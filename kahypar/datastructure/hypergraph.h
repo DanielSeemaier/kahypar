@@ -236,6 +236,16 @@ class GenericHypergraph {
       return _size;
     }
 
+    IDType heads() const {
+      ASSERT(!isDisabled());
+      return std::min(static_cast<IDType>(1), size());
+    }
+
+    IDType tails() const {
+      ASSERT(!isDisabled());
+      return size() - heads();
+    }
+
     void setSize(IDType size) {
       ASSERT(!isDisabled());
       _size = size;
@@ -768,6 +778,28 @@ class GenericHypergraph {
     ASSERT(!hyperedge(e).isDisabled(), "Hyperedge" << e << "is disabled");
     return std::make_pair(_incidence_array.cbegin() + hyperedge(e).firstEntry(),
                           _incidence_array.cbegin() + hyperedge(e).firstInvalidEntry());
+  }
+
+  std::pair<IncidenceIterator, IncidenceIterator> heads(const HyperedgeID e) const {
+    ASSERT(!hyperedge(e).isDisabled(), "Hyperedge" << e << "is disabled");
+    return std::make_pair(_incidence_array.cbegin() + hyperedge(e).firstEntry(),
+                          _incidence_array.cbegin() + hyperedge(e).firstEntry() + hyperedge(e).heads());
+  }
+
+  std::pair<IncidenceIterator, IncidenceIterator> tails(const HyperedgeID e) const {
+    ASSERT(!hyperedge(e).isDisabled(), "Hyperedge" << e << "is disabled");
+    return std::make_pair(_incidence_array.cbegin() + hyperedge(e).firstEntry() + hyperedge(e).heads(),
+                          _incidence_array.cbegin() + hyperedge(e).firstInvalidEntry());
+  }
+
+  // TODO make this more efficient
+  bool isTail(const HypernodeID &u, const HyperedgeID &e) {
+    const auto it = tails(e);
+    return std::find(it.first, it.second, u) != it.second;
+  }
+
+  bool isHead(const HypernodeID &u, const HyperedgeID &e) {
+    return !isTail(u, e);
   }
 
   /*!
@@ -1514,6 +1546,16 @@ class GenericHypergraph {
   HypernodeID edgeSize(const HyperedgeID e) const {
     ASSERT(!hyperedge(e).isDisabled(), "Hyperedge" << e << "is disabled");
     return hyperedge(e).size();
+  }
+
+  HypernodeID edgeNumHeads(const HyperedgeID e) const {
+    ASSERT(!hyperedge(e).isDisabled(), "Hyperedge" << e << "is disabled");
+    return hyperegde(e).heads();
+  }
+
+  HypernodeID edgeNumTails(const HyperedgeID e) const {
+    ASSERT(!hyperedge(e).isDisabled(), "Hyperedge " << e << "is disabled");
+    return hyperedge(e).tails();
   }
 
   size_t & edgeHash(const HyperedgeID e) {

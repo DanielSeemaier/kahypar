@@ -111,7 +111,8 @@ po::options_description createGeneralOptionsDescription(Context& context, const 
     }),
     "Partitioning mode: \n"
     " - (recursive) bisection \n"
-    " - (direct) k-way");
+    " - (direct) k-way \n"
+    " - (acyclic) tbd");
   return options;
 }
 

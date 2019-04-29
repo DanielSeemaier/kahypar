@@ -53,6 +53,16 @@ class Randomize {
   }
 
   template <typename T>
+  T popRandomElement(std::vector<T>& vector) {
+    ASSERT (!vector.empty());
+    std::size_t idx = getRandomInt(0, vector.size() - 1);
+    std::swap(vector[idx], vector.back());
+    T element = vector.back();
+    vector.pop_back();
+    return element;
+  }
+
+  template <typename T>
   void shuffleVector(std::vector<T>& vector, size_t num_elements) {
     std::shuffle(vector.begin(), vector.begin() + num_elements, _gen);
   }

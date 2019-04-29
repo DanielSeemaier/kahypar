@@ -7,6 +7,7 @@
 *.h~
 *.py~
 *.cfg~
+.gitignore~
 build/*
 rel2/*
 release127/*
@@ -23,3 +24,6 @@ tuning/*
 debug152/*
 profile/*
 external_tools/*
+test.sh
+.idea/
+cmake-build-debug/

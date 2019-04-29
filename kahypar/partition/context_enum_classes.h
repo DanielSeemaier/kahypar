@@ -113,6 +113,7 @@ enum class InitialPartitionerAlgorithm : uint8_t {
   random,
   lp,
   pool,
+  topological_ordering,
   UNDEFINED
 };
 
@@ -368,6 +369,7 @@ std::ostream& operator<< (std::ostream& os, const InitialPartitionerAlgorithm& a
     case InitialPartitionerAlgorithm::random: return os << "random";
     case InitialPartitionerAlgorithm::lp: return os << "lp";
     case InitialPartitionerAlgorithm::pool: return os << "pool";
+    case InitialPartitionerAlgorithm::topological_ordering: return os << "topological_ordering";
     case InitialPartitionerAlgorithm::UNDEFINED: return os << "UNDEFINED";
       // omit default case to trigger compiler warning for missing cases
   }
@@ -537,6 +539,8 @@ static CoarseningAlgorithm coarseningAlgorithmFromString(const std::string& type
     return CoarseningAlgorithm::heavy_lazy;
   } else if (type == "ml_style") {
     return CoarseningAlgorithm::ml_style;
+  } else if (type == "do_nothing") {
+    return CoarseningAlgorithm::do_nothing;
   }
   LOG << "Illegal option:" << type;
   exit(0);
@@ -595,6 +599,8 @@ static InitialPartitionerAlgorithm initialPartitioningAlgorithmFromString(const 
     return InitialPartitionerAlgorithm::random;
   } else if (mode == "pool") {
     return InitialPartitionerAlgorithm::pool;
+  } else if (mode == "topological_ordering") {
+    return InitialPartitionerAlgorithm::topological_ordering;
   }
   LOG << "Illegal option:" << mode;
   exit(0);
