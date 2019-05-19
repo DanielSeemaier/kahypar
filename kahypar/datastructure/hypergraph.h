@@ -792,14 +792,18 @@ class GenericHypergraph {
                           _incidence_array.cbegin() + hyperedge(e).firstInvalidEntry());
   }
 
-  // TODO make this more efficient
-  bool isTail(const HypernodeID &u, const HyperedgeID &e) {
-    const auto it = tails(e);
-    return std::find(it.first, it.second, u) != it.second;
+  bool isTail(const HypernodeID &u, const HyperedgeID &e) const {
+    return !isHead(u, e);
   }
 
-  bool isHead(const HypernodeID &u, const HyperedgeID &e) {
-    return !isTail(u, e);
+  bool isHead(const HypernodeID &u, const HyperedgeID &e) const {
+    if (_hyperedges[e].heads() == 1) { // special case: just one head
+      return _incidence_array[hyperedge(e).firstEntry()] == u;
+    }
+
+    // general case: multiple heads
+    const auto it = heads(e);
+    return std::find(it.first, it.second, u) != it.second;
   }
 
   /*!
