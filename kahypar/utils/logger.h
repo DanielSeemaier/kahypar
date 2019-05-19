@@ -28,6 +28,37 @@
 #include "kahypar/meta/pack_expand.h"
 
 namespace kahypar {
+template<typename S, typename T>
+std::ostringstream& operator<< (std::ostringstream& out, const std::pair<S, T>& pair) {
+  return out << pair.first << "=" << pair.second;
+}
+
+template<typename T>
+std::ostringstream& operator<< (std::ostringstream& out, const std::vector<T>& vec) {
+  if (vec.empty()) {
+    out << "[]";
+  } else {
+    out << "[";
+    std::copy(vec.begin(), vec.end(), std::ostream_iterator<T>(out, ", "));
+    out << "\b\b]";
+  }
+
+  return out;
+}
+
+template<typename T>
+std::ostringstream& operator<< (std::ostringstream& out, const std::set<T>& vec) {
+  if (vec.empty()) {
+    out << "[]";
+  } else {
+    out << "[";
+    std::copy(vec.begin(), vec.end(), std::ostream_iterator<T>(out, ", "));
+    out << "\b\b]";
+  }
+
+  return out;
+}
+
 class Logger {
  public:
   explicit Logger(const bool newline) :
