@@ -1,27 +1,14 @@
 #include "gmock/gmock.h"
 
-#include "kahypar/io/hypergraph_io.h"
 #include "kahypar/dag/topological_ordering.h"
+
+#include "dag.h"
 
 using ::testing::Eq;
 using ::testing::ContainerEq;
 
 namespace kahypar {
 namespace dag {
-static Hypergraph _loadHypergraph(const std::string& filename) {
-  HypernodeID num_hypernodes;
-  HyperedgeID num_hyperedges;
-  HyperedgeIndexVector index_vector;
-  HyperedgeVector edge_vector;
-  HyperedgeWeightVector hyperedge_weights;
-  HypernodeWeightVector hypernode_weights;
-
-  io::readHypergraphFile(filename, num_hypernodes, num_hyperedges, index_vector, edge_vector,
-                         &hyperedge_weights, &hypernode_weights);
-  return Hypergraph(num_hypernodes, num_hyperedges, index_vector, edge_vector, 2,
-                    &hyperedge_weights, &hypernode_weights);
-}
-
 static void _assertTopologicalOrderingIsTopological(
   const Hypergraph& hg,
   const std::vector<HypernodeID>& topological_ordering

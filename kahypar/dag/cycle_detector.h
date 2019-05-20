@@ -51,7 +51,7 @@ class OutCycleDetector : CycleDetector {
       _out[pair.first].push_back(pair.second);
     }
   }
-
+ public:
   void disconnect(std::size_t s, std::size_t t) override {
     for (std::size_t i = 0; i < _out[s].size(); ++i) {
       if (_out[s][i] == t) {
@@ -116,7 +116,7 @@ class OutCycleDetector : CycleDetector {
  * Variant that stores a topological ordering of the graph. When inserting an edge that violates the topological
  * ordering, the algorithm tests whether a new topological ordering can be obtained with the edge inserted.
  */
-class KahnCycleDetector : OutCycleDetector {
+class KahnCycleDetector : public OutCycleDetector {
  public:
   explicit KahnCycleDetector(std::size_t n) :
     cycledetector::OutCycleDetector(n),
@@ -169,7 +169,7 @@ class KahnCycleDetector : OutCycleDetector {
 /**!
  * Uses a simple DFS search to test whether new edges induce a cycle.
  */
-class DFSCycleDetector : OutCycleDetector {
+class DFSCycleDetector : public OutCycleDetector {
  public:
   explicit DFSCycleDetector(std::size_t n) :
     OutCycleDetector(n),
