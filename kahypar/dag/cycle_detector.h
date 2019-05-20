@@ -5,6 +5,7 @@
 #include <numeric>
 #include <cmath>
 #include <algorithm>
+#include <set>
 
 #include "kahypar/macros.h"
 

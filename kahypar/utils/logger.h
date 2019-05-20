@@ -24,6 +24,8 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <set>
+#include <vector>
 
 #include "kahypar/meta/pack_expand.h"
 

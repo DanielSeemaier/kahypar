@@ -27,6 +27,7 @@
 #include "kahypar/io/hypergraph_io.h"
 #include "kahypar/io/partitioning_output.h"
 #include "kahypar/partition/metrics.h"
+#include "kahypar/dag/topological_ordering.h"
 #include "kahypar/utils/math.h"
 
 using namespace kahypar;
@@ -116,6 +117,7 @@ int main(int argc, char* argv[]) {
              << " medHNdegree=" << kahypar::math::median(hn_degrees)
              << " Q3HNdegree=" << hn_deg_quartiles.second
              << " density=" << static_cast<double>(num_hyperedges) / num_hypernodes
+             << " acyclic=" << dag::isAcyclic(hypergraph)
              << std::endl;
   out_stream.flush();
 
