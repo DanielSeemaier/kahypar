@@ -37,6 +37,15 @@ static Context _createContext(PartitionID k) {
   return ctx;
 }
 
+TEST(QUOTIENT_GRAPH, HasCorrectSize) {
+  Hypergraph hg = _loadHypergraph("test_instances/acyclic.hgr");
+  _applyAcyclic4Partition(hg);
+  QuotientGraph<DFSCycleDetector> qg(hg, _createContext(4));
+
+  ASSERT_EQ(qg.numberOfNodes(), 4);
+  ASSERT_EQ(qg.numberOfEdges(), 3);
+}
+
 TEST(QUOTIENT_GRAPH, AcyclicInitialPartitionHasAcyclicQuotientGraph) {
   Hypergraph hg = _loadHypergraph("test_instances/acyclic.hgr");
   _applyAcyclic4Partition(hg);
@@ -63,6 +72,48 @@ TEST(QUOTIENT_GRAPH, SimpleIllegalMovesAreIllegal) {
 
   ASSERT_FALSE(qg.update(1, 1, 3)); // move 1 from part 1 to part 3
   ASSERT_FALSE(qg.update(6, 0, 3)); // move 6 from part 0 to part 3
+}
+
+TEST(QUOTIENT_GRAPH, MixedLegalAndIllegalMoves) {
+  Hypergraph hg = _loadHypergraph("test_instances/acyclic.hgr");
+  _applyAcyclic4Partition(hg);
+  QuotientGraph<DFSCycleDetector> qg(hg, _createContext(4));
+
+  ASSERT_FALSE(qg.update(5, 3, 0));
+  ASSERT_TRUE(qg.update(5, 3, 2));
+  ASSERT_FALSE(qg.update(5, 2, 1));
+  ASSERT_TRUE(qg.update(5, 2, 3));
+}
+
+TEST(QUOTIENT_GRAPH, NullMovesAreLegal) {
+  Hypergraph hg = _loadHypergraph("test_instances/acyclic.hgr");
+  _applyAcyclic4Partition(hg);
+  QuotientGraph<DFSCycleDetector> qg(hg, _createContext(4));
+
+  for (const HypernodeID& hn : hg.nodes()) {
+    ASSERT_TRUE(qg.update(hn, hg.partID(hn), hg.partID(hn)));
+  }
+}
+
+TEST(QUOTIENT_GRAPH, MonkeyMovesDontCrashAndRemainAcyclic) {
+  Hypergraph hg = _loadHypergraph("test_instances/acyclic.hgr");
+  _applyAcyclic4Partition(hg);
+  QuotientGraph<DFSCycleDetector> qg(hg, _createContext(4));
+
+  Randomize& random = Randomize::instance();
+  constexpr std::size_t N = 128;
+  constexpr std::size_t K = 4;
+  for (std::size_t i = 0; i < N; ++i) {
+    const HypernodeID hn = random.getRandomInt(0, hg.currentNumNodes() - 1);
+    const PartitionID from = hg.partID(hn);
+    const PartitionID to = random.getRandomInt(0, K - 1);
+    if (from != to) { // otherwise changeNodePart crashes
+      if (qg.update(hn, from, to)) { // expect behaviour: shouldn't crash ...
+        hg.changeNodePart(hn, from, to);
+      }
+    }
+  }
+  ASSERT_TRUE(qg.isAcyclic());
 }
 
 // not supported (and not needed) for now
