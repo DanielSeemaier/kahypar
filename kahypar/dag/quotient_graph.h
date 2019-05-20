@@ -21,6 +21,7 @@
 #include "kahypar/dag/topological_ordering.h"
 
 namespace kahypar {
+namespace ds {
 template<typename Detector>
 class QuotientGraph {
  public:
@@ -63,7 +64,7 @@ class QuotientGraph {
       if (_hg.isHead(hn, he)) { // hn is head
         for (const HypernodeID& ht : _hg.tails(he)) {
           if (_hg.partID(ht) != from) {
-            deltas[_hg.partID(ht)][from] -=_hg.edgeWeight(he);
+            deltas[_hg.partID(ht)][from] -= _hg.edgeWeight(he);
           }
           if (_hg.partID(ht) != to) {
             deltas[_hg.partID(ht)][to] += _hg.edgeWeight(he);
@@ -100,6 +101,8 @@ class QuotientGraph {
     }
 
     // legal movement or does it induce a cycle?
+    // note: if successful, testChanges does not rollback edge insertions / deletions, i.e. the detector is up to date
+    // with the changes after a successful call
     if (!testChanges(todo_remove, todo_insert)) {
       return false; // illegal move, don't commit
     }
@@ -111,16 +114,6 @@ class QuotientGraph {
         const QEdgeWeight& weight = delta.second;
         _adjacency_matrix[u][v] += weight;
       }
-    }
-    for (const auto& edge : todo_remove) {
-      const QNodeID& u = edge.first;
-      const QNodeID& v = edge.second;
-      _detector.disconnect(u, v);
-    }
-    for (const auto& edge : todo_insert) {
-      const QNodeID& u = edge.first;
-      const QNodeID& v = edge.second;
-      _detector.connect(u, v);
     }
 
     return true;
@@ -269,4 +262,7 @@ class QuotientGraph {
   AdjacencyMatrix _adjacency_matrix;
   Detector _detector;
 };
+} // namespace ds
+
+using ds::QuotientGraph;
 } // namespace kahypar
