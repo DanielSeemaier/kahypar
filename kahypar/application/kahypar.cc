@@ -23,6 +23,7 @@
 #include "kahypar/definitions.h"
 #include "kahypar/io/hypergraph_io.h"
 #include "kahypar/partitioner_facade.h"
+#include "kahypar/dag/quotient_graph.h"
 
 int main(int argc, char* argv[]) {
   kahypar::Context context;

@@ -38,6 +38,7 @@
 #include "kahypar/partition/preprocessing/min_hash_sparsifier.h"
 #include "kahypar/partition/preprocessing/single_node_hyperedge_remover.h"
 #include "kahypar/partition/recursive_bisection.h"
+#include "kahypar/partition/acyclic.h"
 
 namespace kahypar {
 // Workaround for bug in gtest
@@ -67,12 +68,13 @@ static inline void partition(Hypergraph& hypergraph, const Context& context) {
       } ());
   switch (context.partition.mode) {
     case Mode::recursive_bisection:
-
       recursive_bisection::partition(hypergraph, context);
-
       break;
     case Mode::direct_kway:
       direct_kway::partition(hypergraph, context);
+      break;
+    case Mode::acyclic:
+      acyclic::partition(hypergraph, context);
       break;
     case Mode::UNDEFINED:
       LOG << "Partitioning Mode undefined!";

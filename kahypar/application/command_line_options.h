@@ -110,9 +110,9 @@ po::options_description createGeneralOptionsDescription(Context& context, const 
       context.partition.mode = kahypar::modeFromString(mode);
     }),
     "Partitioning mode: \n"
+    " - (acyclic) partitioning\n"
     " - (recursive) bisection \n"
-    " - (direct) k-way \n"
-    " - (acyclic) tbd");
+    " - (direct) k-way \n");
   return options;
 }
 
@@ -602,6 +602,7 @@ void processCommandLineInput(Context& context, int argc, char* argv[]) {
   preset_options.add_options()
     ("preset,p", po::value<std::string>(&context_path)->value_name("<string>"),
     "Context Presets (see config directory):\n"
+    " - cut_acyclic.ini\n"
     " - km1_direct_kway_sea18.ini\n"
     " - km1_direct_kway_sea17.ini\n"
     " - direct_kway_km1_alenex17.ini\n"

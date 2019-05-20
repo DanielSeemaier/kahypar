@@ -60,6 +60,10 @@ using ClusterID = PartitionID;
 using Flow = int32_t;
 using Capacity = int32_t;
 
+using QNodeID = HypernodeID;
+using QEdgeID = HyperedgeID;
+using QEdgeWeight = HyperedgeWeight;
+
 using HighResClockTimepoint = std::chrono::time_point<std::chrono::high_resolution_clock>;
 }  // namespace kahypar
 

@@ -32,6 +32,7 @@ enum class ContextType : bool {
 enum class Mode : uint8_t {
   recursive_bisection,
   direct_kway,
+  acyclic,
   UNDEFINED
 };
 
@@ -95,6 +96,7 @@ enum class RefinementAlgorithm : uint8_t {
   kway_flow,
   kway_fm_flow_km1,
   kway_fm_flow,
+  acylic_kway_fm_km1,
   do_nothing,
   UNDEFINED
 };
@@ -239,6 +241,7 @@ std::ostream& operator<< (std::ostream& os, const Mode& mode) {
   switch (mode) {
     case Mode::recursive_bisection: return os << "recursive";
     case Mode::direct_kway: return os << "direct";
+    case Mode::acyclic: return os << "acyclic";
     case Mode::UNDEFINED: return os << "UNDEFINED";
       // omit default case to trigger compiler warning for missing cases
   }
@@ -347,6 +350,7 @@ std::ostream& operator<< (std::ostream& os, const RefinementAlgorithm& algo) {
     case RefinementAlgorithm::kway_flow: return os << "kway_flow";
     case RefinementAlgorithm::kway_fm_flow_km1: return os << "kway_fm_flow_km1";
     case RefinementAlgorithm::kway_fm_flow: return os << "kway_fm_flow";
+    case RefinementAlgorithm::acylic_kway_fm_km1: return os << "acyclic_kway_fm_km1";
     case RefinementAlgorithm::do_nothing: return os << "do_nothing";
     case RefinementAlgorithm::UNDEFINED: return os << "UNDEFINED";
       // omit default case to trigger compiler warning for missing cases
@@ -564,6 +568,8 @@ static RefinementAlgorithm refinementAlgorithmFromString(const std::string& type
     return RefinementAlgorithm::kway_fm_flow_km1;
   } else if (type == "kway_fm_flow") {
     return RefinementAlgorithm::kway_fm_flow;
+  } else if (type == "acyclic_kway_fm_km1") {
+    return RefinementAlgorithm::acylic_kway_fm_km1;
   } else if (type == "do_nothing") {
     return RefinementAlgorithm::do_nothing;
   }
@@ -638,6 +644,8 @@ static Mode modeFromString(const std::string& mode) {
     return Mode::recursive_bisection;
   } else if (mode == "direct") {
     return Mode::direct_kway;
+  } else if (mode == "acyclic") {
+    return Mode::acyclic;
   }
   LOG << "Illegal option:" << mode;
   exit(0);

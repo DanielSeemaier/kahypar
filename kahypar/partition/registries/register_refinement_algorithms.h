@@ -33,6 +33,7 @@
 #include "kahypar/partition/refinement/kway_fm_cut_refiner.h"
 #include "kahypar/partition/refinement/kway_fm_flow_refiner.h"
 #include "kahypar/partition/refinement/kway_fm_km1_refiner.h"
+#include "kahypar/partition/refinement/acyclic_kway_fm_km1_refiner.h"
 #include "kahypar/partition/refinement/policies/fm_stop_policy.h"
 
 #define REGISTER_DISPATCHED_REFINER(id, dispatcher, ...)          \
@@ -66,6 +67,10 @@ REGISTER_DISPATCHED_REFINER(RefinementAlgorithm::kway_fm,
                               context.local_search.fm.stopping_rule));
 REGISTER_DISPATCHED_REFINER(RefinementAlgorithm::kway_fm_km1,
                             KWayKMinusOneFactoryDispatcher,
+                            meta::PolicyRegistry<RefinementStoppingRule>::getInstance().getPolicy(
+                              context.local_search.fm.stopping_rule));
+REGISTER_DISPATCHED_REFINER(RefinementAlgorithm::acylic_kway_fm_km1,
+                            AcyclicKWayKMinusOneFactoryDispatcher,
                             meta::PolicyRegistry<RefinementStoppingRule>::getInstance().getPolicy(
                               context.local_search.fm.stopping_rule));
 REGISTER_DISPATCHED_REFINER(RefinementAlgorithm::twoway_flow,
