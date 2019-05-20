@@ -52,6 +52,10 @@ class QuotientGraph {
   }
 
   bool update(const HypernodeID hn, const PartitionID from, const PartitionID to) {
+    if (from == to) {
+      return true;
+    }
+
     AdjacencyMatrix deltas(numberOfNodes());
 
     // find changes to edge weights of the quotient graph caused by this movement
