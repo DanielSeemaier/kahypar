@@ -70,14 +70,25 @@ int main(int argc, char *argv[]) {
 
   // write hgr
   std::ofstream out(hgr_filename);
+  std::vector<std::size_t> pins;
   out << num_hyperedges << " " << num_hypernodes << "\n";
   for (const auto& pair : graph) {
     if (pair.second.empty()) continue; // no tails
-    out << name_to_id[pair.first] << " "; // head
+    std::size_t pin = name_to_id[pair.first];
+    out << pin << " "; // head
+    pins.push_back(pin);
+
     for (const auto& tail : pair.second) { // tails
-      out << name_to_id[tail] << " ";
+      pin = name_to_id[tail];
+      // TODO is there a better approach to model multi-edge instead of just ignoring them?
+      if (std::find(pins.begin(), pins.end(), pin) == pins.end()) { // prevent multi-pins that result from multi-edges
+        out << pin << " ";
+        pins.push_back(pin);
+      }
     }
+
     out << "\n";
+    pins.clear();
   }
   out.close();
 
