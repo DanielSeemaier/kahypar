@@ -6,6 +6,8 @@
 #include "kahypar/io/hypergraph_io.h"
 #include "kahypar/utils/string.h"
 
+#include "hypergraph_checker.h"
+
 using namespace std::string_literals;
 using namespace kahypar;
 
@@ -79,5 +81,22 @@ int main(int argc, char *argv[]) {
   }
   out.close();
 
+  // check result
+  try {
+    validateHypergraphFile(hgr_filename);
+  } catch (const BadHypernodeException& e) {
+    std::cout << "Error: " << e.what() << std::endl;
+    const HypernodeID& hn = e.hypernode();
+    for (const auto& pair : name_to_id) {
+      if (pair.second == hn) {
+        std::cout << "Note: " << pair.first << " is mapped to " << hn << std::endl;
+        break;
+      }
+    }
+    return -1;
+  } catch (const BadHypergraphException& e) {
+    std::cout << "Error: " << e.what() << std::endl;
+    return -1;
+  }
   return 0;
 }

@@ -30,7 +30,7 @@ struct BadHypergraphException : public std::exception {
 
 struct BadHypernodeException : public BadHypergraphException {
   explicit BadHypernodeException(const std::string& message, const HypernodeID hypernode) :
-    BadHypergraphException(message + " [hypernode: "s + std::to_string(hypernode) + "]s"),
+    BadHypergraphException(message + " [hypernode: "s + std::to_string(hypernode) + "]"s),
     _hypernode(hypernode) {}
 
   HypernodeID hypernode() const { return _hypernode; }
@@ -50,20 +50,15 @@ struct BadHyperedgeException : public BadHypergraphException {
   HyperedgeID _hyperedge;
 };
 
-struct BadPinException : public BadHypergraphException {
-  explicit BadPinException(const std::string& message, const HyperedgeID hyperedge, const HypernodeID hypernode) :
-    BadHypergraphException(message + " ["s
-                           + "hyperedge: "s + std::to_string(hyperedge) + ", "s
-                           + "hypernode: "s + std::to_string(hypernode) + "]"s),
-    _hyperedge(hyperedge),
-    _hypernode(hypernode) {}
+struct BadHyperpinException : public BadHypernodeException {
+  explicit BadHyperpinException(const std::string& message, const HyperedgeID hyperedge, const HypernodeID hypernode) :
+    BadHypernodeException(message + " [hyperedge: "s + std::to_string(hyperedge) + "]"s, hypernode),
+    _hyperedge(hyperedge) {}
 
   HyperedgeID hyperedge() const { return _hyperedge; }
-  HypernodeID hypernode() const { return _hypernode; }
 
  private:
   HyperedgeID _hyperedge;
-  HypernodeID _hypernode;
 };
 
 static inline void readHGRHeader(std::ifstream& file, HyperedgeID& num_hyperedges,
@@ -125,7 +120,7 @@ void validateHypergraphFile(const std::string& filename) {
           throw BadHypernodeException("invalid hypernode ID", pin + 1);
         }
         if (std::find(edge_vector.begin() + index_vector.back(), edge_vector.end(), pin) != edge_vector.end()) {
-          throw BadPinException("hyperedge contains the same pin multiple times", i, pin + 1);
+          throw BadHyperpinException("hyperedge contains the same pin multiple times", i, pin + 1);
         }
         edge_vector.push_back(pin);
       }
@@ -143,6 +138,15 @@ void validateHypergraphFile(const std::string& filename) {
     file.close();
   } else {
     throw BadHypergraphException("hypergraph does not exist [filename: "s + filename + "]"s);
+  }
+}
+
+void validateHypergraphFileAndPanic(const std::string& filename) {
+  try {
+    validateHypergraphFile(filename);
+  } catch (const BadHypergraphException& e) {
+    std::cout << "Error: " << e.what() << std::endl;
+    std::exit(-1);
   }
 }
 } // namespace kahypar

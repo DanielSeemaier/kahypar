@@ -15,13 +15,6 @@ int main(int argc, char *argv[]) {
     return -1;
   }
   std::string filename = argv[1];
-
-  try {
-    validateHypergraphFile(filename);
-    std::cout << "Hypergraph OK" << std::endl;
-    return 0;
-  } catch (const BadHypergraphException &e) {
-    std::cout << "Error: " << e.what() << std::endl;
-    return -1;
-  }
+  validateHypergraphFileAndPanic(filename);
+  return 0;
 }
