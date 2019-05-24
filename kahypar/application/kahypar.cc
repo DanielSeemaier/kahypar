@@ -23,16 +23,21 @@
 #include "kahypar/definitions.h"
 #include "kahypar/io/hypergraph_io.h"
 #include "kahypar/partitioner_facade.h"
-#include "kahypar/dag/quotient_graph.h"
 
 int main(int argc, char* argv[]) {
   kahypar::Context context;
 
   kahypar::processCommandLineInput(context, argc, argv);
 
+  // TODO these could be made context parameters or be integrated into the file format ...
+  constexpr bool directed = true;
+  constexpr kahypar::HypernodeID num_heads_per_hyperedge = 1;
+
   kahypar::Hypergraph hypergraph(
     kahypar::io::createHypergraphFromFile(context.partition.graph_filename,
-                                          context.partition.k));
+                                          context.partition.k,
+                                          directed,
+                                          num_heads_per_hyperedge));
 
   kahypar::PartitionerFacade().partition(hypergraph, context);
 

@@ -165,9 +165,11 @@ static inline void readHypergraphFile(const std::string& filename,
   }
 }
 
-
+// TODO we could integrate directed, num_heads_per_hyperedge into the file format ...
 static inline Hypergraph createHypergraphFromFile(const std::string& filename,
-                                                  const PartitionID num_parts) {
+                                                  const PartitionID num_parts,
+                                                  const bool directed,
+                                                  const HypernodeID num_heads_per_hyperedge) {
   HypernodeID num_hypernodes;
   HyperedgeID num_hyperedges;
   HyperedgeIndexVector index_vector;
@@ -177,7 +179,8 @@ static inline Hypergraph createHypergraphFromFile(const std::string& filename,
   readHypergraphFile(filename, num_hypernodes, num_hyperedges,
                      index_vector, edge_vector, &hyperedge_weights, &hypernode_weights);
   return Hypergraph(num_hypernodes, num_hyperedges, index_vector, edge_vector,
-                    num_parts, &hyperedge_weights, &hypernode_weights);
+                    num_parts, &hyperedge_weights, &hypernode_weights,
+                    directed, num_heads_per_hyperedge);
 }
 
 
