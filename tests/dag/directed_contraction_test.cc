@@ -123,5 +123,74 @@ TEST_F(DirectedContractionTest, Simple_HeadToTail_Case1_Contraction) {
   hg.uncontract(memento_0_2);
   assertGraphRestored();
 }
+
+TEST_F(DirectedContractionTest, ContractEdge) {
+  // (0, (2, 7))
+  const auto memento_l2_7r = hg.contract(2, 7);
+  const auto memento_l0_l2_7rr = hg.contract(0, 2);
+  ASSERT_THAT(toVec(hg.heads(0)), UnorderedElementsAre(0));
+  ASSERT_THAT(toVec(hg.tails(0)), IsEmpty());
+  ASSERT_THAT(toVec(hg.heads(1)), UnorderedElementsAre(1));
+  ASSERT_THAT(toVec(hg.tails(1)), UnorderedElementsAre(8, 0));
+  ASSERT_THAT(toVec(hg.heads(2)), UnorderedElementsAre(0));
+  ASSERT_THAT(toVec(hg.tails(2)), UnorderedElementsAre(10, 4));
+  ASSERT_THAT(toVec(hg.heads(5)), UnorderedElementsAre(9));
+  ASSERT_THAT(toVec(hg.tails(5)), UnorderedElementsAre(1, 0));
+  ASSERT_THAT(toVec(hg.incidentHeadEdges(0)), UnorderedElementsAre(0, 2));
+  ASSERT_THAT(toVec(hg.incidentTailEdges(0)), UnorderedElementsAre(1, 5));
+  hg.uncontract(memento_l0_l2_7rr);
+  hg.uncontract(memento_l2_7r);
+  assertGraphRestored();
+
+  // ((0, 2), 7)
+  const auto memento_l0_2r = hg.contract(0, 2);
+  const auto memento_ll0_2r_7r = hg.contract(0, 7);
+  ASSERT_THAT(toVec(hg.heads(0)), UnorderedElementsAre(0));
+  ASSERT_THAT(toVec(hg.tails(0)), IsEmpty());
+  ASSERT_THAT(toVec(hg.heads(1)), UnorderedElementsAre(1));
+  ASSERT_THAT(toVec(hg.tails(1)), UnorderedElementsAre(8, 0));
+  ASSERT_THAT(toVec(hg.heads(2)), UnorderedElementsAre(0));
+  ASSERT_THAT(toVec(hg.tails(2)), UnorderedElementsAre(10, 4));
+  ASSERT_THAT(toVec(hg.heads(5)), UnorderedElementsAre(9));
+  ASSERT_THAT(toVec(hg.tails(5)), UnorderedElementsAre(1, 0));
+  ASSERT_THAT(toVec(hg.incidentHeadEdges(0)), UnorderedElementsAre(0, 2));
+  ASSERT_THAT(toVec(hg.incidentTailEdges(0)), UnorderedElementsAre(1, 5));
+  hg.uncontract(memento_ll0_2r_7r);
+  hg.uncontract(memento_l0_2r);
+  assertGraphRestored();
+}
+
+TEST_F(DirectedContractionTest, ContractGraph) {
+  std::vector<Hypergraph::Memento> mementos{
+    hg.contract(0, 1),
+    hg.contract(0, 2),
+    hg.contract(0, 3),
+    hg.contract(0, 4),
+    hg.contract(0, 5),
+    hg.contract(0, 6),
+    hg.contract(0, 7),
+    hg.contract(0, 8),
+    hg.contract(0, 9),
+    hg.contract(0, 10),
+  };
+  ASSERT_THAT(toVec(hg.heads(0)), UnorderedElementsAre(0));
+  ASSERT_THAT(toVec(hg.tails(0)), IsEmpty());
+  ASSERT_THAT(toVec(hg.heads(1)), UnorderedElementsAre(0));
+  ASSERT_THAT(toVec(hg.tails(1)), IsEmpty());
+  ASSERT_THAT(toVec(hg.heads(2)), UnorderedElementsAre(0));
+  ASSERT_THAT(toVec(hg.tails(2)), IsEmpty());
+  ASSERT_THAT(toVec(hg.heads(3)), UnorderedElementsAre(0));
+  ASSERT_THAT(toVec(hg.tails(3)), IsEmpty());
+  ASSERT_THAT(toVec(hg.heads(4)), UnorderedElementsAre(0));
+  ASSERT_THAT(toVec(hg.tails(4)), IsEmpty());
+  ASSERT_THAT(toVec(hg.heads(5)), UnorderedElementsAre(0));
+  ASSERT_THAT(toVec(hg.tails(5)), IsEmpty());
+  ASSERT_THAT(toVec(hg.incidentHeadEdges(0)), UnorderedElementsAre(0, 1, 2, 3, 4, 5));
+  ASSERT_THAT(toVec(hg.incidentTailEdges(0)), IsEmpty());
+  for (std::size_t i = mementos.size(); i > 0; --i) {
+    hg.uncontract(mementos[i - 1]);
+  }
+  assertGraphRestored();
+}
 } // namespace dag
 } // namespace kahypar
