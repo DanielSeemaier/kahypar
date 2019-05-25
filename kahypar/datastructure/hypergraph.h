@@ -1301,7 +1301,10 @@ class GenericHypergraph {
       // Undo case 2 opeations (i.e. Entry of pin v in HE e was reused to store connection to u):
       // Set incidence entry containing u for this HE e back to v, because this slot was used
       // to store the new edge to representative u during contraction as u was not a pin of e.
-      for (const HyperedgeID& he : incidentEdges(memento.u)) {
+      for (HyperedgeID he_it = hypernode(memento.u).firstEntry();
+           he_it < hypernode(memento.u).firstInvalidEntry();
+           ++he_it) {
+        const HyperedgeID he = _incidence_array[he_it];
         if (_hes_not_containing_u[he]) {
           DBG << "resetting reused Pinslot of HE" << he << "from" << memento.u << "to" << memento.v;
           resetReusedPinSlotToOriginalValue(he, memento);
@@ -1309,6 +1312,11 @@ class GenericHypergraph {
           if (connectivity(he) > 1) {
             --hypernode(memento.u).num_incident_cut_hes;    // because u is not connected to that cut HE anymore
             ++hypernode(memento.v).num_incident_cut_hes;    // because v is connected to that cut HE
+          }
+          if (hypernode(memento.u).isHeadID(he_it)) {
+            std::swap(_incidence_array[he_it],
+                      _incidence_array[hypernode(memento.u).firstTailEntry() - 1]);
+            hypernode(memento.u).decrementHeadCounter();
           }
           // The state of this hyperedge now resembles the state before contraction.
           // Thus we don't need to process them any further.
