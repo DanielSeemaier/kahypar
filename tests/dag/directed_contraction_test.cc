@@ -11,7 +11,7 @@ namespace dag {
 class DirectedContractionTest : public Test {
  protected:
   void SetUp() override {
-    hg = _loadHypergraph("test_instances/c17.hgr");
+    hg = loadHypergraph("test_instances/c17.hgr");
     placeAllHypernodesInPartition(hg, 0);
     assertGraphRestored();
   }

@@ -26,6 +26,8 @@
 #include <random>
 #include <vector>
 
+#include "kahypar/macros.h"
+
 namespace kahypar {
 class Randomize {
  public:

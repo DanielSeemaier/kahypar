@@ -7,8 +7,8 @@
 
 namespace kahypar {
 namespace dag {
-static Hypergraph _loadHypergraph(const std::string& filename, const bool directed = true,
-                                  const HypernodeID num_heads_per_hyperedge = 1) {
+static Hypergraph loadHypergraph(const std::string& filename, const bool directed = true,
+                                 const HypernodeID num_heads_per_hyperedge = 1) {
   HypernodeID num_hypernodes;
   HyperedgeID num_hyperedges;
   HyperedgeIndexVector index_vector;

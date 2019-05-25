@@ -4,11 +4,21 @@
 
 #include "dag.h"
 
-using ::testing::Eq;
-using ::testing::ContainerEq;
+using ::testing::Test;
 
 namespace kahypar {
 namespace dag {
+class TopologicalOrderingTest : public Test {
+ protected:
+  void SetUp() override {
+    cyclic = loadHypergraph("test_instances/cyclic.hgr");
+    acyclic = loadHypergraph("test_instances/acyclic.hgr");
+  }
+
+  Hypergraph cyclic;
+  Hypergraph acyclic;
+};
+
 static void _assertTopologicalOrderingIsTopological(
   const Hypergraph& hg,
   const std::vector<HypernodeID>& topological_ordering
@@ -29,21 +39,18 @@ static void _assertTopologicalOrderingIsTopological(
   }
 }
 
-TEST(DAG, CyclicGraphCannotBeTopologicalOrdered) {
-  Hypergraph hg = _loadHypergraph("test_instances/cyclic.hgr");
-  ASSERT_THROW(calculateTopologicalOrdering(hg), CyclicGraphException);
-  ASSERT_FALSE(isAcyclic(hg));
+TEST_F(TopologicalOrderingTest, CyclicGraphCannotBeTopologicalOrdered) {
+  ASSERT_THROW(calculateTopologicalOrdering(cyclic), CyclicGraphException);
+  ASSERT_FALSE(isAcyclic(cyclic));
 }
 
-TEST(DAG, AcyclicGraphCanBeTopologicalOrdered) {
-  Hypergraph hg = _loadHypergraph("test_instances/acyclic.hgr");
-  ASSERT_NO_THROW(calculateTopologicalOrdering(hg));
-  ASSERT_TRUE(isAcyclic(hg));
+TEST_F(TopologicalOrderingTest, AcyclicGraphCanBeTopologicalOrdered) {
+  ASSERT_NO_THROW(calculateTopologicalOrdering(acyclic));
+  ASSERT_TRUE(isAcyclic(acyclic));
 }
 
-TEST(DAG, AcyclicGraphGetsTopologicalOrdered) {
-  Hypergraph hg = _loadHypergraph("test_instances/acyclic.hgr");
-  _assertTopologicalOrderingIsTopological(hg, calculateTopologicalOrdering(hg));
+TEST_F(TopologicalOrderingTest, AcyclicGraphGetsTopologicalOrdered) {
+  _assertTopologicalOrderingIsTopological(acyclic, calculateTopologicalOrdering(acyclic));
 }
 } // namespace dag
 } // namespace kahypar
