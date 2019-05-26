@@ -29,6 +29,7 @@
 #include "kahypar/macros.h"
 #include "kahypar/partition/context.h"
 #include "kahypar/partition/metrics.h"
+#include "kahypar/dag/quotient_graph.h"
 
 using namespace kahypar;
 
@@ -60,9 +61,12 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  Hypergraph hypergraph(io::createHypergraphFromFile(hgr_filename, max_part + 1));
+  // TODO integrate this into the file format
+  constexpr bool directed = true;
+  constexpr HypernodeID num_heads_per_edge = 1;
+  Hypergraph hypergraph(io::createHypergraphFromFile(hgr_filename, max_part + 1, directed, num_heads_per_edge));
 
-  if (partition.size() != 0 && partition.size() != hypergraph.initialNumNodes()) {
+  if (!partition.empty() && partition.size() != hypergraph.initialNumNodes()) {
     std::cout << "partition file has incorrect size. Exiting." << std::endl;
     exit(-1);
   }
@@ -78,9 +82,13 @@ int main(int argc, char* argv[]) {
             << "-way Partition Result************************" << std::endl;
   std::cout << "cut=" << metrics::hyperedgeCut(hypergraph) << std::endl;
   std::cout << "soed=" << metrics::soed(hypergraph) << std::endl;
-  std::cout << "km1= " << metrics::km1(hypergraph) << std::endl;
-  std::cout << "absorption= " << metrics::absorption(hypergraph) << std::endl;
-  std::cout << "imbalance= " << imb(hypergraph, context.partition.k)
-            << std::endl;
+  std::cout << "km1=" << metrics::km1(hypergraph) << std::endl;
+  std::cout << "absorption=" << metrics::absorption(hypergraph) << std::endl;
+  std::cout << "imbalance=" << imb(hypergraph, context.partition.k) << std::endl;
+  if (hypergraph.isDirected()) {
+    std::cout << "acyclic=" << QuotientGraph<DFSCycleDetector>(hypergraph, context).isAcyclic() << std::endl;
+  } else {
+    std::cout << "acyclic=0" << std::endl;
+  }
   return 0;
 }
