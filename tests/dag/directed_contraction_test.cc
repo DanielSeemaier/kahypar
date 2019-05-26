@@ -1,5 +1,10 @@
 #include "gmock/gmock.h"
 
+#include "kahypar/definitions.h"
+#include "kahypar/partition/context.h"
+#include "kahypar/dag/topological_ordering.h"
+#include "kahypar/io/partitioning_output.h"
+
 #include "dag.h"
 
 using ::testing::Test;
@@ -14,6 +19,24 @@ class DirectedContractionTest : public Test {
     hg = loadHypergraph("test_instances/c17.hgr");
     placeAllHypernodesInPartition(hg, 0);
     assertGraphRestored();
+  }
+
+  void partitionUsingTopologicalOrdering(const PartitionID k) {
+    Randomize::instance().setSeed(0);
+    auto ordering = calculateTopologicalOrdering(hg);
+    PartitionID part = 0;
+    HypernodeID nodes_per_part = hg.currentNumPins() / k;
+    HypernodeID nodes_in_cur_part = 0;
+
+    hg.resetPartitioning();
+    hg.changeK(k);
+    for (const HypernodeID& hn : ordering) {
+      hg.setNodePart(hn, part);
+      if (nodes_in_cur_part == nodes_per_part) {
+        ++part;
+        nodes_in_cur_part = 0;
+      }
+    }
   }
 
   void assertGraphRestored() const {

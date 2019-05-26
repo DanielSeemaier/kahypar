@@ -1011,7 +1011,7 @@ class GenericHypergraph {
     ASSERT(!(isFixedVertex(u) && isFixedVertex(v)) || (fixedVertexPartID(u) == fixedVertexPartID(v)),
            "Hypernode " << v << " is a fixed vertex and have to be the representive of the contraction");
 
-    DBG << "contracting (" << u << "," << v << ")";
+    std::cout << "hg.contract(" << u << ", " << v << ")," << std::endl;
 
     hypernode(u).setWeight(hypernode(u).weight() + hypernode(v).weight());
     if (isFixedVertex(u)) {
@@ -1051,6 +1051,7 @@ class GenericHypergraph {
           v_is_head = hyperedge(_incidence_array[he_it]).isHeadID(pin_iter);
 
           if (v_is_head) {
+            ASSERT(first_tail_slot <= last_pin_slot);
             std::swap(_incidence_array[pin_iter], _incidence_array[first_tail_slot - 1]); // move v to slot of last head
             std::swap(_incidence_array[first_tail_slot - 1], _incidence_array[last_pin_slot]); // move v to last slot
             hyperedge(_incidence_array[he_it]).decrementHeadCounter();
@@ -1087,6 +1088,8 @@ class GenericHypergraph {
                  "Contracting a (tail, head) pair in a hyperedge with multiple heads is not supported" << hyperedge(he).numHeads() << he);
 
           // make u head in edge
+          ASSERT(hyperedge(he).firstTailEntry() < _incidence_array.size());
+          ASSERT(slot_of_u < _incidence_array.size());
           std::swap(_incidence_array[hyperedge(he).firstTailEntry()],
                     _incidence_array[slot_of_u]); // place u at head position
           hyperedge(he).incrementHeadCounter();
@@ -1095,6 +1098,9 @@ class GenericHypergraph {
           for (HyperedgeID he_u_it = hypernode(u).firstTailEntry();
                he_u_it < hypernode(u).firstInvalidEntry();
                ++he_u_it) {
+            ASSERT(he_u_it < _incidence_array.size());
+            ASSERT(he_it < _incidence_array.size());
+            ASSERT(hypernode(u).firstTailEntry() < _incidence_array.size());
             if (_incidence_array[he_u_it] == _incidence_array[he_it]) {
               std::swap(_incidence_array[he_u_it],
                         _incidence_array[hypernode(u).firstTailEntry()]);
@@ -1315,6 +1321,8 @@ class GenericHypergraph {
             ++hypernode(memento.v).num_incident_cut_hes;    // because v is connected to that cut HE
           }
           if (hypernode(memento.u).isHeadID(he_it)) {
+            ASSERT(he_it < _incidence_array.size());
+            ASSERT(hypernode(memento.u).firstTailEntry() - 1 < _incidence_array.size());
             std::swap(_incidence_array[he_it],
                       _incidence_array[hypernode(memento.u).firstTailEntry() - 1]);
             hypernode(memento.u).decrementHeadCounter();
@@ -1355,6 +1363,8 @@ class GenericHypergraph {
                                                 << "(while uncontracting: (" << memento.u << "," << memento.v << "))");
         if (_allow_mixed_contraction && hypernode(memento.v).isHeadID(he_it)) { // assuming there's only one head ...
           // make node a tail in edge
+          ASSERT(hyperedge(he).firstTailEntry() - 1 < _incidence_array.size());
+          ASSERT(hyperedge(he).firstInvalidEntry() - 1 < _incidence_array.size());
           std::swap(_incidence_array[hyperedge(he).firstTailEntry() - 1], // u: no longer a head
                     _incidence_array[hyperedge(he).firstInvalidEntry() - 1]); // v
 
@@ -1362,9 +1372,12 @@ class GenericHypergraph {
           for (HyperedgeID he_u_it = hypernode(memento.u).firstHeadEntry();
                he_u_it < hypernode(memento.u).firstTailEntry();
                ++he_u_it) {
+            ASSERT(he_u_it < _incidence_array.size());
+            ASSERT(he_it < _incidence_array.size());
             if (_incidence_array[he_u_it] == _incidence_array[he_it]) {
+              ASSERT(hypernode(memento.u).firstTailEntry() - 1 < _incidence_array.size());
               std::swap(_incidence_array[he_u_it],
-                        _incidence_array[hypernode(memento.u).firstTailEntry()]);
+                        _incidence_array[hypernode(memento.u).firstTailEntry() - 1]);
               hypernode(memento.u).decrementHeadCounter();
               break;
             }
@@ -2266,6 +2279,8 @@ class GenericHypergraph {
     // the hypernode's point of view.
     _incidence_array[hyperedge(e).firstInvalidEntry() - 1] = u;
     if (make_head) {
+      ASSERT(hyperedge(e).firstTailEntry() < _incidence_array.size());
+      ASSERT(hyperedge(e).firstInvalidEntry() - 1 < _incidence_array.size());
       std::swap(_incidence_array[hyperedge(e).firstTailEntry()],
                 _incidence_array[hyperedge(e).firstInvalidEntry() - 1]);
       hyperedge(e).incrementHeadCounter();
@@ -2284,6 +2299,7 @@ class GenericHypergraph {
     nodeU.incrementSize();
 
     if (make_head) {
+      ASSERT(hypernode(u).firstTailEntry() < _incidence_array.size());
       std::swap(_incidence_array[hypernode(u).firstTailEntry()],
                 _incidence_array.back());
       hypernode(u).incrementHeadCounter();
