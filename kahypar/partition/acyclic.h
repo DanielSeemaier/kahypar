@@ -77,7 +77,6 @@ static inline void performInitialPartitioning(Hypergraph& hypergraph, const Cont
   Timer::instance().add(context, Timepoint::initial_partitioning,
                         std::chrono::duration<double>(end - start).count());
 
-  hypergraph.initializeNumCutHyperedges();
   if (context.partition.verbose_output && context.type == ContextType::main) {
     LOG << "Initial Partitioning Result:";
     LOG << "Initial" << context.partition.objective << "      ="
