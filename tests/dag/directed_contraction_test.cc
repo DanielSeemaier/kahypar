@@ -7,6 +7,7 @@
 
 #include "dag.h"
 
+using ::testing::Eq;
 using ::testing::Test;
 using ::testing::UnorderedElementsAre;
 using ::testing::IsEmpty;
@@ -214,6 +215,85 @@ TEST_F(DirectedContractionTest, ContractGraph) {
     hg.uncontract(mementos[i - 1]);
   }
   assertGraphRestored();
+}
+
+TEST_F(DirectedContractionTest, RemoveAndRestoreEdge) {
+  for (std::size_t i = 0; i < 2; ++i) {
+    hg.removeEdge(0);
+    ASSERT_THAT(hg.currentNumEdges(), Eq(5));
+    ASSERT_THAT(toVec(hg.incidentHeadEdges(0)), IsEmpty());
+    ASSERT_THAT(toVec(hg.incidentTailEdges(2)), UnorderedElementsAre(1));
+    ASSERT_THAT(toVec(hg.incidentTailEdges(7)), IsEmpty());
+    hg.restoreEdge(0);
+    assertGraphRestored();
+  }
+  for (std::size_t i = 0; i < 2; ++i) {
+    hg.removeEdge(0);
+    hg.removeEdge(1);
+    hg.removeEdge(2);
+    ASSERT_THAT(hg.currentNumEdges(), Eq(3));
+    ASSERT_THAT(toVec(hg.incidentHeadEdges(0)), IsEmpty());
+    ASSERT_THAT(toVec(hg.incidentTailEdges(0)), UnorderedElementsAre(5));
+    ASSERT_THAT(toVec(hg.incidentHeadEdges(1)), IsEmpty());
+    ASSERT_THAT(toVec(hg.incidentTailEdges(1)), UnorderedElementsAre(3, 5));
+    ASSERT_THAT(toVec(hg.incidentHeadEdges(2)), IsEmpty());
+    ASSERT_THAT(toVec(hg.incidentTailEdges(2)), IsEmpty());
+    ASSERT_THAT(toVec(hg.incidentHeadEdges(3)), UnorderedElementsAre(3));
+    ASSERT_THAT(toVec(hg.incidentTailEdges(3)), IsEmpty());
+    ASSERT_THAT(toVec(hg.incidentHeadEdges(4)), IsEmpty());
+    ASSERT_THAT(toVec(hg.incidentTailEdges(4)), IsEmpty());
+    ASSERT_THAT(toVec(hg.incidentHeadEdges(5)), UnorderedElementsAre(4));
+    ASSERT_THAT(toVec(hg.incidentTailEdges(5)), UnorderedElementsAre(3));
+    ASSERT_THAT(toVec(hg.incidentHeadEdges(6)), IsEmpty());
+    ASSERT_THAT(toVec(hg.incidentTailEdges(6)), UnorderedElementsAre(4));
+    ASSERT_THAT(toVec(hg.incidentHeadEdges(7)), IsEmpty());
+    ASSERT_THAT(toVec(hg.incidentTailEdges(7)), IsEmpty());
+    ASSERT_THAT(toVec(hg.incidentHeadEdges(8)), IsEmpty());
+    ASSERT_THAT(toVec(hg.incidentTailEdges(8)), IsEmpty());
+    ASSERT_THAT(toVec(hg.incidentHeadEdges(9)), UnorderedElementsAre(5));
+    ASSERT_THAT(toVec(hg.incidentTailEdges(9)), IsEmpty());
+    ASSERT_THAT(toVec(hg.incidentHeadEdges(10)), IsEmpty());
+    ASSERT_THAT(toVec(hg.incidentTailEdges(10)), UnorderedElementsAre(4));
+    hg.restoreEdge(2);
+    hg.restoreEdge(1);
+    hg.restoreEdge(0);
+    assertGraphRestored();
+  }
+}
+
+TEST_F(DirectedContractionTest, RemoveRestoreSingletonHypernodeInCoarserGraph) {
+  auto memento_1 = hg.contract(2, 7);
+  auto memento_2 = hg.contract(0, 2);
+  hg.removeEdge(0);
+  ASSERT_THAT(hg.currentNumEdges(), Eq(5));
+  ASSERT_THAT(toVec(hg.incidentEdges(0)), UnorderedElementsAre(1, 2, 5));
+  ASSERT_THAT(toVec(hg.incidentHeadEdges(0)), UnorderedElementsAre(2));
+  ASSERT_THAT(toVec(hg.incidentTailEdges(0)), UnorderedElementsAre(1, 5));
+  ASSERT_THAT(toVec(hg.heads(2)), UnorderedElementsAre(0));
+  ASSERT_THAT(toVec(hg.tails(2)), UnorderedElementsAre(10, 4));
+  hg.restoreEdge(0);
+  ASSERT_THAT(hg.currentNumEdges(), Eq(6));
+  ASSERT_THAT(toVec(hg.incidentEdges(0)), UnorderedElementsAre(0, 1, 2, 5));
+  ASSERT_THAT(toVec(hg.incidentHeadEdges(0)), UnorderedElementsAre(0, 2));
+  ASSERT_THAT(toVec(hg.incidentTailEdges(0)), UnorderedElementsAre(1, 5));
+  ASSERT_THAT(toVec(hg.pins(2)), UnorderedElementsAre(0, 4, 10));
+  ASSERT_THAT(toVec(hg.heads(2)), UnorderedElementsAre(0));
+  ASSERT_THAT(toVec(hg.tails(2)), UnorderedElementsAre(10, 4));
+  hg.uncontract(memento_2);
+  hg.uncontract(memento_1);
+}
+
+// Code that crashed at some point in time
+
+TEST_F(DirectedContractionTest, Regression_C3540_UncoarseningCrash) {
+  hg = loadHypergraph("test_instances/c3540.hgr");
+  partitionUsingTopologicalOrdering(8);
+
+  auto memento = hg.contract(1604, 1566);
+  hg.removeEdge(1565);
+  hg.initializeNumCutHyperedges();
+  hg.restoreEdge(1565);
+  hg.uncontract(memento); // should not crash
 }
 } // namespace dag
 } // namespace kahypar
