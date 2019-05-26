@@ -1129,6 +1129,7 @@ class GenericHypergraph {
   template <typename GainChanges>
   void uncontract(const Memento& memento, GainChanges& changes,
                   meta::Int2Type<static_cast<int>(RefinementAlgorithm::twoway_fm)>) {  // NOLINT
+    ASSERT(!isDirected(), "Implement uncontract(Memento, GainChanges)!");
     ASSERT(!hypernode(memento.u).isDisabled(), "Hypernode" << memento.u << "is disabled");
     ASSERT(hypernode(memento.v).isDisabled(), "Hypernode" << memento.v << "is not invalid");
     ASSERT(changes.representative.size() == 1, V(changes.representative.size()));
@@ -2568,6 +2569,7 @@ reindex(const Hypergraph& hypergraph) {
   std::unique_ptr<Hypergraph> reindexed_hypergraph(new Hypergraph());
 
   reindexed_hypergraph->_k = hypergraph._k;
+  reindexed_hypergraph->_directed = hypergraph._directed;
 
   HypernodeID num_hypernodes = 0;
   for (const HypernodeID& hn : hypergraph.nodes()) {
@@ -2605,6 +2607,7 @@ reindex(const Hypergraph& hypergraph) {
       reindexed_hypergraph->hypernode(original_to_reindexed[pin]).incrementSize();
       ++pin_index;
     }
+    reindexed_hypergraph->hyperedge(num_hyperedges).setHeadCounter(hypergraph.hyperedge(he).numHeads());
     ++num_hyperedges;
   }
 
@@ -2647,6 +2650,7 @@ reindex(const Hypergraph& hypergraph) {
   reindexed_hypergraph->_part_info.resize(reindexed_hypergraph->_k);
   for (const HypernodeID& hn : reindexed_hypergraph->nodes()) {
     HypernodeID original_hn = reindexed_to_original[hn];
+    reindexed_hypergraph->hypernode(hn).setHeadCounter(hypergraph.hypernode(original_hn).numHeads());
     if (hypergraph.isFixedVertex(original_hn)) {
       reindexed_hypergraph->setFixedVertex(hn, hypergraph.fixedVertexPartID(original_hn));
     }
