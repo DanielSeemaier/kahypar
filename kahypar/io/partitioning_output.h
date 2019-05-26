@@ -241,7 +241,7 @@ inline void printPartitioningResults(const Hypergraph& hypergraph,
       }
     }
     LOG << "  + Initial Partitioning           =" << timings.total_initial_partitioning << "s";
-    if (context.partition.mode == Mode::direct_kway) {
+    if (context.partition.mode == Mode::direct_kway || context.partition.mode == Mode::acyclic) {
       LOG << "    + Coarsening                   =" << timings.total_ip_coarsening << "s";
       for (const auto& timing : timings.bisection_coarsening) {
         LOG << "          | bisection" << timing.no << "(" << timing.lk << "," << timing.rk

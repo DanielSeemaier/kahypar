@@ -113,6 +113,8 @@ static inline void partition(Hypergraph& hypergraph, const Context& context) {
   for (uint32_t vcycle = 1; vcycle <= context.partition.global_search_iterations; ++vcycle) {
     context.partition.current_v_cycle = vcycle;
     const bool improved_quality = partitionVCycle(hypergraph, *coarsener, *refiner, context);
+    ASSERT(QuotientGraph<DFSCycleDetector>(hypergraph, context).isAcyclic(),
+           "Vcycle" << vcycle << "produced a cyclic partition");
 
     if (!improved_quality) {
       LOG << "No improvement in V-cycle" << vcycle << ". Stopping global search.";
