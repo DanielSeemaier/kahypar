@@ -53,6 +53,9 @@ set_property(TARGET HypergraphChecker PROPERTY CXX_STANDARD_REQUIRED ON)
 add_executable(PoppToHgr popp_to_hgr_converter.cc)
 set_property(TARGET PoppToHgr PROPERTY CXX_STANDARD 14)
 set_property(TARGET PoppToHgr PROPERTY CXX_STANDARD_REQUIRED ON)
+add_executable(VerifyHgrGraphPartition verify_hgr_graph_partition.cc)
+set_property(TARGET VerifyHgrGraphPartition PROPERTY CXX_STANDARD 14)
+set_property(TARGET VerifyHgrGraphPartition PROPERTY CXX_STANDARD_REQUIRED ON)
 
 
 # This test needs test instance files, so we copy them to the corresponding build dir
