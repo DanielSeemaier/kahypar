@@ -27,3 +27,4 @@ external_tools/*
 test.sh
 .idea/
 cmake-build-debug/
+cmake-build-release/
