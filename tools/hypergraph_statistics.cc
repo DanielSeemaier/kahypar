@@ -36,6 +36,7 @@ int main(int argc, char* argv[]) {
   if (argc != 3) {
     std::cout << "Wrong number of arguments!" << std::endl;
     std::cout << "Usage: hypergraph_stats <hypergraph.hgr> <statsfile.txt>" << std::endl;
+    std::exit(-1);
   }
 
   std::string graph_filename(argv[1]);
@@ -50,7 +51,8 @@ int main(int argc, char* argv[]) {
 
   kahypar::io::readHypergraphFile(graph_filename, num_hypernodes, num_hyperedges,
                                   index_vector, edge_vector, &hyperedge_weights, &hypernode_weights);
-  Hypergraph hypergraph(num_hypernodes, num_hyperedges, index_vector, edge_vector);
+  // TODO integrate into file format
+  Hypergraph hypergraph(num_hypernodes, num_hyperedges, index_vector, edge_vector, 2, nullptr, nullptr, true, 1);
 
   HyperedgeID max_hn_degree = 0;
   HyperedgeID min_hn_degree = std::numeric_limits<HyperedgeID>::max();
