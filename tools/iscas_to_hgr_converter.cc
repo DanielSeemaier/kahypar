@@ -11,7 +11,19 @@
 using namespace std::string_literals;
 using namespace kahypar;
 
-std::pair<std::string, std::vector<std::string>> parse_line(const std::string& line) {
+enum Output {
+  HGR,
+  GRAPH
+};
+
+using Graph = std::unordered_map<std::string, std::vector<std::string>>;
+using NameToID = std::unordered_map<std::string, std::size_t>;
+using HeadAndTails = std::pair<std::string, std::vector<std::string>>;
+using AdjacencyList = std::vector<std::vector<std::size_t>>;
+
+constexpr static bool print_mapping = false;
+
+HeadAndTails parseHeadTails(const std::string& line) {
   // input or output node: INPUT(node) or OUTPUT(node)
   const auto input_length = "INPUT"s.size();
   const auto output_length = "OUTPUT"s.size();
@@ -33,43 +45,22 @@ std::pair<std::string, std::vector<std::string>> parse_line(const std::string& l
   return {head, string::split(tails, ",")};
 }
 
-int main(int argc, char *argv[]) {
-  if (argc != 2) {
-    std::cout << "No .bench.txt file specified" << std::endl;
-    std::exit(0);
-  }
-
-  std::string iscas_filename = argv[1];
-  std::string hgr_filename = iscas_filename + ".hgr";
-
-  std::string line;
-  std::ifstream iscas(iscas_filename);
-  std::unordered_map<std::string, std::vector<std::string>> graph;
-  while (std::getline(iscas, line)) {
-    if (line[0] == '#') {
-      continue;
-    }
-
-    auto head_and_tails = parse_line(line);
-    auto& head = head_and_tails.first;
-    auto& tails = head_and_tails.second;
-    if (!head.empty()) {
-      graph[std::move(head)] = std::move(tails);
-    }
-  }
-  iscas.close();
-
-  std::unordered_map<std::string, std::size_t> name_to_id;
-  std::size_t next_id = 1; // ids start at 1 in the hypergraph file format
-  std::size_t num_hypernodes = graph.size();
+void generateHgr(const std::string& out_filename, Graph graph, NameToID name_to_id) {
+  const std::size_t num_hypernodes = graph.size();
   std::size_t num_hyperedges = 0;
   for (const auto& pair : graph) {
-    name_to_id[pair.first] = next_id++;
-    if (!pair.second.empty()) ++num_hyperedges;
+    if (!pair.second.empty()) {
+      ++num_hyperedges;
+    }
   }
 
-  // write hgr
-  std::ofstream out(hgr_filename);
+  std::ofstream out(out_filename);
+  if (print_mapping) {
+    for (const auto& name_id : name_to_id) {
+      out << "% " << name_id.first << "=" << name_id.second << "\n";
+    }
+  }
+
   std::vector<std::size_t> pins;
   out << num_hyperedges << " " << num_hypernodes << "\n";
   for (const auto& pair : graph) {
@@ -80,7 +71,6 @@ int main(int argc, char *argv[]) {
 
     for (const auto& tail : pair.second) { // tails
       pin = name_to_id[tail];
-      // TODO is there a better approach to model multi-edge instead of just ignoring them?
       if (std::find(pins.begin(), pins.end(), pin) == pins.end()) { // prevent multi-pins that result from multi-edges
         out << pin << " ";
         pins.push_back(pin);
@@ -94,7 +84,7 @@ int main(int argc, char *argv[]) {
 
   // check result
   try {
-    validateHypergraphFile(hgr_filename);
+    validateHypergraphFile(out_filename);
   } catch (const BadHypernodeException& e) {
     std::cout << "Error: " << e.what() << std::endl;
     const HypernodeID& hn = e.hypernode();
@@ -104,10 +94,91 @@ int main(int argc, char *argv[]) {
         break;
       }
     }
-    return -1;
+    std::exit(-1);
   } catch (const BadHypergraphException& e) {
     std::cout << "Error: " << e.what() << std::endl;
-    return -1;
+    std::exit(-1);
   }
+}
+
+void generateGraph(const std::string& out_filename, Graph graph, NameToID name_to_id) {
+  const std::size_t num_nodes = graph.size();
+  const std::size_t num_edges = std::accumulate(graph.begin(), graph.end(), 0, [](std::size_t acc, const auto& pair) {
+    return acc + pair.second.size();
+  });
+
+  AdjacencyList adj_list(num_nodes);
+  for (const auto& pair : graph) {
+    const auto& head = pair.first;
+    const auto& tails = pair.second;
+    ASSERT(0 < name_to_id[head] && name_to_id[head] <= num_nodes);
+    for (const auto& tail : tails) {
+      ASSERT(0 < name_to_id[tail] && name_to_id[tail] <= num_nodes);
+      adj_list[name_to_id[tail] - 1].push_back(name_to_id[head]);
+    }
+  }
+
+  std::ofstream out(out_filename);
+  if (print_mapping) {
+    for (const auto& name_id : name_to_id) {
+      out << "% " << name_id.first << "=" << name_id.second << "\n";
+    }
+  }
+
+  out << num_nodes << " " << num_edges << "\n";
+  for (const auto& heads : adj_list) {
+    for (const std::size_t& head : heads) {
+      out << head << " ";
+    }
+    out << "\n";
+  }
+  out.close();
+}
+
+int main(int argc, char* argv[]) {
+  if (argc != 3) {
+    std::cout << "Usage: " << argv[0] << " <iscas file> <*.hgr|*.graph>" << std::endl;
+    std::exit(0);
+  }
+
+  std::string iscas_filename = argv[1];
+  std::string out_filename = argv[2];
+  Output out_format = string::ends_with(out_filename, ".graph")
+                      ? Output::GRAPH
+                      : Output::HGR;
+
+  std::string line;
+  std::ifstream iscas(iscas_filename);
+  Graph graph;
+  while (std::getline(iscas, line)) {
+    if (line[0] == '#') {
+      continue;
+    }
+
+    auto head_and_tails = parseHeadTails(line);
+    auto& head = head_and_tails.first;
+    auto& tails = head_and_tails.second;
+    if (!head.empty()) {
+      graph[std::move(head)] = std::move(tails);
+    }
+  }
+  iscas.close();
+
+  NameToID name_to_id;
+  std::size_t next_id = 1; // ids start at 1 in the hypergraph file format
+  for (const auto& pair : graph) {
+    name_to_id[pair.first] = next_id++;
+  }
+
+  switch (out_format) {
+    case HGR:
+      generateHgr(out_filename, std::move(graph), std::move(name_to_id));
+      break;
+
+    case GRAPH:
+      generateGraph(out_filename, std::move(graph), std::move(name_to_id));
+      break;
+  }
+
   return 0;
 }

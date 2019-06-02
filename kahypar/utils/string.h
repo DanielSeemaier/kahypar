@@ -8,6 +8,10 @@ bool starts_with(const std::string& haystack, const std::string &needle) {
   return haystack.substr(0, needle.length()) == needle;
 }
 
+bool ends_with(const std::string& haystack, const std::string& needle) {
+  return haystack.substr(haystack.length() - needle.length(), needle.length()) == needle;
+}
+
 std::string trim(std::string text, const char *symbols = " \t\n\r\f\v") {
   text.erase(0, text.find_first_not_of(symbols));
   text.erase(text.find_last_not_of(symbols) + 1);
