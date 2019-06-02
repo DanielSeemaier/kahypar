@@ -3,6 +3,7 @@
 #include <sstream>
 
 #include "kahypar/macros.h"
+#include "kahypar/utils/string.h"
 
 #include "hypergraph_checker.h"
 
@@ -10,16 +11,24 @@ constexpr std::size_t GRAPH_FILENAME = 1;
 constexpr std::size_t HGR_FILENAME = 2;
 constexpr char COMMENT_CHAR = '#';
 
+enum Output {
+  HGR,
+  GRAPH
+};
+
 using namespace kahypar;
 
 int main(int argc, char* argv[]) {
   if (argc != 3) {
-    std::cout << "Usage: " << argv[0] << " <graph file> <hgr file>" << std::endl;
+    std::cout << "Usage: " << argv[0] << " <graph file> <*.hgr|*.graph>" << std::endl;
     std::exit(-1);
   }
 
   const std::string graph_filename = argv[GRAPH_FILENAME];
-  const std::string hgr_filename = argv[HGR_FILENAME];
+  const std::string out_filename = argv[HGR_FILENAME];
+  Output out_format = (string::ends_with(out_filename, ".graph"))
+    ? Output::GRAPH
+    : Output::HGR;
 
   std::ifstream in(graph_filename);
   std::string line;
@@ -97,22 +106,49 @@ int main(int argc, char* argv[]) {
   }
   in.close();
 
-  std::ofstream out(hgr_filename);
-  out << "% Generated from " << graph_filename << "\n";
-  out << hes.size() << " " << hn_weights.size() << " 11\n";
-  for (std::size_t i = 0; i < hes.size(); ++i) {
-    ASSERT(he_weights.size() > i);
-    out << he_weights[i] << " ";
-    for (const auto& pin : hes[i]) {
-      out << pin + 1 << " ";
+  if (out_format == Output::HGR) {
+    std::ofstream out(out_filename);
+    out << "% Generated from " << graph_filename << "\n";
+    out << hes.size() << " " << hn_weights.size() << " 11\n";
+    for (std::size_t i = 0; i < hes.size(); ++i) {
+      ASSERT(he_weights.size() > i);
+      out << he_weights[i] << " ";
+      for (const auto& pin : hes[i]) {
+        out << pin + 1 << " ";
+      }
+      out << "\n";
     }
-    out << "\n";
-  }
-  for (const auto& hn_weight : hn_weights) {
-    out << hn_weight << "\n";
-  }
-  out.close();
+    for (const auto& hn_weight : hn_weights) {
+      out << hn_weight << "\n";
+    }
+    out.close();
+  } else if (out_format == Output::GRAPH) {
+    std::ofstream out(out_filename);
+    const std::size_t num_edges = std::accumulate(hes.begin(), hes.end(), 0, [](auto acc, const auto& he) {
+      ASSERT(he.size() > 1);
+      return acc + (he.size() - 1);
+    });
+    out << hn_weights.size() << " " << num_edges << " 11 1\n";
 
-  validateHypergraphFileAndPanic(hgr_filename);
+    ASSERT(hes.size() <= hn_weights.size());
+    for (std::size_t hn = 0, he = 0; hn < hn_weights.size(); ++hn) {
+      out << hn_weights[hn] << " ";
+      if (hes[he][0] == hn) {
+        for (std::size_t i = 1; i < hes[he].size(); ++i) {
+          out << hes[he][i] + 1 << " " << he_weights[he] << " ";
+        }
+        ++he;
+      }
+      out << "\n";
+    }
+    out.close();
+  } else {
+    LOG << "Unsupported output format";
+    std::exit(-1);
+  }
+
+  if (out_format == Output::HGR) {
+    validateHypergraphFileAndPanic(out_filename);
+  }
   return 0;
 }

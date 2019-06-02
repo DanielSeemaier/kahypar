@@ -107,6 +107,7 @@ void generateGraph(const std::string& out_filename, Graph graph, NameToID name_t
     return acc + pair.second.size();
   });
 
+  std::size_t num_multi_edges = 0;
   AdjacencyList adj_list(num_nodes);
   for (const auto& pair : graph) {
     const auto& head = pair.first;
@@ -114,7 +115,14 @@ void generateGraph(const std::string& out_filename, Graph graph, NameToID name_t
     ASSERT(0 < name_to_id[head] && name_to_id[head] <= num_nodes);
     for (const auto& tail : tails) {
       ASSERT(0 < name_to_id[tail] && name_to_id[tail] <= num_nodes);
-      adj_list[name_to_id[tail] - 1].push_back(name_to_id[head]);
+      auto& vec = adj_list[name_to_id[tail] - 1];
+      auto& to_add = name_to_id[head];
+      if (std::find(vec.begin(), vec.end(), to_add) == vec.end()) {
+        vec.push_back(to_add);
+      } else {
+        ++num_multi_edges;
+        LOG << "Ignoring multi-edge" << name_to_id[tail] << "-->" << to_add << "===" << tail << "-->" << head;
+      }
     }
   }
 
@@ -125,10 +133,12 @@ void generateGraph(const std::string& out_filename, Graph graph, NameToID name_t
     }
   }
 
-  out << num_nodes << " " << num_edges << "\n";
+  ASSERT(num_edges >= num_multi_edges);
+  out << num_nodes << " " << num_edges - num_multi_edges << " 11 1\n";
   for (const auto& heads : adj_list) {
+    out << "1 ";
     for (const std::size_t& head : heads) {
-      out << head << " ";
+      out << head << " 1 ";
     }
     out << "\n";
   }
