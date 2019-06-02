@@ -50,6 +50,9 @@ set_property(TARGET IscasToHgr PROPERTY CXX_STANDARD_REQUIRED ON)
 add_executable(HypergraphChecker hypergraph_checker.cc)
 set_property(TARGET HypergraphChecker PROPERTY CXX_STANDARD 14)
 set_property(TARGET HypergraphChecker PROPERTY CXX_STANDARD_REQUIRED ON)
+add_executable(PoppToHgr popp_to_hgr_converter.cc)
+set_property(TARGET PoppToHgr PROPERTY CXX_STANDARD 14)
+set_property(TARGET PoppToHgr PROPERTY CXX_STANDARD_REQUIRED ON)
 
 
 # This test needs test instance files, so we copy them to the corresponding build dir
