@@ -1,11 +1,16 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
-#include <kahypar/macros.h>
+
+#include "kahypar/macros.h"
+
+#include "hypergraph_checker.h"
 
 constexpr std::size_t GRAPH_FILENAME = 1;
 constexpr std::size_t HGR_FILENAME = 2;
 constexpr char COMMENT_CHAR = '#';
+
+using namespace kahypar;
 
 int main(int argc, char* argv[]) {
   if (argc != 3) {
@@ -108,5 +113,6 @@ int main(int argc, char* argv[]) {
   }
   out.close();
 
+  validateHypergraphFileAndPanic(hgr_filename);
   return 0;
 }
