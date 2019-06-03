@@ -40,11 +40,23 @@ class TopologicalOrderingInitialPartitioner : public IInitialPartitioner,
 
     // assign nodes to the lowest non-overloaded block in topological order
     PartitionID p = 0;
+#ifdef KAHYPAR_USE_ASSERTIONS
+    bool reset = false;
+#endif
     for (const HypernodeID& hn : topological_ordering) {
       while (!Base::assignHypernodeToPartition(hn, p)) {
         ++p;
-        ASSERT(p < _context.partition.k, "Could not find a non-overloaded partition for node" << hn);
+        ASSERT(p < _context.partition.k || !reset, "Could not find a non-overloaded partition for node" << hn);
+        if (p == _context.partition.k) {
+#ifdef KAHYPAR_USE_ASSERTIONS
+          reset = true;
+#endif
+          p = 0;
+        }
       }
+#ifdef KAHYPAR_USE_ASSERTIONS
+      reset = false;
+#endif
     }
   }
 };
