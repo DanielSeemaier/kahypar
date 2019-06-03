@@ -64,20 +64,20 @@ class QuotientGraph {
       if (_hg.isHead(hn, he)) { // hn is head
         for (const HypernodeID& ht : _hg.tails(he)) {
           if (_hg.partID(ht) != from) {
-            deltas[_hg.partID(ht)][from] -= _hg.edgeWeight(he);
+            deltas[_hg.partID(ht)][from] -= 1;
           }
           if (_hg.partID(ht) != to) {
-            deltas[_hg.partID(ht)][to] += _hg.edgeWeight(he);
+            deltas[_hg.partID(ht)][to] += 1;
           }
         }
       } else { // hn is tail
         ASSERT(_hg.isTail(hn, he));
         for (const HypernodeID& hh : _hg.heads(he)) {
           if (_hg.partID(hh) != from) {
-            deltas[from][_hg.partID(hh)] -= _hg.edgeWeight(he);
+            deltas[from][_hg.partID(hh)] -= 1;
           }
           if (_hg.partID(hh) != to) {
-            deltas[to][_hg.partID(hh)] += _hg.edgeWeight(he);
+            deltas[to][_hg.partID(hh)] += 1;
           }
         }
       }
@@ -132,7 +132,7 @@ class QuotientGraph {
         const QNodeID& v = edge.first;
         const QEdgeWeight& weight = edge.second;
         if (weight != 0) {
-          ASSERT(weight > 0);
+          ASSERT(weight > 0, V(u) << V(weight));
           ++rank[v];
         }
       }
