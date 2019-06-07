@@ -115,10 +115,29 @@ class VertexPairRater {
                                     HeavyNodePenaltyPolicy::penalty(weight_u,
                                                                     _hg.nodeWeight(tmp_target));
       DBG << "r(" << u << "," << tmp_target << ")=" << tmp_rating;
+      // TODO cache here, move to appropriate place
+      bool allow_contraction = true;
+      if (!_context.coarsening.allow_mixed_contraction) {
+        for (const HyperedgeID& he : _hg.incidentHeadEdges(u)) {
+          if (_hg.isTail(target, he)) {
+            allow_contraction = false;
+            break;
+          }
+        }
+        if (allow_contraction) {
+          for (const HyperedgeID& he : _hg.incidentTailEdges(u)) {
+            if (_hg.isHead(target, he)) {
+              allow_contraction = false;
+            }
+          }
+        }
+      }
+
       if (CommunityPolicy::sameCommunity(_hg.communities(), u, tmp_target) &&
           AcceptancePolicy::acceptRating(tmp_rating, max_rating,
                                          target, tmp_target, _already_matched) &&
-          FixedVertexPolicy::acceptContraction(_hg, _context, u, tmp_target)) {
+          FixedVertexPolicy::acceptContraction(_hg, _context, u, tmp_target) &&
+          allow_contraction) {
         max_rating = tmp_rating;
         target = tmp_target;
       }
