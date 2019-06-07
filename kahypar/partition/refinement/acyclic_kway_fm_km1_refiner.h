@@ -133,10 +133,6 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
         return refineImpl2<KahnCycleDetector>(refinement_nodes, metrics, changes, best_metrics);
       case CycleDetectorType::bender:
         return refineImpl2<PseudoTopologicalOrderingCycleDetector>(refinement_nodes, metrics, changes, best_metrics);
-      case CycleDetectorType::pearce:
-        return refineImpl2<PearceCycleDetector>(refinement_nodes, metrics, changes, best_metrics);
-      case CycleDetectorType::haeupler:
-        return refineImpl2<HaeuplerCycleDetector>(refinement_nodes, metrics, changes, best_metrics);
       default:
         LOG << "No cycle detector set";
         return false;
