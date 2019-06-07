@@ -96,7 +96,8 @@ enum class RefinementAlgorithm : uint8_t {
   kway_flow,
   kway_fm_flow_km1,
   kway_fm_flow,
-  acylic_kway_fm_km1,
+  acyclic_kway_fm_km1,
+  acyclic_kway_fm_balance,
   do_nothing,
   UNDEFINED
 };
@@ -161,6 +162,28 @@ enum class EvoDecision :uint8_t {
   mutation,
   combine
 };
+
+enum class CycleDetectorType : uint8_t {
+  dfs,
+  kahn,
+  bender,
+  pearce,
+  haeupler,
+  UNDEFINED
+};
+
+std::ostream& operator<< (std::ostream& os, const CycleDetectorType& detector) {
+  switch (detector) {
+    case CycleDetectorType::dfs: return os << "dfs";
+    case CycleDetectorType::kahn: return os << "kahn";
+    case CycleDetectorType::bender: return os << "bender";
+    case CycleDetectorType::pearce: return os << "pearce";
+    case CycleDetectorType::haeupler: return os << "haeupler";
+    case CycleDetectorType::UNDEFINED: return os << "-";
+    // omit default case to trigger compiler warning for missing case
+  }
+  return os << static_cast<uint8_t>(detector);
+}
 
 
 std::ostream& operator<< (std::ostream& os, const EvoReplaceStrategy& replace) {
@@ -350,7 +373,8 @@ std::ostream& operator<< (std::ostream& os, const RefinementAlgorithm& algo) {
     case RefinementAlgorithm::kway_flow: return os << "kway_flow";
     case RefinementAlgorithm::kway_fm_flow_km1: return os << "kway_fm_flow_km1";
     case RefinementAlgorithm::kway_fm_flow: return os << "kway_fm_flow";
-    case RefinementAlgorithm::acylic_kway_fm_km1: return os << "acyclic_kway_fm_km1";
+    case RefinementAlgorithm::acyclic_kway_fm_km1: return os << "acyclic_kway_fm_km1";
+    case RefinementAlgorithm::acyclic_kway_fm_balance: return os << "acyclic_kway_fm_balance";
     case RefinementAlgorithm::do_nothing: return os << "do_nothing";
     case RefinementAlgorithm::UNDEFINED: return os << "UNDEFINED";
       // omit default case to trigger compiler warning for missing cases
@@ -435,6 +459,22 @@ std::ostream& operator<< (std::ostream& os, const FlowExecutionMode& mode) {
       // omit default case to trigger compiler warning for missing cases
   }
   return os << static_cast<uint8_t>(mode);
+}
+
+static CycleDetectorType cycleDetectorTypeFromString(const std::string& detector) {
+  if (detector == "dfs") {
+    return CycleDetectorType::dfs;
+  } else if (detector == "kahn") {
+    return CycleDetectorType::kahn;
+  } else if (detector == "bender") {
+    return CycleDetectorType::bender;
+  } else if (detector == "pearce") {
+    return CycleDetectorType::pearce;
+  } else if (detector == "haeupler") {
+    return CycleDetectorType::haeupler;
+  }
+  LOG << "No valid cycle detector type. ";
+  exit(0);
 }
 
 static EvoMutateStrategy mutateStrategyFromString(const std::string& strat) {
@@ -569,7 +609,9 @@ static RefinementAlgorithm refinementAlgorithmFromString(const std::string& type
   } else if (type == "kway_fm_flow") {
     return RefinementAlgorithm::kway_fm_flow;
   } else if (type == "acyclic_kway_fm_km1") {
-    return RefinementAlgorithm::acylic_kway_fm_km1;
+    return RefinementAlgorithm::acyclic_kway_fm_km1;
+  } else if (type == "acyclic_kway_fm_balance") {
+    return RefinementAlgorithm::acyclic_kway_fm_balance;
   } else if (type == "do_nothing") {
     return RefinementAlgorithm::do_nothing;
   }

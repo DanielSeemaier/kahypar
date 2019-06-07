@@ -69,10 +69,14 @@ REGISTER_DISPATCHED_REFINER(RefinementAlgorithm::kway_fm_km1,
                             KWayKMinusOneFactoryDispatcher,
                             meta::PolicyRegistry<RefinementStoppingRule>::getInstance().getPolicy(
                               context.local_search.fm.stopping_rule));
-REGISTER_DISPATCHED_REFINER(RefinementAlgorithm::acylic_kway_fm_km1,
+REGISTER_DISPATCHED_REFINER(RefinementAlgorithm::acyclic_kway_fm_km1,
                             AcyclicKWayKMinusOneFactoryDispatcher,
                             meta::PolicyRegistry<RefinementStoppingRule>::getInstance().getPolicy(
                               context.local_search.fm.stopping_rule));
+REGISTER_DISPATCHED_REFINER(RefinementAlgorithm::acyclic_kway_fm_balance,
+                            AcyclicKWayBalanceFactoryDispatcher,
+                            meta::PolicyRegistry<RefinementStoppingRule>::getInstance().getPolicy(
+                                context.local_search.fm.stopping_rule));
 REGISTER_DISPATCHED_REFINER(RefinementAlgorithm::twoway_flow,
                             TwoWayFlowFactoryDispatcher,
                             meta::PolicyRegistry<FlowNetworkType>::getInstance().getPolicy(

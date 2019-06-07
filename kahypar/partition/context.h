@@ -147,6 +147,7 @@ struct CoarseningParameters {
   HypernodeWeight max_allowed_node_weight = 0;
   HypernodeID contraction_limit = 0;
   double hypernode_weight_fraction = 0.0;
+  bool allow_mixed_contraction = false;
 };
 
 inline std::ostream& operator<< (std::ostream& str, const CoarseningParameters& params) {
@@ -203,6 +204,7 @@ struct LocalSearchParameters {
   Flow flow { };
   RefinementAlgorithm algorithm = RefinementAlgorithm::UNDEFINED;
   int iterations_per_level = std::numeric_limits<int>::max();
+  CycleDetectorType cycle_detector_type;
 };
 
 
@@ -414,6 +416,7 @@ class Context {
   ContextType type = ContextType::main;
   mutable PartitioningStats stats;
   bool partition_evolutionary = false;
+  bool imbalanced_intermediate_step = false;
 
   Context() :
     stats(*this) { }

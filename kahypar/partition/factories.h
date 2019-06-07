@@ -41,6 +41,7 @@
 #include "kahypar/partition/refinement/kway_fm_cut_refiner.h"
 #include "kahypar/partition/refinement/kway_fm_km1_refiner.h"
 #include "kahypar/partition/refinement/acyclic_kway_fm_km1_refiner.h"
+#include "kahypar/partition/refinement/acyclic_kway_fm_balance_refiner.h"
 #include "kahypar/partition/refinement/policies/fm_stop_policy.h"
 
 namespace kahypar {
@@ -82,6 +83,10 @@ using KWayKMinusOneFactoryDispatcher = meta::StaticMultiDispatchFactory<KWayKMin
 using AcyclicKWayKMinusOneFactoryDispatcher = meta::StaticMultiDispatchFactory<AcyclicKWayKMinusOneRefiner,
                                                                                IRefiner,
                                                                                meta::Typelist<StoppingPolicyClasses> >;
+
+using AcyclicKWayBalanceFactoryDispatcher = meta::StaticMultiDispatchFactory<AcyclicKWayBalanceRefiner,
+                                                                             IRefiner,
+                                                                             meta::Typelist<StoppingPolicyClasses> >;
 
 using TwoWayFlowFactoryDispatcher = meta::StaticMultiDispatchFactory<TwoWayFlowRefiner,
                                                                      IRefiner,

@@ -45,14 +45,15 @@
 #include "kahypar/partition/refinement/policies/fm_improvement_policy.h"
 #include "kahypar/utils/float_compare.h"
 #include "kahypar/utils/randomize.h"
+#include "kahypar/utils/timer.h"
 
 namespace kahypar {
-template <class StoppingPolicy = Mandatory,
-          class FMImprovementPolicy = CutDecreasedOrInfeasibleImbalanceDecreased>
+template<class StoppingPolicy = Mandatory,
+         class FMImprovementPolicy = CutDecreasedOrInfeasibleImbalanceDecreased>
 class AcyclicKWayKMinusOneRefiner final : public IRefiner,
-                                   private FMRefinerBase<RollbackInfo,
-                                                         AcyclicKWayKMinusOneRefiner<StoppingPolicy,
-                                                                                     FMImprovementPolicy> >{
+                                          private FMRefinerBase<RollbackInfo,
+                                                                AcyclicKWayKMinusOneRefiner<StoppingPolicy,
+                                                                                            FMImprovementPolicy> > {
  private:
   static constexpr bool debug = false;
   static constexpr HypernodeID hn_to_debug = 5589;
@@ -79,7 +80,7 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
       one_pin_in_from_part_before(one_in_from_before),
       one_pin_in_to_part_after(one_in_to_after),
       two_pins_in_from_part_before(two_in_from_before),
-      two_pins_in_to_part_after(two_in_to_after) { }
+      two_pins_in_to_part_after(two_in_to_after) {}
   };
 
  public:
@@ -89,15 +90,15 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
     _new_adjacent_part(_hg.initialNumNodes(), Hypergraph::kInvalidPartition),
     _unremovable_he_parts(_hg.initialNumEdges() * context.partition.k),
     _gain_cache(_hg.initialNumNodes(), _context.partition.k),
-    _stopping_policy() { }
+    _stopping_policy() {}
 
   ~AcyclicKWayKMinusOneRefiner() override = default;
 
   AcyclicKWayKMinusOneRefiner(const AcyclicKWayKMinusOneRefiner&) = delete;
-  AcyclicKWayKMinusOneRefiner& operator= (const AcyclicKWayKMinusOneRefiner&) = delete;
+  AcyclicKWayKMinusOneRefiner& operator=(const AcyclicKWayKMinusOneRefiner&) = delete;
 
   AcyclicKWayKMinusOneRefiner(AcyclicKWayKMinusOneRefiner&&) = delete;
-  AcyclicKWayKMinusOneRefiner& operator= (AcyclicKWayKMinusOneRefiner&&) = delete;
+  AcyclicKWayKMinusOneRefiner& operator=(AcyclicKWayKMinusOneRefiner&&) = delete;
 
  private:
   void initializeImpl(const HyperedgeWeight max_gain) override final {
@@ -121,16 +122,37 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
     Base::performMovesAndUpdateCache(moves, refinement_nodes, changes);
   }
 
-
   bool refineImpl(std::vector<HypernodeID>& refinement_nodes,
-                  const std::array<HypernodeWeight, 2>&,
-                  const UncontractionGainChanges&,
+                  const std::array<HypernodeWeight, 2>& metrics,
+                  const UncontractionGainChanges& changes,
                   Metrics& best_metrics) override final {
+    switch (_context.local_search.cycle_detector_type) {
+      case CycleDetectorType::dfs:
+        return refineImpl2<DFSCycleDetector>(refinement_nodes, metrics, changes, best_metrics);
+      case CycleDetectorType::kahn:
+        return refineImpl2<KahnCycleDetector>(refinement_nodes, metrics, changes, best_metrics);
+      case CycleDetectorType::bender:
+        return refineImpl2<PseudoTopologicalOrderingCycleDetector>(refinement_nodes, metrics, changes, best_metrics);
+      case CycleDetectorType::pearce:
+        return refineImpl2<PearceCycleDetector>(refinement_nodes, metrics, changes, best_metrics);
+      case CycleDetectorType::haeupler:
+        return refineImpl2<HaeuplerCycleDetector>(refinement_nodes, metrics, changes, best_metrics);
+      default:
+        LOG << "No cycle detector set";
+        return false;
+    }
+  }
+
+  template<typename Detector>
+  bool refineImpl2(std::vector<HypernodeID>& refinement_nodes,
+                   const std::array<HypernodeWeight, 2>&,
+                   const UncontractionGainChanges&,
+                   Metrics& best_metrics) {
     // LOG << "=================================================";
     ASSERT(best_metrics.km1 == metrics::km1(_hg),
            V(best_metrics.km1) << V(metrics::km1(_hg)));
     ASSERT(FloatingPoint<double>(best_metrics.imbalance).AlmostEquals(
-             FloatingPoint<double>(metrics::imbalance(_hg, _context))),
+      FloatingPoint<double>(metrics::imbalance(_hg, _context))),
            V(best_metrics.imbalance) << V(metrics::imbalance(_hg, _context)));
 
     Base::reset();
@@ -154,7 +176,7 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
     int touched_hns_since_last_improvement = 0;
     _stopping_policy.resetStatistics();
 
-    QuotientGraph<DFSCycleDetector> qg(_hg, _context);
+    QuotientGraph<Detector> qg(_hg, _context);
 
     const double beta = log(_hg.currentNumNodes());
     while (!_pq.empty() && !_stopping_policy.searchShouldStop(touched_hns_since_last_improvement,
@@ -179,13 +201,13 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
       // Active nodes cannot be incident only to HEs larger than the threshold, because these
       // should never be activated.
       ASSERT([&]() {
-          for (const HyperedgeID& he : _hg.incidentEdges(max_gain_node)) {
-            if (_hg.edgeSize(he) <= _context.partition.hyperedge_size_threshold) {
-              return true;
-            }
+        for (const HyperedgeID& he : _hg.incidentEdges(max_gain_node)) {
+          if (_hg.edgeSize(he) <= _context.partition.hyperedge_size_threshold) {
+            return true;
           }
-          return false;
-        } (), "HE threshold violated for" << V(max_gain_node));
+        }
+        return false;
+      }(), "HE threshold violated for" << V(max_gain_node));
 
       // remove all other possible moves of the current max_gain_node
       for (const PartitionID& part : _gain_cache.adjacentParts(max_gain_node)) {
@@ -198,8 +220,16 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
       _hg.mark(max_gain_node);
       ++touched_hns_since_last_improvement;
 
-      if (Base::moveIsFeasible(max_gain_node, from_part, to_part)
-          && qg.update(max_gain_node, from_part, to_part)) {
+      bool do_move = Base::moveIsFeasible(max_gain_node, from_part, to_part);
+      if (do_move) {
+        HighResClockTimepoint start = std::chrono::high_resolution_clock::now();
+        do_move = do_move && qg.update(max_gain_node, from_part, to_part);
+        HighResClockTimepoint end = std::chrono::high_resolution_clock::now();
+        Timer::instance().add(_context, Timepoint::cycle_detector,
+                              std::chrono::duration<double>(end - start).count());
+      }
+
+      if (do_move) {
         // LOG << "performed MOVE:" << V(max_gain_node) << V(from_part) << V(to_part);
         Base::moveHypernode(max_gain_node, from_part, to_part);
 
@@ -238,7 +268,7 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
           touched_hns_since_last_improvement = 0;
           _gain_cache.resetDelta();
         }
-        _performed_moves.emplace_back(RollbackInfo { max_gain_node, from_part, to_part });
+        _performed_moves.emplace_back(RollbackInfo{max_gain_node, from_part, to_part});
       } else {
         // If the HN can't be moved to to_part, it locks all its incident
         // HEs in from_part (i.e., from_part becomes unremovable).
@@ -263,10 +293,12 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
         << _performed_moves.size()
         << "local search movements ( min_cut_index=" << min_cut_index << "): stopped because of "
         << (_stopping_policy.searchShouldStop(touched_hns_since_last_improvement, _context, beta,
-                                          best_metrics.km1, current_km1)
-        == true ? "policy" : "empty queue");
+                                              best_metrics.km1, current_km1)
+            == true ? "policy" : "empty queue");
 
     ASSERT(qg.isAcyclic(), "Refinement produced a cyclic quotient graph!");
+    ASSERT(QuotientGraph<DFSCycleDetector>(_hg, _context).isAcyclic(),
+           "Refinement produced a cyclic quotient graph not detected by the QG!");
 
     Base::rollback(_performed_moves.size() - 1, min_cut_index);
     _gain_cache.rollbackDelta();
@@ -301,7 +333,7 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
   }
 
 
-  template <bool update_pq = false>
+  template<bool update_pq = false>
   KAHYPAR_ATTRIBUTE_ALWAYS_INLINE void deltaGainUpdates(const HypernodeID pin,
                                                         const PartitionID from_part,
                                                         const PartitionID to_part,
@@ -416,7 +448,7 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
   // 2.) Removal of new non-border HNs
   // 3.) Connectivity update
   // 4.) Delta-Gain Update
-  template <bool only_update_cache = false>
+  template<bool only_update_cache = false>
   void fullUpdate(const HypernodeID moved_hn, const PartitionID from_part,
                   const PartitionID to_part, const HyperedgeID he) {
     ONLYDEBUG(moved_hn);
@@ -466,7 +498,7 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
 
 
   // UR -> R and R -> UR
-  template <bool only_update_cache = false>
+  template<bool only_update_cache = false>
   void updateForHEwithUnequalPartState(const HypernodeID moved_hn,
                                        const PartitionID from_part,
                                        const PartitionID to_part,
@@ -599,7 +631,7 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
     updateNeighbours<true>(moved_hn, from_part, to_part);
   }
 
-  template <bool only_update_cache = false>
+  template<bool only_update_cache = false>
   void updateNeighbours(const HypernodeID moved_hn, const PartitionID from_part,
                         const PartitionID to_part) {
     _new_adjacent_part.resetUsedEntries();
@@ -635,20 +667,20 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
       _unremovable_he_parts.set(static_cast<size_t>(he) * _context.partition.k + to_part, 1);
 
       ASSERT([&]() {
-          // Search parts of hyperedge he which are unremoveable
-          std::vector<bool> ur_parts(_context.partition.k, false);
-          for (const HypernodeID& pin : _hg.pins(he)) {
-            if (_hg.marked(pin)) {
-              ur_parts[_hg.partID(pin)] = true;
-            }
+        // Search parts of hyperedge he which are unremoveable
+        std::vector<bool> ur_parts(_context.partition.k, false);
+        for (const HypernodeID& pin : _hg.pins(he)) {
+          if (_hg.marked(pin)) {
+            ur_parts[_hg.partID(pin)] = true;
           }
-          // _unremovable_he_parts should have the same bits set as ur_parts
-          for (PartitionID k = 0; k < _context.partition.k; k++) {
-            ASSERT(ur_parts[k] == _unremovable_he_parts[he * _context.partition.k + k],
-                   V(ur_parts[k]) << V(_unremovable_he_parts[he * _context.partition.k + k]));
-          }
-          return true;
-        } (), "Error in locking of he/parts!");
+        }
+        // _unremovable_he_parts should have the same bits set as ur_parts
+        for (PartitionID k = 0; k < _context.partition.k; k++) {
+          ASSERT(ur_parts[k] == _unremovable_he_parts[he * _context.partition.k + k],
+                 V(ur_parts[k]) << V(_unremovable_he_parts[he * _context.partition.k + k]));
+        }
+        return true;
+      }(), "Error in locking of he/parts!");
     }
 
     _gain_cache.updateFromAndToPartOfMovedHN(moved_hn, from_part, to_part,
@@ -664,135 +696,135 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
     _hns_to_activate.clear();
 
     ASSERT([&]() {
-        if (only_update_cache) { return true; }
-        // This lambda checks verifies the internal state of KFM for all pins that could
-        // have been touched during updateNeighbours.
-        for (const HyperedgeID& he : _hg.incidentEdges(moved_hn)) {
-          bool valid = true;
-          for (const HypernodeID& pin : _hg.pins(he)) {
-            ASSERT_THAT_CACHE_IS_VALID_FOR_HN(pin);
-            // LOG << "HN" << pin << "CHECK!";
-            if (!_hg.isBorderNode(pin)) {
-              // The pin is an internal HN
-              // there should not be any move of this HN in the PQ.
-              for (PartitionID part = 0; part < _context.partition.k; ++part) {
-                valid = (_pq.contains(pin, part) == false);
-                if (!valid) {
-                  LOG << "HN" << pin << "should not be contained in PQ";
-                  return false;
-                }
-              }
-            } else {
-              // Pin is a border HN
-              for (const PartitionID& part : _hg.connectivitySet(he)) {
-                ASSERT(_hg.pinCountInPart(he, part) > 0, V(he) << "not connected to" << V(part));
-                if (_pq.contains(pin, part)) {
-                  // if the move to target.part is in the PQ, it has to have the correct gain
-                  ASSERT(_hg.active(pin), "Pin is not active");
-                  ASSERT(_hg.isBorderNode(pin), "BorderFail");
-                  const Gain expected_gain = gainInducedByHypergraph(pin, part);
-                  valid = _pq.key(pin, part) == expected_gain;
-                  if (!valid) {
-                    LOG << "Incorrect maxGain for HN" << pin;
-                    LOG << "expected key=" << expected_gain;
-                    LOG << "actual key=" << _pq.key(pin, part);
-                    LOG << "from_part=" << _hg.partID(pin);
-                    LOG << "to part =" << part;
-                    return false;
-                  }
-                  if (_hg.partWeight(part) < _context.partition.max_part_weights[0] &&
-                      !_pq.isEnabled(part)) {
-                    LOG << V(pin);
-                    LOG << "key=" << expected_gain;
-                    LOG << "Part" << part << "should be enabled as target part";
-                    return false;
-                  }
-                  if (_hg.partWeight(part) >= _context.partition.max_part_weights[0] &&
-                      _pq.isEnabled(part)) {
-                    LOG << V(pin);
-                    LOG << "key=" << expected_gain;
-                    LOG << "Part" << part << "should NOT be enabled as target part";
-                    return false;
-                  }
-                } else {
-                  // if it is not in the PQ then either the HN has already been marked as moved
-                  // or we currently look at the source partition of pin or pin is a fixed vertex
-                  valid = (_hg.marked(pin) == true) || (part == _hg.partID(pin)) || unlikely(_hg.isFixedVertex(pin));
-                  valid = valid || _hg.edgeSize(he) > _context.partition.hyperedge_size_threshold;
-                  if (!valid) {
-                    LOG << "HN" << pin << "not in PQ but also not marked";
-                    LOG << "gain=" << gainInducedByHypergraph(pin, part);
-                    LOG << "from_part=" << _hg.partID(pin);
-                    LOG << "to_part=" << part;
-                    LOG << "would be feasible=" << Base::moveIsFeasible(pin, _hg.partID(pin), part);
-                    _hg.printNodeState(pin);
-                    for (const HyperedgeID& incident_edge : _hg.incidentEdges(pin)) {
-                      for (PartitionID i = 0; i < _context.partition.k; ++i) {
-                        LOG << "Part" << i << "unremovable: "
-                            << _unremovable_he_parts[he * _context.partition.k + i];
-                      }
-                      _hg.printEdgeState(incident_edge);
-                    }
-                    return false;
-                  }
-                  if (_hg.marked(pin)) {
-                    // If the pin is already marked as moved, then all moves concerning this pin
-                    // should have been removed from the PQ.
-                    for (PartitionID part = 0; part < _context.partition.k; ++part) {
-                      if (_pq.contains(pin, part)) {
-                        LOG << "HN" << pin << "should not be in PQ, because it is already marked";
-                        return false;
-                      }
-                    }
-                  }
-                }
-              }
-            }
-            // Staleness check. If the PQ contains a move of pin to part, there
-            // has to be at least one HE that connects to that part. Otherwise the
-            // move is stale and should have been removed from the PQ.
+      if (only_update_cache) { return true; }
+      // This lambda checks verifies the internal state of KFM for all pins that could
+      // have been touched during updateNeighbours.
+      for (const HyperedgeID& he : _hg.incidentEdges(moved_hn)) {
+        bool valid = true;
+        for (const HypernodeID& pin : _hg.pins(he)) {
+          ASSERT_THAT_CACHE_IS_VALID_FOR_HN(pin);
+          // LOG << "HN" << pin << "CHECK!";
+          if (!_hg.isBorderNode(pin)) {
+            // The pin is an internal HN
+            // there should not be any move of this HN in the PQ.
             for (PartitionID part = 0; part < _context.partition.k; ++part) {
-              bool connected = false;
-              for (const HyperedgeID& incident_he : _hg.incidentEdges(pin)) {
-                if (_hg.pinCountInPart(incident_he, part) > 0) {
-                  connected = true;
-                  break;
-                }
-              }
-              if (!connected && _pq.contains(pin, part)) {
-                LOG << "PQ contains stale move of HN" << pin << ":";
-                LOG << "calculated gain=" << gainInducedByHypergraph(pin, part);
-                LOG << "gain in PQ=" << _pq.key(pin, part);
-                LOG << "from_part=" << _hg.partID(pin);
-                LOG << "to_part=" << part;
-                LOG << "would be feasible=" << Base::moveIsFeasible(pin, _hg.partID(pin), part);
-                LOG << "current HN" << moved_hn << "was moved from" << from_part << "to"
-                    << to_part;
+              valid = (_pq.contains(pin, part) == false);
+              if (!valid) {
+                LOG << "HN" << pin << "should not be contained in PQ";
                 return false;
               }
             }
+          } else {
+            // Pin is a border HN
+            for (const PartitionID& part : _hg.connectivitySet(he)) {
+              ASSERT(_hg.pinCountInPart(he, part) > 0, V(he) << "not connected to" << V(part));
+              if (_pq.contains(pin, part)) {
+                // if the move to target.part is in the PQ, it has to have the correct gain
+                ASSERT(_hg.active(pin), "Pin is not active");
+                ASSERT(_hg.isBorderNode(pin), "BorderFail");
+                const Gain expected_gain = gainInducedByHypergraph(pin, part);
+                valid = _pq.key(pin, part) == expected_gain;
+                if (!valid) {
+                  LOG << "Incorrect maxGain for HN" << pin;
+                  LOG << "expected key=" << expected_gain;
+                  LOG << "actual key=" << _pq.key(pin, part);
+                  LOG << "from_part=" << _hg.partID(pin);
+                  LOG << "to part =" << part;
+                  return false;
+                }
+                if (_hg.partWeight(part) < _context.partition.max_part_weights[0] &&
+                    !_pq.isEnabled(part)) {
+                  LOG << V(pin);
+                  LOG << "key=" << expected_gain;
+                  LOG << "Part" << part << "should be enabled as target part";
+                  return false;
+                }
+                if (_hg.partWeight(part) >= _context.partition.max_part_weights[0] &&
+                    _pq.isEnabled(part)) {
+                  LOG << V(pin);
+                  LOG << "key=" << expected_gain;
+                  LOG << "Part" << part << "should NOT be enabled as target part";
+                  return false;
+                }
+              } else {
+                // if it is not in the PQ then either the HN has already been marked as moved
+                // or we currently look at the source partition of pin or pin is a fixed vertex
+                valid = (_hg.marked(pin) == true) || (part == _hg.partID(pin)) || unlikely(_hg.isFixedVertex(pin));
+                valid = valid || _hg.edgeSize(he) > _context.partition.hyperedge_size_threshold;
+                if (!valid) {
+                  LOG << "HN" << pin << "not in PQ but also not marked";
+                  LOG << "gain=" << gainInducedByHypergraph(pin, part);
+                  LOG << "from_part=" << _hg.partID(pin);
+                  LOG << "to_part=" << part;
+                  LOG << "would be feasible=" << Base::moveIsFeasible(pin, _hg.partID(pin), part);
+                  _hg.printNodeState(pin);
+                  for (const HyperedgeID& incident_edge : _hg.incidentEdges(pin)) {
+                    for (PartitionID i = 0; i < _context.partition.k; ++i) {
+                      LOG << "Part" << i << "unremovable: "
+                          << _unremovable_he_parts[he * _context.partition.k + i];
+                    }
+                    _hg.printEdgeState(incident_edge);
+                  }
+                  return false;
+                }
+                if (_hg.marked(pin)) {
+                  // If the pin is already marked as moved, then all moves concerning this pin
+                  // should have been removed from the PQ.
+                  for (PartitionID part = 0; part < _context.partition.k; ++part) {
+                    if (_pq.contains(pin, part)) {
+                      LOG << "HN" << pin << "should not be in PQ, because it is already marked";
+                      return false;
+                    }
+                  }
+                }
+              }
+            }
           }
-        }
-        return true;
-      } (), V(moved_hn));
-    ASSERT([&]() {
-        for (const HypernodeID& hn : _hg.nodes()) {
-          if (_hg.active(hn)) {
-            bool valid = _hg.marked(hn) || !_hg.isBorderNode(hn);
-            for (PartitionID part = 0; part < _context.partition.k; ++part) {
-              if (_pq.contains(hn, part)) {
-                valid = true;
+          // Staleness check. If the PQ contains a move of pin to part, there
+          // has to be at least one HE that connects to that part. Otherwise the
+          // move is stale and should have been removed from the PQ.
+          for (PartitionID part = 0; part < _context.partition.k; ++part) {
+            bool connected = false;
+            for (const HyperedgeID& incident_he : _hg.incidentEdges(pin)) {
+              if (_hg.pinCountInPart(incident_he, part) > 0) {
+                connected = true;
                 break;
               }
             }
-            if (!valid) {
-              LOG << V(hn) << "is active but neither marked nor in one of the PQs";
+            if (!connected && _pq.contains(pin, part)) {
+              LOG << "PQ contains stale move of HN" << pin << ":";
+              LOG << "calculated gain=" << gainInducedByHypergraph(pin, part);
+              LOG << "gain in PQ=" << _pq.key(pin, part);
+              LOG << "from_part=" << _hg.partID(pin);
+              LOG << "to_part=" << part;
+              LOG << "would be feasible=" << Base::moveIsFeasible(pin, _hg.partID(pin), part);
+              LOG << "current HN" << moved_hn << "was moved from" << from_part << "to"
+                  << to_part;
               return false;
             }
           }
         }
-        return true;
-      } (), V(moved_hn));
+      }
+      return true;
+    }(), V(moved_hn));
+    ASSERT([&]() {
+      for (const HypernodeID& hn : _hg.nodes()) {
+        if (_hg.active(hn)) {
+          bool valid = _hg.marked(hn) || !_hg.isBorderNode(hn);
+          for (PartitionID part = 0; part < _context.partition.k; ++part) {
+            if (_pq.contains(hn, part)) {
+              valid = true;
+              break;
+            }
+          }
+          if (!valid) {
+            LOG << V(hn) << "is active but neither marked nor in one of the PQs";
+            return false;
+          }
+        }
+      }
+      return true;
+    }(), V(moved_hn));
   }
 
   KAHYPAR_ATTRIBUTE_ALWAYS_INLINE void updatePin(const HypernodeID pin, const PartitionID part,
@@ -818,15 +850,15 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
     }
   }
 
-  template <bool invalidate_hn = false>
+  template<bool invalidate_hn = false>
   void activate(const HypernodeID hn) {
     ASSERT(!_hg.active(hn), V(hn));
     ASSERT([&]() {
-        for (PartitionID part = 0; part < _context.partition.k; ++part) {
-          ASSERT(!_pq.contains(hn, part), V(hn) << V(part));
-        }
-        return true;
-      } (), "HN" << hn << "is already contained in PQ ");
+      for (PartitionID part = 0; part < _context.partition.k; ++part) {
+        ASSERT(!_pq.contains(hn, part), V(hn) << V(part));
+      }
+      return true;
+    }(), "HN" << hn << "is already contained in PQ ");
 
     // Currently we cannot infer the gain changes of the two initial refinement nodes
     // from the uncontraction itself (this is still a todo). Therefore, these activations
@@ -903,7 +935,7 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
         ASSERT(part != _hg.partID(hn), V(hn) << V(part) << V(_gain_cache.entry(hn, part)));
         ASSERT(_gain_cache.entry(hn, part) == gainInducedByHypergraph(hn, part),
                V(hn) << V(part) << V(_gain_cache.entry(hn, part)) <<
-               V(gainInducedByHypergraph(hn, part)));
+                     V(gainInducedByHypergraph(hn, part)));
         ASSERT(Base::hypernodeIsConnectedToPart(hn, part), V(hn) << V(part));
         DBGC(hn == 12518) << "inserting" << V(hn) << V(part) << V(_gain_cache.entry(hn, part));
         _pq.insert(hn, part, _gain_cache.entry(hn, part));
@@ -916,11 +948,11 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
 
   void ASSERT_THAT_GAIN_CACHE_IS_VALID() {
     ASSERT([&]() {
-        for (const HypernodeID& hn : _hg.nodes()) {
-          ASSERT_THAT_CACHE_IS_VALID_FOR_HN(hn);
-        }
-        return true;
-      } (), "Gain Cache inconsistent");
+      for (const HypernodeID& hn : _hg.nodes()) {
+        ASSERT_THAT_CACHE_IS_VALID_FOR_HN(hn);
+      }
+      return true;
+    }(), "Gain Cache inconsistent");
   }
 
   // TODO(schlag): Some of these assertions could easily be converted
@@ -936,7 +968,7 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
           ASSERT(_gain_cache.entryExists(hn, part), V(hn) << V(part));
           ASSERT(_gain_cache.entry(hn, part) == gainInducedByHypergraph(hn, part),
                  V(hn) << V(part) << V(_gain_cache.entry(hn, part)) <<
-                 V(gainInducedByHypergraph(hn, part)) << V(_hg.partID(hn)));
+                       V(gainInducedByHypergraph(hn, part)) << V(_hg.partID(hn)));
           ASSERT(Base::hypernodeIsConnectedToPart(hn, part), V(hn) << V(part));
         } else if (_hg.partID(hn) != part && !Base::hypernodeIsConnectedToPart(hn, part)) {
           ASSERT(!_gain_cache.entryExists(hn, part), V(hn) << V(part)

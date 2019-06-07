@@ -213,6 +213,9 @@ po::options_description createCoarseningOptionsDescription(Context& context,
     " - ml_style\n"
     " - heavy_full\n"
     " - heavy_lazy")
+    ((initial_partitioning ? "i-c-mixed-contraction" : "c-mixed-contraction"),
+    po::value<bool>(&context.coarsening.allow_mixed_contraction)->value_name("<bool>"),
+    "Allow (tail, head) or (head, tail) contraction (for hypergraphs with only one head per edge)")
     ((initial_partitioning ? "i-c-s" : "c-s"),
     po::value<double>((initial_partitioning ? &context.initial_partitioning.coarsening.max_allowed_weight_multiplier : &context.coarsening.max_allowed_weight_multiplier))->value_name("<double>"),
     "The maximum weight of a vertex in the coarsest hypergraph H is:\n"
@@ -319,6 +322,17 @@ po::options_description createRefinementOptionsDescription(Context& context,
     " - kway_fm_km1      : k-way FM algorithm        (direct k-way       : km1)\n"
     " - kway_fm_flow_km1 : k-way FM + Flow algorithm (direct k-way       : km1)\n"
     " - kway_flow        : k-way Flow algorithm      (direct k-way       : cut & km1)")
+    ((initial_partitioning ? "i-r-cycle-detector" : "r-cycle-detector"),
+    po::value<std::string>()->value_name("<string>")->notifier(
+      [&context, initial_partitioning](const std::string& detector) { // TODO
+      context.local_search.cycle_detector_type = kahypar::cycleDetectorTypeFromString(detector);
+    }),
+    "Cycle Detector Algorithm:\n"
+    " - dfs     : DFS\n"
+    " - kahn    : Kahn\n"
+    " - bender  : Algorithm by Bender et. al.\n"
+    " - pearce  : Algorithm by Pearce et. al.\n"
+    " - haeuple : Algorithm by Haeuple et. al.")
     ((initial_partitioning ? "i-r-runs" : "r-runs"),
     po::value<int>((initial_partitioning ? &context.initial_partitioning.local_search.iterations_per_level : &context.local_search.iterations_per_level))->value_name("<int>")->notifier(
       [&context, initial_partitioning](const int) {

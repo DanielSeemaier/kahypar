@@ -40,6 +40,7 @@ enum class Timepoint : uint8_t {
   v_cycle_local_search,
   post_sparsifier_restore,
   evolutionary,
+  cycle_detector,
   COUNT
 };
 
@@ -95,6 +96,7 @@ class Timer {
     double total_postprocessing = 0.0;
     double post_sparsifier_restore = 0.0;
     double total_evolutionary = 0.0;
+    double total_cycle_detector = 0.0;
     std::vector<double> evolutionary = { };
     std::vector<double> v_cycle_coarsening = { };
     std::vector<double> v_cycle_local_search = { };
@@ -154,6 +156,11 @@ class Timer {
   void evaluate() {
     int bisection_no = 0;
     for (const Timing& timing : _timings) {
+      if (timing.timepoint == Timepoint::cycle_detector) {
+        _result.total_cycle_detector += timing.time;
+        continue;
+      }
+
       if (timing.type == ContextType::main) {
         switch (timing.timepoint) {
           case Timepoint::pre_sparsifier:

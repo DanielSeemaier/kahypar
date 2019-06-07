@@ -229,6 +229,7 @@ inline void printPartitioningResults(const Hypergraph& hypergraph,
     const auto& timings = Timer::instance().result();
 
     LOG << "\nTimings:";
+    LOG << "Cycle Detector                     =" << timings.total_cycle_detector << "s";
     LOG << "Partition time                     =" << elapsed_seconds.count() << "s";
     LOG << "  + Preprocessing                  =" << timings.total_preprocessing << "s";
     LOG << "    | min hash sparsifier          =" << timings.pre_sparsifier << "s";
