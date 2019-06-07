@@ -50,6 +50,7 @@ using HyperedgeIndexVector = Hypergraph::HyperedgeIndexVector;
 using HyperedgeVector = Hypergraph::HyperedgeVector;
 using HyperedgeWeightVector = Hypergraph::HyperedgeWeightVector;
 using HypernodeWeightVector = Hypergraph::HypernodeWeightVector;
+using NumHeadsVector = Hypergraph::NumHeadsVector;
 using IncidenceIterator = Hypergraph::IncidenceIterator;
 
 // #########Graph-Definitions#############

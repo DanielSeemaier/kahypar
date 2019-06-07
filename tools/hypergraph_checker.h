@@ -62,7 +62,8 @@ struct BadHyperpinException : public BadHypernodeException {
 };
 
 static inline void readHGRHeader(std::ifstream& file, HyperedgeID& num_hyperedges,
-                                 HypernodeID& num_hypernodes, HypergraphType& hypergraph_type) {
+                                 HypernodeID& num_hypernodes, HypergraphType& hypergraph_type,
+                                 bool& is_directed) {
   std::string line;
   std::getline(file, line);
 
@@ -73,7 +74,7 @@ static inline void readHGRHeader(std::ifstream& file, HyperedgeID& num_hyperedge
 
   std::istringstream sstream(line);
   int i = 0;
-  sstream >> num_hyperedges >> num_hypernodes >> i;
+  sstream >> num_hyperedges >> num_hypernodes >> i >> is_directed;
   hypergraph_type = static_cast<HypergraphType>(i);
 }
 
@@ -83,10 +84,11 @@ void validateHypergraphFile(const std::string& filename) {
   HypergraphType hypergraph_type = HypergraphType::Unweighted;
   HyperedgeIndexVector index_vector;
   HyperedgeVector edge_vector;
+  bool is_directed = false;
   std::ifstream file(filename);
 
   if (file) {
-    readHGRHeader(file, num_hyperedges, num_hypernodes, hypergraph_type);
+    readHGRHeader(file, num_hyperedges, num_hypernodes, hypergraph_type, is_directed);
     if (hypergraph_type != HypergraphType::Unweighted && hypergraph_type != HypergraphType::EdgeWeights
         && hypergraph_type != HypergraphType::NodeWeights && hypergraph_type != HypergraphType::EdgeAndNodeWeights) {
       throw BadHypergraphException("bad hypergraph type [type: "s + std::to_string(static_cast<int>(hypergraph_type)) + "]"s);
@@ -110,7 +112,15 @@ void validateHypergraphFile(const std::string& filename) {
 
       if (has_hyperedge_weights) {
         HyperedgeWeight edge_weight;
-        line_stream >> edge_weight;
+        if (!(line_stream >> edge_weight)) {
+          throw BadHyperedgeException("hyperedge does not have a weight", i);
+        }
+      }
+      if (is_directed) {
+        HypernodeID num_heads;
+        if (!(line_stream >> num_heads)) {
+          throw BadHyperedgeException("hyperedge does specify its number of heads", i);
+        }
       }
       HypernodeID pin;
       while (line_stream >> pin) {

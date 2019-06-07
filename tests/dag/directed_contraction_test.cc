@@ -281,6 +281,7 @@ TEST_F(DirectedContractionTest, RemoveRestoreSingletonHypernodeInCoarserGraph) {
   ASSERT_THAT(toVec(hg.tails(2)), UnorderedElementsAre(10, 4));
   hg.uncontract(memento_2);
   hg.uncontract(memento_1);
+  assertGraphRestored();
 }
 
 // Code that crashed at some point in time

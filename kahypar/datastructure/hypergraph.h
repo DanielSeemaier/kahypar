@@ -522,6 +522,8 @@ class GenericHypergraph {
   using HypernodeWeightVector = std::vector<HypernodeWeight>;
   // ! The data type used to store the weights of hyperedges
   using HyperedgeWeightVector = std::vector<HyperedgeWeight>;
+  // ! The data type used to store the number of heads of each hyperedge
+  using NumHeadsVector = std::vector<HypernodeID>;
   // ! The data type used to store the undo information of contraction operations
   using ContractionMemento = Memento;
   // ! Iterator to iterate over the set of incident nets of a hypernode
@@ -559,32 +561,68 @@ class GenericHypergraph {
                     const HyperedgeID num_hyperedges,
                     const HyperedgeIndexVector& index_vector,
                     const HyperedgeVector& edge_vector,
+                    const bool is_directed,
+                    const NumHeadsVector& num_heads,
                     const PartitionID k = 2,
                     const HyperedgeWeightVector *hyperedge_weights = nullptr,
-                    const HypernodeWeightVector *hypernode_weights = nullptr,
-                    const bool directed = false,
-                    const HypernodeID num_heads_per_hyperedge = 0) :
+                    const HypernodeWeightVector *hypernode_weights = nullptr) :
     GenericHypergraph(num_hypernodes,
                       num_hyperedges,
                       index_vector.data(),
                       edge_vector.data(),
+                      is_directed,
+                      num_heads.data(),
                       k,
                       hyperedge_weights == nullptr ? nullptr : hyperedge_weights->data(),
-                      hypernode_weights == nullptr ? nullptr : hypernode_weights->data(),
-                      directed,
-                      num_heads_per_hyperedge) {
+                      hypernode_weights == nullptr ? nullptr : hypernode_weights->data()) {
     ASSERT(edge_vector.size() == index_vector[num_hyperedges]);
   }
 
   GenericHypergraph(const HypernodeID num_hypernodes,
                     const HyperedgeID num_hyperedges,
+                    const HyperedgeIndexVector& index_vector,
+                    const HyperedgeVector& edge_vector,
+                    const PartitionID k = 2,
+                    const HyperedgeWeightVector *hyperedge_weights = nullptr,
+                    const HypernodeWeightVector *hypernode_weights = nullptr) :
+    GenericHypergraph(num_hypernodes,
+                      num_hyperedges,
+                      index_vector.data(),
+                      edge_vector.data(),
+                      false,
+                      nullptr,
+                      k,
+                      hyperedge_weights == nullptr ? nullptr : hyperedge_weights->data(),
+                      hypernode_weights == nullptr ? nullptr : hypernode_weights->data()) {
+    ASSERT(edge_vector.size() == index_vector[num_hyperedges]);
+  }
+
+  GenericHypergraph(const HypernodeID num_hypernodes,
+                    const HyperedgeID num_hyperedges,
+                    const size_t* index_vector,
+                    const HypernodeID* edge_vector,
+                    const PartitionID k = 2,
+                    const HyperedgeWeight* hyperedge_weights = nullptr,
+                    const HypernodeWeight* hypernode_weights = nullptr) :
+    GenericHypergraph(num_hypernodes,
+                      num_hyperedges,
+                      index_vector,
+                      edge_vector,
+                      false,
+                      nullptr,
+                      k,
+                      hyperedge_weights,
+                      hypernode_weights) {}
+
+  GenericHypergraph(const HypernodeID num_hypernodes,
+                    const HyperedgeID num_hyperedges,
                     const size_t *index_vector,
                     const HypernodeID *edge_vector,
+                    const bool is_directed,
+                    const HypernodeID* num_heads_vector,
                     const PartitionID k = 2,
                     const HyperedgeWeight *hyperedge_weights = nullptr,
-                    const HypernodeWeight *hypernode_weights = nullptr,
-                    const bool directed = false,
-                    const HypernodeID num_heads_per_hyperedge = 0) :
+                    const HypernodeWeight *hypernode_weights = nullptr) :
     _num_hypernodes(num_hypernodes),
     _num_hyperedges(num_hyperedges),
     _num_pins(index_vector[num_hyperedges]),
@@ -607,7 +645,7 @@ class GenericHypergraph {
     _pins_in_part(_num_hyperedges * k),
     _connectivity_sets(_num_hyperedges, k),
     _hes_not_containing_u(_num_hyperedges),
-    _directed(directed) {
+    _directed(is_directed) {
     VertexID edge_vector_index = 0;
     for (HyperedgeID i = 0; i < _num_hyperedges; ++i) {
       hyperedge(i).setFirstEntry(edge_vector_index);
@@ -628,12 +666,13 @@ class GenericHypergraph {
     }
     hypernode(num_hypernodes - 1).setSize(0);
 
+    ASSERT(!is_directed || num_heads_vector != nullptr);
     for (HyperedgeID i = 0; i < _num_hyperedges; ++i) {
       for (VertexID pin_index = index_vector[i]; pin_index <
                                                  index_vector[static_cast<size_t>(i) + 1]; ++pin_index) {
         const HypernodeID pin = edge_vector[pin_index];
-        const bool head = (pin_index - index_vector[i]) <
-                          num_heads_per_hyperedge; // TODO make num_heads_per_hyperedge more flexible in the future
+        bool num_heads = (is_directed) ? num_heads_vector[i] : 0;
+        const bool head = (pin_index - index_vector[i]) < num_heads;
         _incidence_array[hypernode(pin).firstInvalidEntry()] = i;
         if (head && hypernode(pin).size() > 0) {
           // place hyperedges that this hypernode is a head of at the beginning of its incidence array; this way, we can
@@ -648,10 +687,10 @@ class GenericHypergraph {
       }
     }
 
-    // TODO replace this with something more flexible sometime in the future
-    if (directed) {
+    if (is_directed) {
+      ASSERT(num_heads_vector != nullptr);
       for (HyperedgeID i = 0; i < _num_hyperedges; ++i) {
-        hyperedge(i).setHeadCounter(std::min(num_heads_per_hyperedge, hyperedge(i).size()));
+        hyperedge(i).setHeadCounter(std::min(num_heads_vector[i], hyperedge(i).size()));
       }
     }
 

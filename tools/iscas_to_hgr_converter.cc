@@ -62,11 +62,11 @@ void generateHgr(const std::string& out_filename, Graph graph, NameToID name_to_
   }
 
   std::vector<std::size_t> pins;
-  out << num_hyperedges << " " << num_hypernodes << "\n";
+  out << num_hyperedges << " " << num_hypernodes << " 11 1\n";
   for (const auto& pair : graph) {
     if (pair.second.empty()) continue; // no tails
     std::size_t pin = name_to_id[pair.first];
-    out << pin << " "; // head
+    out << "1 1 " << pin << " "; // head
     pins.push_back(pin);
 
     for (const auto& tail : pair.second) { // tails
@@ -79,6 +79,9 @@ void generateHgr(const std::string& out_filename, Graph graph, NameToID name_to_
 
     out << "\n";
     pins.clear();
+  }
+  for (std::size_t i = 0; i < num_hypernodes; ++i) {
+    out << "1\n";
   }
   out.close();
 

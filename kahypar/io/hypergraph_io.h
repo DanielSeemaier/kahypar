@@ -36,7 +36,8 @@ namespace io {
 using Mapping = std::unordered_map<HypernodeID, HypernodeID>;
 
 static inline void readHGRHeader(std::ifstream& file, HyperedgeID& num_hyperedges,
-                                 HypernodeID& num_hypernodes, HypergraphType& hypergraph_type) {
+                                 HypernodeID& num_hypernodes, HypergraphType& hypergraph_type,
+                                 bool& is_directed) {
   std::string line;
   std::getline(file, line);
 
@@ -47,7 +48,7 @@ static inline void readHGRHeader(std::ifstream& file, HyperedgeID& num_hyperedge
 
   std::istringstream sstream(line);
   int i = 0;
-  sstream >> num_hyperedges >> num_hypernodes >> i;
+  sstream >> num_hyperedges >> num_hypernodes >> i >> is_directed;
   hypergraph_type = static_cast<HypergraphType>(i);
 }
 
@@ -55,13 +56,15 @@ static inline void readHypergraphFile(const std::string& filename, HypernodeID& 
                                       HyperedgeID& num_hyperedges,
                                       HyperedgeIndexVector& index_vector,
                                       HyperedgeVector& edge_vector,
+                                      bool& is_directed,
+                                      NumHeadsVector& num_heads_vector,
                                       HyperedgeWeightVector* hyperedge_weights = nullptr,
                                       HypernodeWeightVector* hypernode_weights = nullptr) {
   ASSERT(!filename.empty(), "No filename for hypergraph file specified");
   HypergraphType hypergraph_type = HypergraphType::Unweighted;
   std::ifstream file(filename);
   if (file) {
-    readHGRHeader(file, num_hyperedges, num_hypernodes, hypergraph_type);
+    readHGRHeader(file, num_hyperedges, num_hypernodes, hypergraph_type, is_directed);
     ASSERT(hypergraph_type == HypergraphType::Unweighted ||
            hypergraph_type == HypergraphType::EdgeWeights ||
            hypergraph_type == HypergraphType::NodeWeights ||
@@ -97,6 +100,11 @@ static inline void readHypergraphFile(const std::string& filename, HypernodeID& 
           hyperedge_weights->push_back(edge_weight);
         }
       }
+      HypernodeID num_heads = 0;
+      if (is_directed) {
+        line_stream >> num_heads;
+      }
+      num_heads_vector.push_back(num_heads);
       HypernodeID pin;
       while (line_stream >> pin) {
         // Hypernode IDs start from 0
@@ -132,23 +140,29 @@ static inline void readHypergraphFile(const std::string& filename,
                                       HyperedgeID& num_hyperedges,
                                       std::unique_ptr<size_t[]>& index_vector,
                                       std::unique_ptr<HypernodeID[]>& edge_vector,
+                                      bool& is_directed,
+                                      std::unique_ptr<HypernodeID[]>& num_heads_vector,
                                       std::unique_ptr<HyperedgeWeight[]>& hyperedge_weights,
                                       std::unique_ptr<HypernodeWeight[]>& hypernode_weights) {
   HyperedgeIndexVector index_vec;
   HyperedgeVector edge_vec;
+  NumHeadsVector num_heads_vec;
   HyperedgeWeightVector edge_weights_vec;
   HypernodeWeightVector node_weights_vec;
 
   readHypergraphFile(filename, num_hypernodes, num_hyperedges, index_vec,
-                     edge_vec, &edge_weights_vec, &node_weights_vec);
+                     edge_vec, is_directed, num_heads_vec, &edge_weights_vec, &node_weights_vec);
 
   ASSERT(index_vector == nullptr);
   ASSERT(edge_vector == nullptr);
+  ASSERT(num_heads_vector == nullptr);
   index_vector = std::make_unique<size_t[]>(index_vec.size());
   edge_vector = std::make_unique<HypernodeID[]>(edge_vec.size());
+  num_heads_vector = std::make_unique<HypernodeID[]>(num_heads_vec.size());
 
   memcpy(index_vector.get(), index_vec.data(), index_vec.size() * sizeof(size_t));
   memcpy(edge_vector.get(), edge_vec.data(), edge_vec.size() * sizeof(HypernodeID));
+  memcpy(num_heads_vector.get(), num_heads_vec.data(), num_heads_vec.size() * sizeof(HypernodeID));
 
   if (!edge_weights_vec.empty()) {
     ASSERT(hyperedge_weights == nullptr);
@@ -167,20 +181,21 @@ static inline void readHypergraphFile(const std::string& filename,
 
 // TODO we could integrate directed, num_heads_per_hyperedge into the file format ...
 static inline Hypergraph createHypergraphFromFile(const std::string& filename,
-                                                  const PartitionID num_parts,
-                                                  const bool directed,
-                                                  const HypernodeID num_heads_per_hyperedge) {
+                                                  const PartitionID num_parts) {
   HypernodeID num_hypernodes;
   HyperedgeID num_hyperedges;
   HyperedgeIndexVector index_vector;
   HyperedgeVector edge_vector;
   HypernodeWeightVector hypernode_weights;
   HyperedgeWeightVector hyperedge_weights;
+  NumHeadsVector num_heads_vector;
+  bool is_directed;
   readHypergraphFile(filename, num_hypernodes, num_hyperedges,
-                     index_vector, edge_vector, &hyperedge_weights, &hypernode_weights);
+                     index_vector, edge_vector, is_directed, num_heads_vector,
+                     &hyperedge_weights, &hypernode_weights);
   return Hypergraph(num_hypernodes, num_hyperedges, index_vector, edge_vector,
-                    num_parts, &hyperedge_weights, &hypernode_weights,
-                    directed, num_heads_per_hyperedge);
+                    is_directed, num_heads_vector, num_parts,
+                    &hyperedge_weights, &hypernode_weights);
 }
 
 
@@ -194,6 +209,9 @@ static inline void writeHGRHeader(std::ofstream& out_stream, const Hypergraph& h
   out_stream << hypergraph.initialNumEdges() << " " << hypergraph.initialNumNodes() << " ";
   if (hypergraph.type() != HypergraphType::Unweighted) {
     out_stream << static_cast<int>(hypergraph.type());
+  }
+  if (hypergraph.isDirected()) {
+    out_stream << " 1";
   }
   out_stream << std::endl;
 }
@@ -209,6 +227,9 @@ static inline void writeHypergraphFile(const Hypergraph& hypergraph, const std::
     if (hypergraph.type() == HypergraphType::EdgeWeights ||
         hypergraph.type() == HypergraphType::EdgeAndNodeWeights) {
       out_stream << hypergraph.edgeWeight(he) << " ";
+    }
+    if (hypergraph.isDirected()) {
+      out_stream << hypergraph.edgeNumHeads(he) << " ";
     }
     for (const HypernodeID& pin : hypergraph.pins(he)) {
       out_stream << pin + 1 << " ";

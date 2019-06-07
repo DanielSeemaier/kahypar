@@ -109,10 +109,10 @@ int main(int argc, char* argv[]) {
   if (out_format == Output::HGR) {
     std::ofstream out(out_filename);
     out << "% Generated from " << graph_filename << "\n";
-    out << hes.size() << " " << hn_weights.size() << " 11\n";
+    out << hes.size() << " " << hn_weights.size() << " 11 1\n";
     for (std::size_t i = 0; i < hes.size(); ++i) {
       ASSERT(he_weights.size() > i);
-      out << he_weights[i] << " ";
+      out << he_weights[i] << " 1 ";
       for (const auto& pin : hes[i]) {
         out << pin + 1 << " ";
       }
