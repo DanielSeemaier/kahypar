@@ -86,13 +86,13 @@ class CoarsenerBase {
   }
 
   void removeParallelHyperedges() {
-    const HyperedgeID removed_parallel_hes =
-      _hypergraph_pruner.removeParallelHyperedges(_hg, _history.back());
-    _context.stats.add(StatTag::Coarsening, "numRemovedParalellHEs", removed_parallel_hes);
+    //const HyperedgeID removed_parallel_hes =
+    //  _hypergraph_pruner.removeParallelHyperedges(_hg, _history.back());
+    //_context.stats.add(StatTag::Coarsening, "numRemovedParalellHEs", removed_parallel_hes);
   }
 
   void restoreParallelHyperedges() {
-    _hypergraph_pruner.restoreParallelHyperedges(_hg, _history.back());
+    //_hypergraph_pruner.restoreParallelHyperedges(_hg, _history.back());
   }
 
   void restoreSingleNodeHyperedges() {
@@ -150,7 +150,8 @@ class CoarsenerBase {
                                             current_changes,
                                             current_metrics);
 
-    ASSERT((current_metrics.cut <= old_cut && current_metrics.cut == metrics::hyperedgeCut(_hg)) ||
+    ASSERT(_context.imbalanced_intermediate_step ||
+           (current_metrics.cut <= old_cut && current_metrics.cut == metrics::hyperedgeCut(_hg)) ||
            (current_metrics.km1 <= old_km1 && current_metrics.km1 == metrics::km1(_hg)),
            V(current_metrics.cut) << V(old_cut) << V(metrics::hyperedgeCut(_hg))
                                   << V(current_metrics.km1) << V(old_km1) << V(metrics::km1(_hg)));
