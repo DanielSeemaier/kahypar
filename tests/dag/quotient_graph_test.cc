@@ -5,6 +5,9 @@
 #include "dag.h"
 
 using testing::Test;
+using testing::Eq;
+using testing::Le;
+using testing::Lt;
 
 namespace kahypar {
 namespace dag {
@@ -24,6 +27,14 @@ class QuotientGraphTest : public Test {
     hg.setNodePart(3, 2);
     hg.setNodePart(4, 2);
     hg.setNodePart(5, 3);
+  }
+
+  void applySingletonPartition() {
+    ctx.partition.k = hg.currentNumNodes();
+    hg.changeK(hg.currentNumNodes());
+    for (const HypernodeID& hn : hg.nodes()) {
+      hg.setNodePart(hn, hn);
+    }
   }
 
   void partitionUsingTopologicalOrdering(const PartitionID k) {
@@ -148,6 +159,50 @@ TEST_F(QuotientGraphTest, C880_K128_MonkeyMovesDontCrashAndRemainsAcyclic) {
   auto qg = createQuotientGraph();
   performMonkeyMoves(qg, k, N);
   ASSERT_TRUE(qg.isAcyclic());
+}
+
+TEST_F(QuotientGraphTest, C17_WeakTopologicalOrderingIsCorrect) {
+  hg = loadHypergraph("test_instances/c17.hgr");
+  applySingletonPartition();
+  auto qg = createQuotientGraph();
+  auto ordering = qg.computeWeakTopologicalOrdering();
+  ASSERT_THAT(ordering[0], Eq(2));
+  ASSERT_THAT(ordering[1], Eq(2));
+  ASSERT_THAT(ordering[2], Eq(1));
+  ASSERT_THAT(ordering[3], Eq(3));
+  ASSERT_THAT(ordering[4], Eq(0));
+  ASSERT_THAT(ordering[5], Eq(1));
+  ASSERT_THAT(ordering[6], Eq(0));
+  ASSERT_THAT(ordering[7], Eq(0));
+  ASSERT_THAT(ordering[8], Eq(0));
+  ASSERT_THAT(ordering[9], Eq(3));
+  ASSERT_THAT(ordering[10], Eq(0));
+}
+
+TEST_F(QuotientGraphTest, C3540_StrictTopologicalOrderingHolds) {
+  hg = loadHypergraph("test_instances/c3540.hgr");
+  applySingletonPartition();
+  auto qg = createQuotientGraph();
+  auto strict = qg.computeTopologicalOrdering();
+
+  for (const HyperedgeID& he : hg.edges()) {
+    for (const HypernodeID& hh : hg.heads(he)) {
+      for (const HypernodeID& ht : hg.tails(he)) {
+        ASSERT_THAT(strict[ht], Lt(strict[hh]));
+      }
+    }
+  }
+}
+
+TEST_F(QuotientGraphTest, C3540_WeakTopologicalOrderingIsLessThanStrictTopologicalOrdering) {
+  hg = loadHypergraph("test_instances/c3540.hgr");
+  applySingletonPartition();
+  auto qg = createQuotientGraph();
+  auto weak = qg.computeWeakTopologicalOrdering();
+  auto strict = qg.computeTopologicalOrdering();
+  for (const HypernodeID& hn : hg.nodes()) {
+    ASSERT_THAT(weak[hn], Le(strict[hn]));
+  }
 }
 } // namespace dag
 } // namespace kahypar

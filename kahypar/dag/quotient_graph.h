@@ -34,9 +34,11 @@ class QuotientGraph {
   }
 
   QuotientGraph(const QuotientGraph& other) = delete;
+
   QuotientGraph& operator=(const QuotientGraph& other) = delete;
 
   QuotientGraph(QuotientGraph&& other) noexcept = default;
+
   QuotientGraph& operator=(QuotientGraph&& other) = delete;
 
   ~QuotientGraph() = default;
@@ -127,53 +129,81 @@ class QuotientGraph {
     return true;
   }
 
+  std::vector<QNodeID> computeWeakTopologicalOrdering() const {
+    return computeTopologicalOrdering(false);
+  }
+
+  std::vector<QNodeID> computeStrictTopologicalOrdering() const {
+    return computeTopologicalOrdering(true);
+  }
+
+  std::vector<QNodeID> computeTopologicalOrdering(bool strict = true) const {
+    std::vector<QEdgeID> in_degree(numberOfNodes());
+    for (QNodeID u = 0; u < numberOfNodes(); ++u) {
+      for (const auto& edge : _adjacency_matrix[u]) {
+        const QNodeID& v = edge.first;
+        const QEdgeWeight& weight = edge.second;
+        if (weight != 0) {
+          ASSERT(weight > 0, V(u) << V(v) << V(weight));
+          ++in_degree[v];
+        }
+      }
+    }
+
+    std::vector<QNodeID> todo;
+    for (QNodeID u = 0; u < numberOfNodes(); ++u) {
+      if (in_degree[u] == 0) {
+        todo.push_back(u);
+      }
+    }
+
+    std::vector<QNodeID> weak_topological_ordering(numberOfNodes());
+    QNodeID current_level = 0;
+    std::size_t processed_nodes = 0;
+    while (!todo.empty()) {
+      std::vector<QNodeID> next_todo;
+      for (const QNodeID& u : todo) {
+        weak_topological_ordering[u] = current_level;
+        if (strict) {
+          ++current_level;
+        }
+        ++processed_nodes;
+
+        for (const auto& edge : _adjacency_matrix[u]) {
+          const QNodeID& v = edge.first;
+          const QEdgeWeight& weight = edge.second;
+          if (weight != 0) {
+            ASSERT(weight > 0);
+            ASSERT(in_degree[v] > 0);
+            --in_degree[v];
+            if (in_degree[v] == 0) {
+              next_todo.push_back(v);
+            }
+          }
+        }
+      }
+
+      if (!strict) {
+        ++current_level;
+      }
+      todo = next_todo;
+    }
+
+    if (processed_nodes != numberOfNodes()) {
+      return {};
+    } else {
+      return weak_topological_ordering;
+    }
+  }
+
   /**!
    * Checks whether the quotient graph is acyclic. Note that a quotient graph that is acyclic initially should never
-   * become cyclic by calling the public member functions.
+   * become cyclic by calling the public member functions, i.e. this is just a method for ASSERTs.
    *
    * \return Whether the quotient graph is acyclic.
    */
   bool isAcyclic() const {
-    std::vector<QEdgeID> rank(numberOfNodes());
-    for (QNodeID u = 0; u < numberOfNodes(); ++u) {
-      for (const auto& edge : _adjacency_matrix[u]) {
-        const QNodeID& v = edge.first;
-        const QEdgeWeight& weight = edge.second;
-        if (weight != 0) {
-          ASSERT(weight > 0, V(u) << V(weight));
-          ++rank[v];
-        }
-      }
-    }
-
-    std::vector<QNodeID> candidates;
-    for (QNodeID u = 0; u < numberOfNodes(); ++u) {
-      if (rank[u] == 0) {
-        candidates.push_back(u);
-      }
-    }
-
-    std::size_t processed_candidates = 0;
-    while (!candidates.empty()) {
-      const QNodeID u = candidates.back();
-      candidates.pop_back();
-      ++processed_candidates;
-
-      for (const auto& edge : _adjacency_matrix[u]) {
-        const QNodeID& v = edge.first;
-        const QEdgeWeight& weight = edge.second;
-        if (weight != 0) {
-          ASSERT(weight > 0);
-          ASSERT(rank[v] > 0);
-          --rank[v];
-          if (rank[v] == 0) {
-            candidates.push_back(v);
-          }
-        }
-      }
-    }
-
-    return processed_candidates == numberOfNodes();
+    return computeTopologicalOrdering().size() == numberOfNodes();
   }
 
   void log() const {
