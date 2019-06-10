@@ -200,6 +200,25 @@ class QuotientGraph {
     return true;
   }
 
+  void reduceToOneRoot() {
+    const auto ordering = computeWeakTopologicalOrdering();
+    QNodeID root = numberOfNodes();
+
+    for (QNodeID u = 0; u < numberOfNodes(); ++u) {
+      if (ordering[u] > 0) {
+        continue;
+      }
+      if (root == numberOfNodes()) {
+        root = u;
+        continue;
+      }
+      ASSERT(_adjacency_matrix[root][u] == 0);
+      _adjacency_matrix[root][u] = _hg.weightOfHeaviestEdge() + 1;
+      bool connect = _detector.connect(root, u);
+      ASSERT(connect);
+    }
+  }
+
   std::vector<QNodeID> computeWeakTopologicalOrdering() const {
     return computeTopologicalOrdering(false);
   }

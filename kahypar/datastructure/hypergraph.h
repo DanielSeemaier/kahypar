@@ -2102,6 +2102,14 @@ class GenericHypergraph {
     return max_weight;
   }
 
+  HyperedgeWeight weightOfHeaviestEdge() const {
+    HyperedgeWeight max_weight = std::numeric_limits<HyperedgeWeight>::min();
+    for (const HyperedgeID& he : edges()) {
+      max_weight = std::max(edgeWeight(he), max_weight);
+    }
+    return max_weight;
+  }
+
   // ! Returns the number of pins of a hyperedge that are in a certain block
   HypernodeID pinCountInPart(const HyperedgeID he, const PartitionID id) const {
     ASSERT(!hyperedge(he).isDisabled(), "Hyperedge" << he << "is disabled");

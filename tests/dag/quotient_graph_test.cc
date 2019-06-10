@@ -204,5 +204,85 @@ TEST_F(QuotientGraphTest, C3540_WeakTopologicalOrderingIsLessThanStrictTopologic
     ASSERT_THAT(weak[hn], Le(strict[hn]));
   }
 }
+
+static void ASSERT_THAT_QMG_MOVES_ARE_LEGAL(Hypergraph& hg, QuotientGraph<DFSCycleDetector>& qg) {
+  auto qmg = qg.computeMoveGraph();
+  for (const HypernodeID& from : hg.nodes()) {
+    for (const QNodeID& to : qmg.outs(from)) {
+      bool move_from_to = qg.update(from, from, to);
+      ASSERT_THAT(move_from_to, Eq(true));
+      hg.changeNodePart(from, from, to);
+      bool move_to_from = qg.update(from, to, from);
+      ASSERT_THAT(move_to_from, Eq(true));
+      hg.changeNodePart(from, to, from);
+    }
+  }
+}
+
+TEST_F(QuotientGraphTest, C17_MovesAlongMoveGraphAreLegal) {
+  hg = loadHypergraph("test_instances/c17.hgr");
+  applySingletonPartition();
+  auto qg = createQuotientGraph();
+  qg.reduceToOneRoot();
+  ASSERT_THAT_QMG_MOVES_ARE_LEGAL(hg, qg);
+}
+
+TEST_F(QuotientGraphTest, C3540_MovesAlongMoveGraphAreLegal) {
+  hg = loadHypergraph("test_instances/c3540.hgr");
+  applySingletonPartition();
+  auto qg = createQuotientGraph();
+  qg.reduceToOneRoot();
+  ASSERT_THAT_QMG_MOVES_ARE_LEGAL(hg, qg);
+}
+
+static void ASSERT_THAT_QMG_IS_SCC(const QuotientMoveGraph& qmg) {
+  for (QNodeID u = 0; u < qmg.numberOfNodes(); ++u) {
+    std::vector<bool> connected_to(qmg.numberOfNodes());
+    std::vector<QNodeID> todo{u};
+
+    while (!todo.empty()) {
+      QNodeID from = todo.back();
+      todo.pop_back();
+      if (!connected_to[from]) {
+        connected_to[from] = true;
+        const auto& outs = qmg.outs(from);
+        todo.insert(todo.end(), outs.begin(), outs.end());
+      }
+    }
+
+    bool connected_to_all = std::all_of(connected_to.begin(), connected_to.end(), [](auto value) { return value; });
+    ASSERT_THAT(connected_to_all, Eq(true)) << "bad node: " << u;
+  }
+}
+
+TEST_F(QuotientGraphTest, C17_MoveGraphIsSCC) {
+  hg = loadHypergraph("test_instances/c17.hgr");
+  applySingletonPartition();
+  auto qg = createQuotientGraph();
+  qg.reduceToOneRoot();
+  const auto qmg = qg.computeMoveGraph();
+  ASSERT_THAT_QMG_IS_SCC(qmg);
+}
+
+TEST_F(QuotientGraphTest, C3540_MoveGraphIsSCC) {
+  hg = loadHypergraph("test_instances/c3540.hgr");
+
+  { // test with singleton partitions
+    applySingletonPartition();
+    auto qg = createQuotientGraph();
+    qg.reduceToOneRoot();
+    const auto qmg = qg.computeMoveGraph();
+    ASSERT_THAT_QMG_IS_SCC(qmg);
+  }
+
+  for (const PartitionID& k : {2, 4, 8, 16, 32, 64, 128, 256}) {
+    hg.resetPartitioning();
+    partitionUsingTopologicalOrdering(k);
+    auto qg = createQuotientGraph();
+    qg.reduceToOneRoot();
+    const auto qmg = qg.computeMoveGraph();
+    ASSERT_THAT_QMG_IS_SCC(qmg);
+  }
+}
 } // namespace dag
 } // namespace kahypar
