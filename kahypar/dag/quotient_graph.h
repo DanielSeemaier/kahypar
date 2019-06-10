@@ -53,7 +53,13 @@ class QuotientGraph {
   }
 
   bool update(const HypernodeID hn, const PartitionID from, const PartitionID to) {
+    bool changed;
+    return update(hn, from, to, changed);
+  }
+
+  bool update(const HypernodeID hn, const PartitionID from, const PartitionID to, bool& changed) {
     if (from == to) {
+      changed = false;
       return true;
     }
 
@@ -104,6 +110,7 @@ class QuotientGraph {
     // note: if successful, testChanges does not rollback edge insertions / deletions, i.e. the detector is up to date
     // with the changes after a successful call
     if (!testChanges(todo_remove, todo_insert)) {
+      changed = false;
       return false; // illegal move, don't commit
     }
 
@@ -116,6 +123,7 @@ class QuotientGraph {
       }
     }
 
+    changed = !todo_insert.empty() || !todo_remove.empty();
     return true;
   }
 
