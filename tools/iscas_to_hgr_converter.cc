@@ -4,7 +4,7 @@
 
 #include "kahypar/definitions.h"
 #include "kahypar/io/hypergraph_io.h"
-#include "kahypar/utils/string.h"
+#include "kahypar/utils/stringhelpers.h"
 
 #include "hypergraph_checker.h"
 

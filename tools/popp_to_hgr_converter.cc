@@ -3,7 +3,7 @@
 #include <sstream>
 
 #include "kahypar/macros.h"
-#include "kahypar/utils/string.h"
+#include "kahypar/utils/stringhelpers.h"
 
 #include "hypergraph_checker.h"
 
