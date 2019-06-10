@@ -22,6 +22,77 @@
 
 namespace kahypar {
 namespace ds {
+class DynamicUnweightedGraph {
+ public:
+  using AdjacencyList = std::vector<std::vector<QNodeID>>;
+
+  explicit DynamicUnweightedGraph(QNodeID numberOfNodes) :
+    _outs(numberOfNodes),
+    _ins(numberOfNodes) {}
+
+  DynamicUnweightedGraph(AdjacencyList outs, AdjacencyList ins) :
+    _outs(std::move(outs)),
+    _ins(std::move(ins)) {
+    ASSERT(_outs.size() == _ins.size());
+  }
+
+  QNodeID numberOfNodes() const {
+    return _outs.size();
+  }
+
+  QNodeID newNode() {
+    _ins.emplace_back();
+    _outs.emplace_back();
+    return numberOfNodes() - 1;
+  }
+
+  void newDirectedEdge(QNodeID from, QNodeID to) {
+    ASSERT(from < numberOfNodes());
+    ASSERT(to < numberOfNodes());
+    ASSERT(std::find(_outs[from].begin(), _outs[from].end(), to) == _outs[from].end());
+    ASSERT(std::find(_ins[to].begin(), _ins[to].end(), from) == _ins[to].end());
+    _outs[from].push_back(to);
+    _ins[to].push_back(from);
+  }
+
+  void newUndirectedEdge(QNodeID u, QNodeID v) {
+    newDirectedEdge(u, v);
+    newDirectedEdge(v, u);
+  }
+
+  QNodeID outDegree(QNodeID node) const {
+    return outs(node).size();
+  }
+
+  const std::vector<QNodeID>& outs(QNodeID node) const {
+    ASSERT(node < _outs.size());
+    return _outs[node];
+  }
+
+  QNodeID inDegree(QNodeID node) const {
+    return ins(node).size();
+  }
+
+  const std::vector<QNodeID>& ins(QNodeID node) const {
+    ASSERT(node < _ins.size());
+    return _ins[node];
+  }
+
+  void log() const {
+    LOG << "Dynamic unweighted graph with" << numberOfNodes() << "nodes";
+    for (QNodeID u = 0; u < numberOfNodes(); ++u) {
+      LOG << "[" << u << "] outs =" << _outs[u] << ", ins =" << _ins[u];
+    }
+    LOG << "End of dyanmic unweighted graph";
+  }
+
+ private:
+  AdjacencyList _outs;
+  AdjacencyList _ins;
+};
+
+using QuotientMoveGraph = DynamicUnweightedGraph;
+
 template<typename Detector>
 class QuotientGraph {
  public:
@@ -196,6 +267,44 @@ class QuotientGraph {
     }
   }
 
+  QuotientMoveGraph computeMoveGraph() const {
+    QuotientMoveGraph qmg(numberOfNodes());
+    const auto ordering = computeWeakTopologicalOrdering();
+
+    for (QNodeID u = 0; u < numberOfNodes(); ++u) {
+      std::vector<QNodeID> min_neighbors;
+      for (const auto& edge : _adjacency_matrix[u]) {
+        const QNodeID v = edge.first;
+        const QEdgeWeight& weight = edge.second;
+        if (weight == 0) {
+          continue;
+        }
+
+        if (min_neighbors.empty()) {
+          min_neighbors.push_back(v);
+        } else {
+          const QNodeID min_neighbor = min_neighbors[0];
+          if (ordering[v] == ordering[min_neighbor]) {
+            min_neighbors.push_back(v);
+          } else if (ordering[v] < ordering[min_neighbor]) {
+            min_neighbors.clear();
+            min_neighbors.push_back(v);
+          }
+        }
+      }
+
+      for (const QNodeID& min_neighbor : min_neighbors) {
+        if (ordering[min_neighbor] == ordering[u] + 1) {
+          qmg.newUndirectedEdge(u, min_neighbor);
+        } else {
+          qmg.newDirectedEdge(u, min_neighbor);
+        }
+      }
+    }
+
+    return qmg;
+  }
+
   /**!
    * Checks whether the quotient graph is acyclic. Note that a quotient graph that is acyclic initially should never
    * become cyclic by calling the public member functions, i.e. this is just a method for ASSERTs.
@@ -303,4 +412,5 @@ class QuotientGraph {
 } // namespace ds
 
 using ds::QuotientGraph;
+using ds::QuotientMoveGraph;
 } // namespace kahypar
