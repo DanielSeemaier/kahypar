@@ -64,6 +64,12 @@ class Randomize {
     return element;
   }
 
+  template<typename T>
+  const T& getRandomElement(const std::vector<T>& vector) {
+    ASSERT(!vector.empty());
+    return vector[getRandomInt(0, vector.size() - 1)];
+  }
+
   template <typename T>
   void shuffleVector(std::vector<T>& vector, size_t num_elements) {
     std::shuffle(vector.begin(), vector.begin() + num_elements, _gen);

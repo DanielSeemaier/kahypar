@@ -9,6 +9,7 @@
 #include <utility>
 #include <vector>
 #include <stack>
+#include <queue>
 
 #include "gtest/gtest_prod.h"
 
@@ -44,6 +45,44 @@ class DynamicUnweightedGraph {
     _ins.emplace_back();
     _outs.emplace_back();
     return numberOfNodes() - 1;
+  }
+
+  bool findPath(QNodeID from, QNodeID to, std::vector<QNodeID>& path) const {
+    ASSERT(from < numberOfNodes());
+    ASSERT(to < numberOfNodes());
+    ASSERT(path.empty());
+
+    std::vector<QNodeID> parent(numberOfNodes());
+    std::iota(parent.begin(), parent.end(), 0);
+
+    std::queue<QNodeID> todo;
+    todo.push(from);
+    while (!todo.empty()) {
+      QNodeID u = todo.front();
+      todo.pop();
+
+      for (const QNodeID& v  : outs(u)) {
+        if (v != from && parent[v] == v) {
+          parent[v] = u;
+          if (v == to) {
+            goto done;
+          } else {
+            todo.push(v);
+          }
+        }
+      }
+    }
+    done:
+
+    if (parent[to] != to) {
+      for (QNodeID v = to; v != from; v = parent[v]) {
+        path.push_back(v);
+      }
+      path.push_back(from);
+      std::reverse(path.begin(), path.end());
+      return true;
+    }
+    return false;
   }
 
   void newDirectedEdge(QNodeID from, QNodeID to) {
@@ -110,7 +149,7 @@ class QuotientGraph {
 
   QuotientGraph(QuotientGraph&& other) noexcept = default;
 
-  QuotientGraph& operator=(QuotientGraph&& other) = delete;
+  QuotientGraph& operator=(QuotientGraph&& other) = default;
 
   ~QuotientGraph() = default;
 
@@ -216,6 +255,19 @@ class QuotientGraph {
       _adjacency_matrix[root][u] = _hg.weightOfHeaviestEdge() + 1;
       bool connect = _detector.connect(root, u);
       ASSERT(connect);
+    }
+  }
+
+  void addMissingEdges() {
+    const auto ordering = computeWeakTopologicalOrdering();
+    for (QNodeID u = 0; u < numberOfNodes(); ++u) {
+      for (QNodeID v = 0; v < numberOfNodes(); ++v) {
+        if (ordering[v] > ordering[u]) {
+          _adjacency_matrix[u][v] = _hg.currentNumEdges() * _hg.weightOfHeaviestEdge() + 1;
+          bool connect = _detector.connect(u, v);
+          ASSERT(connect);
+        }
+      }
     }
   }
 

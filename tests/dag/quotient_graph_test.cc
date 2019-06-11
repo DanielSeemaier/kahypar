@@ -8,6 +8,7 @@ using testing::Test;
 using testing::Eq;
 using testing::Le;
 using testing::Lt;
+using testing::Gt;
 
 namespace kahypar {
 namespace dag {
@@ -45,9 +46,11 @@ class QuotientGraphTest : public Test {
     HypernodeID nodes_per_part = hg.currentNumPins() / k;
     HypernodeID nodes_in_cur_part = 0;
 
+    hg.resetPartitioning();
     hg.changeK(k);
     for (const HypernodeID& hn : ordering) {
       hg.setNodePart(hn, part);
+      ++nodes_in_cur_part;
       if (nodes_in_cur_part == nodes_per_part) {
         ++part;
         nodes_in_cur_part = 0;
@@ -74,6 +77,232 @@ class QuotientGraphTest : public Test {
     }
   }
 
+  void ASSERT_THAT_MOVES_ALONG_MOVE_PATH_ARE_LEGAL(const std::string& filename) {
+    hg = loadHypergraph(filename);
+    applySingletonPartition();
+
+    auto qg = createQuotientGraph();
+    qg.reduceToOneRoot();
+
+    // find partition that has the longest distance to root
+    auto ordering = qg.computeWeakTopologicalOrdering();
+    QNodeID start = 0;
+    QNodeID end = 0;
+    for (QNodeID u = 0; u < qg.numberOfNodes(); ++u) {
+      if (ordering[u] == 0) {
+        end = u;
+      } else if (ordering[u] > ordering[start]) {
+        start = u;
+      }
+    }
+
+    ASSERT_THAT(ordering[end], Eq(0));
+    ASSERT_THAT(ordering[start], Gt(0));
+    ASSERT_THAT_MOVES_ALONG_PATH_ARE_LEGAL(hg, qg, start, end);
+  }
+
+  void ASSERT_THAT_MOVES_ALONG_MOVE_PATH_ARE_LEGAL_RANDOMIZED(const std::string& filename) {
+    hg = loadHypergraph(filename);
+    applySingletonPartition();
+    auto qg = createQuotientGraph();
+    qg.reduceToOneRoot();
+
+    QNodeID start = Randomize::instance().getRandomInt(0, qg.numberOfNodes() - 1);
+    QNodeID end;
+    do {
+      end = Randomize::instance().getRandomInt(0, qg.numberOfNodes() - 1);
+    } while (end == start);
+
+    ASSERT_THAT_MOVES_ALONG_PATH_ARE_LEGAL(hg, qg, start, end);
+  }
+
+  void ASSERT_THAT_MULTIPLE_MOVES_ALONG_MOVE_PATH_ARE_LEGAL_RANDOMIZED(const std::string& filename, PartitionID k) {
+    hg = loadHypergraph(filename);
+    partitionUsingTopologicalOrdering(k);
+    auto qg = createQuotientGraph();
+    qg.addMissingEdges();
+    qg.reduceToOneRoot();
+
+    QNodeID start;
+    QNodeID end;
+    std::tie(start, end) = getRandomStartEndInQG(qg);
+    ASSERT_THAT_MULTIPLE_MOVES_ALONG_PATH_ARE_LEGAL(hg, qg, start, end);
+  }
+
+  void ASSERT_THAT_MULTIPLE_MOVES_ALONG_MOVE_PATH_ARE_LEGAL_EXTENSIVE(const std::string& filename, PartitionID k) {
+    hg = loadHypergraph(filename);
+
+    for (QNodeID u = 0; u < k; ++u) {
+      for (QNodeID v = 0; v < k; ++v) {
+        LOG << V(u) << V(v);
+        if (u == v) {
+          continue;
+        }
+        partitionUsingTopologicalOrdering(k);
+        auto qg = createQuotientGraph();
+        qg.addMissingEdges();
+        qg.reduceToOneRoot();
+        ASSERT_THAT_QMG_IS_SCC(qg.computeMoveGraph());
+        ASSERT_THAT_MULTIPLE_MOVES_ALONG_PATH_ARE_LEGAL(hg, qg, u, v);
+      }
+    }
+  }
+
+  void ASSERT_THAT_MOVES_ALONG_MOVE_GRAPH_EDGES_ARE_LEGAL(const std::string& filename) {
+    hg = loadHypergraph(filename);
+    applySingletonPartition();
+    auto qg = createQuotientGraph();
+    qg.reduceToOneRoot();
+    auto qmg = qg.computeMoveGraph();
+    for (const HypernodeID& from : hg.nodes()) {
+      for (const QNodeID& to : qmg.outs(from)) {
+        bool move_from_to = qg.update(from, from, to);
+        ASSERT_THAT(move_from_to, Eq(true));
+        hg.changeNodePart(from, from, to);
+        bool move_to_from = qg.update(from, to, from);
+        ASSERT_THAT(move_to_from, Eq(true));
+        hg.changeNodePart(from, to, from);
+      }
+    }
+  }
+
+  void ASSERT_THAT_QMG_IS_SCC_SINGLETON_KTS(const std::string& filename, const std::vector<PartitionID> ks) {
+    hg = loadHypergraph(filename);
+    {
+      applySingletonPartition();
+      auto qg = createQuotientGraph();
+      qg.reduceToOneRoot();
+      const auto qmg = qg.computeMoveGraph();
+      ASSERT_THAT_QMG_IS_SCC(qmg);
+    }
+    for (const PartitionID& k : ks) {
+      hg.resetPartitioning();
+      partitionUsingTopologicalOrdering(k);
+      auto qg = createQuotientGraph();
+      qg.reduceToOneRoot();
+      const auto qmg = qg.computeMoveGraph();
+      ASSERT_THAT_QMG_IS_SCC(qmg);
+    }
+  }
+
+ private:
+  static void ASSERT_THAT_QMG_IS_SCC(const QuotientMoveGraph& qmg) {
+    for (QNodeID u = 0; u < qmg.numberOfNodes(); ++u) {
+      std::vector<bool> connected_to(qmg.numberOfNodes());
+      std::vector<QNodeID> todo{u};
+
+      while (!todo.empty()) {
+        QNodeID from = todo.back();
+        todo.pop_back();
+        if (!connected_to[from]) {
+          connected_to[from] = true;
+          const auto& outs = qmg.outs(from);
+          todo.insert(todo.end(), outs.begin(), outs.end());
+        }
+      }
+
+      bool connected_to_all = std::all_of(connected_to.begin(), connected_to.end(), [](auto value) { return value; });
+      ASSERT_THAT(connected_to_all, Eq(true)) << "bad node: " << u;
+    }
+  }
+
+  static void ASSERT_THAT_MOVES_ALONG_PATH_ARE_LEGAL(Hypergraph& hg, QuotientGraph<DFSCycleDetector>& qg,
+                                                     QNodeID start, QNodeID end) {
+    const auto qmg = qg.computeMoveGraph();
+    std::vector<QNodeID> path;
+    bool found_path = qmg.findPath(start, end, path);
+    ASSERT_THAT(found_path, Eq(true));
+
+    for (std::size_t i = 1; i < path.size(); ++i) {
+      QNodeID from = path[i - 1];
+      QNodeID to = path[i];
+      bool ok = qg.update(from, from, to);
+      ASSERT_THAT(ok, Eq(true));
+      hg.changeNodePart(from, from, to);
+    }
+  }
+
+  static void ASSERT_THAT_MULTIPLE_MOVES_ALONG_PATH_ARE_LEGAL(Hypergraph& hg, QuotientGraph<DFSCycleDetector>& qg,
+                                                              const QNodeID start, const QNodeID end) {
+    const auto qmg = qg.computeMoveGraph();
+    const auto ordering = qg.computeWeakTopologicalOrdering();
+
+    std::vector<QNodeID> path;
+    bool found_path = qmg.findPath(start, end, path);
+    ASSERT_THAT(found_path, Eq(true)) << V(start) << " " << V(end);
+
+    for (std::size_t i = path.size() - 1; i > 0; --i) {
+      const QNodeID from = path[i - 1];
+      const QNodeID to = path[i];
+      movePartitionHalf(hg, qg, from, to, ordering[from] < ordering[to]);
+    }
+  }
+
+  static void movePartitionHalf(Hypergraph& hg, QuotientGraph<DFSCycleDetector>& qg,
+                                const PartitionID from, const PartitionID to, const bool lower) {
+    std::size_t count = 0;
+    std::size_t limit = hg.partWeight(from) / 2;
+
+    while (count < limit / 2) {
+      // find candidate
+      HypernodeID candidate = hg.currentNumNodes();
+      for (const HypernodeID& hn : hg.nodes()) {
+        if (hg.partID(hn) != from) {
+          continue;
+        }
+        bool movable = true;
+        if (lower) {
+          for (const HyperedgeID& he : hg.incidentTailEdges(hn)) {
+            for (const HypernodeID& ht : hg.heads(he)) {
+              if (hg.partID(ht) == from) {
+                movable = false;
+                break;
+              }
+            }
+            if (!movable) {
+              break;
+            }
+          }
+        } else {
+          for (const HyperedgeID& he : hg.incidentHeadEdges(hn)) {
+            for (const HypernodeID& hh : hg.tails(he)) {
+              if (hg.partID(hh) == from) {
+                movable = false;
+                break;
+              }
+            }
+            if (!movable) {
+              break;
+            }
+          }
+        }
+
+        if (movable) {
+          candidate = hn;
+          break;
+        }
+      }
+      ASSERT_THAT(candidate, Lt(hg.currentNumNodes()))
+                << "not enough candidates: " << V(from) << " " << V(to) << " " << V(count) << " " << V(limit);
+      bool move_ok = qg.update(candidate, from, to);
+      ASSERT_THAT(move_ok, Eq(true))
+                << V(candidate) << " " << V(from) << " " << V(to) << " " << V(count) << " "
+                << V(hg.partID(candidate));
+      hg.changeNodePart(candidate, from, to);
+      ++count;
+    }
+  }
+
+  static std::pair<QNodeID, QNodeID> getRandomStartEndInQG(const QuotientGraph<DFSCycleDetector>& qg) {
+    QNodeID start = Randomize::instance().getRandomInt(0, qg.numberOfNodes() - 1);
+    QNodeID end;
+    do {
+      end = Randomize::instance().getRandomInt(0, qg.numberOfNodes() - 1);
+    } while (end == start);
+    return {start, end};
+  }
+
+ protected:
   Hypergraph hg;
   Context ctx;
 };
@@ -205,83 +434,80 @@ TEST_F(QuotientGraphTest, C3540_WeakTopologicalOrderingIsLessThanStrictTopologic
   }
 }
 
-static void ASSERT_THAT_QMG_MOVES_ARE_LEGAL(Hypergraph& hg, QuotientGraph<DFSCycleDetector>& qg) {
-  auto qmg = qg.computeMoveGraph();
-  for (const HypernodeID& from : hg.nodes()) {
-    for (const QNodeID& to : qmg.outs(from)) {
-      bool move_from_to = qg.update(from, from, to);
-      ASSERT_THAT(move_from_to, Eq(true));
-      hg.changeNodePart(from, from, to);
-      bool move_to_from = qg.update(from, to, from);
-      ASSERT_THAT(move_to_from, Eq(true));
-      hg.changeNodePart(from, to, from);
-    }
-  }
-}
-
 TEST_F(QuotientGraphTest, C17_MovesAlongMoveGraphAreLegal) {
-  hg = loadHypergraph("test_instances/c17.hgr");
-  applySingletonPartition();
-  auto qg = createQuotientGraph();
-  qg.reduceToOneRoot();
-  ASSERT_THAT_QMG_MOVES_ARE_LEGAL(hg, qg);
+  ASSERT_THAT_MOVES_ALONG_MOVE_GRAPH_EDGES_ARE_LEGAL("test_instances/c17.hgr");
 }
 
-TEST_F(QuotientGraphTest, C3540_MovesAlongMoveGraphAreLegal) {
-  hg = loadHypergraph("test_instances/c3540.hgr");
-  applySingletonPartition();
-  auto qg = createQuotientGraph();
-  qg.reduceToOneRoot();
-  ASSERT_THAT_QMG_MOVES_ARE_LEGAL(hg, qg);
-}
-
-static void ASSERT_THAT_QMG_IS_SCC(const QuotientMoveGraph& qmg) {
-  for (QNodeID u = 0; u < qmg.numberOfNodes(); ++u) {
-    std::vector<bool> connected_to(qmg.numberOfNodes());
-    std::vector<QNodeID> todo{u};
-
-    while (!todo.empty()) {
-      QNodeID from = todo.back();
-      todo.pop_back();
-      if (!connected_to[from]) {
-        connected_to[from] = true;
-        const auto& outs = qmg.outs(from);
-        todo.insert(todo.end(), outs.begin(), outs.end());
-      }
-    }
-
-    bool connected_to_all = std::all_of(connected_to.begin(), connected_to.end(), [](auto value) { return value; });
-    ASSERT_THAT(connected_to_all, Eq(true)) << "bad node: " << u;
+TEST_F(QuotientGraphTest, C17_MultipleMovesAlongPathInMoveGraphAreLegal) {
+  constexpr std::size_t N = 10;
+  for (std::size_t i = 0; i < N; ++i) {
+    ASSERT_THAT_MULTIPLE_MOVES_ALONG_MOVE_PATH_ARE_LEGAL_RANDOMIZED("test_instances/c17.hgr", 4);
   }
+}
+
+TEST_F(QuotientGraphTest, C17_MovesAlongPathInMoveGraphAreLegal) {
+  ASSERT_THAT_MOVES_ALONG_MOVE_PATH_ARE_LEGAL("test_instances/c17.hgr");
 }
 
 TEST_F(QuotientGraphTest, C17_MoveGraphIsSCC) {
-  hg = loadHypergraph("test_instances/c17.hgr");
-  applySingletonPartition();
-  auto qg = createQuotientGraph();
-  qg.reduceToOneRoot();
-  const auto qmg = qg.computeMoveGraph();
-  ASSERT_THAT_QMG_IS_SCC(qmg);
+  ASSERT_THAT_QMG_IS_SCC_SINGLETON_KTS("test_instances/c17.hgr", {2, 4, 8});
+}
+
+TEST_F(QuotientGraphTest, C3540_MovesAlongMoveGraphAreLegal) {
+  ASSERT_THAT_MOVES_ALONG_MOVE_GRAPH_EDGES_ARE_LEGAL("test_instances/c3540.hgr");
+}
+
+TEST_F(QuotientGraphTest, C3540_MovesAlongPathInMoveGraphAreLegal) {
+  ASSERT_THAT_MOVES_ALONG_MOVE_PATH_ARE_LEGAL("test_instances/c3540.hgr");
 }
 
 TEST_F(QuotientGraphTest, C3540_MoveGraphIsSCC) {
-  hg = loadHypergraph("test_instances/c3540.hgr");
+  ASSERT_THAT_QMG_IS_SCC_SINGLETON_KTS("test_instances/c3540.hgr", {2, 4, 8, 16, 32, 64, 128, 256});
+}
 
-  { // test with singleton partitions
-    applySingletonPartition();
-    auto qg = createQuotientGraph();
-    qg.reduceToOneRoot();
-    const auto qmg = qg.computeMoveGraph();
-    ASSERT_THAT_QMG_IS_SCC(qmg);
+TEST_F(QuotientGraphTest, C3540_MovesAlongPathInMoveGraphAreLegalRandomized) {
+  constexpr std::size_t N = 10;
+  for (std::size_t i = 0; i < N; ++i) {
+    ASSERT_THAT_MOVES_ALONG_MOVE_PATH_ARE_LEGAL_RANDOMIZED("test_instances/c3540.hgr");
   }
+}
 
-  for (const PartitionID& k : {2, 4, 8, 16, 32, 64, 128, 256}) {
-    hg.resetPartitioning();
-    partitionUsingTopologicalOrdering(k);
-    auto qg = createQuotientGraph();
-    qg.reduceToOneRoot();
-    const auto qmg = qg.computeMoveGraph();
-    ASSERT_THAT_QMG_IS_SCC(qmg);
+TEST_F(QuotientGraphTest, C880_MultipleMovesAlongPathInMoveGraphAreLegal_Extensive) {
+  ASSERT_THAT_MULTIPLE_MOVES_ALONG_MOVE_PATH_ARE_LEGAL_EXTENSIVE("test_instances/c880.hgr", 2);
+  ASSERT_THAT_MULTIPLE_MOVES_ALONG_MOVE_PATH_ARE_LEGAL_EXTENSIVE("test_instances/c880.hgr", 4);
+  ASSERT_THAT_MULTIPLE_MOVES_ALONG_MOVE_PATH_ARE_LEGAL_EXTENSIVE("test_instances/c880.hgr", 8);
+  ASSERT_THAT_MULTIPLE_MOVES_ALONG_MOVE_PATH_ARE_LEGAL_EXTENSIVE("test_instances/c880.hgr", 16);
+  ASSERT_THAT_MULTIPLE_MOVES_ALONG_MOVE_PATH_ARE_LEGAL_EXTENSIVE("test_instances/c880.hgr", 32);
+  ASSERT_THAT_MULTIPLE_MOVES_ALONG_MOVE_PATH_ARE_LEGAL_EXTENSIVE("test_instances/c880.hgr", 64);
+}
+
+TEST_F(QuotientGraphTest, C880_MultipleMovesAlongPathInMoveGraphAreLegal) {
+  constexpr std::size_t N = 10;
+  for (std::size_t i = 0; i < N; ++i) {
+    ASSERT_THAT_MULTIPLE_MOVES_ALONG_MOVE_PATH_ARE_LEGAL_RANDOMIZED("test_instances/c880.hgr", 2);
+    ASSERT_THAT_MULTIPLE_MOVES_ALONG_MOVE_PATH_ARE_LEGAL_RANDOMIZED("test_instances/c880.hgr", 4);
+    ASSERT_THAT_MULTIPLE_MOVES_ALONG_MOVE_PATH_ARE_LEGAL_RANDOMIZED("test_instances/c880.hgr", 8);
+    ASSERT_THAT_MULTIPLE_MOVES_ALONG_MOVE_PATH_ARE_LEGAL_RANDOMIZED("test_instances/c880.hgr", 16);
+    ASSERT_THAT_MULTIPLE_MOVES_ALONG_MOVE_PATH_ARE_LEGAL_RANDOMIZED("test_instances/c880.hgr", 32);
+    ASSERT_THAT_MULTIPLE_MOVES_ALONG_MOVE_PATH_ARE_LEGAL_RANDOMIZED("test_instances/c880.hgr", 64);
+    ASSERT_THAT_MULTIPLE_MOVES_ALONG_MOVE_PATH_ARE_LEGAL_RANDOMIZED("test_instances/c880.hgr", 128);
+    ASSERT_THAT_MULTIPLE_MOVES_ALONG_MOVE_PATH_ARE_LEGAL_RANDOMIZED("test_instances/c880.hgr", 256);
+    ASSERT_THAT_MULTIPLE_MOVES_ALONG_MOVE_PATH_ARE_LEGAL_RANDOMIZED("test_instances/c880.hgr", 512);
+  }
+}
+
+TEST_F(QuotientGraphTest, C3540_MultipleMovesAlongPathInMoveGraphAreLegal) {
+  constexpr std::size_t N = 10;
+  for (std::size_t i = 0; i < N; ++i) {
+    ASSERT_THAT_MULTIPLE_MOVES_ALONG_MOVE_PATH_ARE_LEGAL_RANDOMIZED("test_instances/c3540.hgr", 2);
+    ASSERT_THAT_MULTIPLE_MOVES_ALONG_MOVE_PATH_ARE_LEGAL_RANDOMIZED("test_instances/c3540.hgr", 4);
+    ASSERT_THAT_MULTIPLE_MOVES_ALONG_MOVE_PATH_ARE_LEGAL_RANDOMIZED("test_instances/c3540.hgr", 8);
+    ASSERT_THAT_MULTIPLE_MOVES_ALONG_MOVE_PATH_ARE_LEGAL_RANDOMIZED("test_instances/c3540.hgr", 16);
+    ASSERT_THAT_MULTIPLE_MOVES_ALONG_MOVE_PATH_ARE_LEGAL_RANDOMIZED("test_instances/c3540.hgr", 32);
+    ASSERT_THAT_MULTIPLE_MOVES_ALONG_MOVE_PATH_ARE_LEGAL_RANDOMIZED("test_instances/c3540.hgr", 64);
+    ASSERT_THAT_MULTIPLE_MOVES_ALONG_MOVE_PATH_ARE_LEGAL_RANDOMIZED("test_instances/c3540.hgr", 128);
+    ASSERT_THAT_MULTIPLE_MOVES_ALONG_MOVE_PATH_ARE_LEGAL_RANDOMIZED("test_instances/c3540.hgr", 256);
+    ASSERT_THAT_MULTIPLE_MOVES_ALONG_MOVE_PATH_ARE_LEGAL_RANDOMIZED("test_instances/c3540.hgr", 512);
   }
 }
 } // namespace dag

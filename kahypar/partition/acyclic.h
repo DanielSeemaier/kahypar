@@ -149,40 +149,14 @@ static inline void partition(Hypergraph& hypergraph, const Context& context) {
     const bool improved_quality = partitionVCycle(hypergraph, *coarsener, *km1_refiner, imbalanced_context);
     ASSERT(QuotientGraph<DFSCycleDetector>(hypergraph, context).isAcyclic(), "Vcycle" << vcycle << "produced a cyclic partition");
 
-    /*if (context.imbalanced_intermediate_step) {
-      for (std::size_t i = 0; i < 5; ++i) {
-        context.partition.current_v_cycle = vcycle + i + 1;
-        partitionVCycle(hypergraph, *coarsener, *balance_refiner, context);
-        ASSERT(QuotientGraph<DFSCycleDetector>(hypergraph, context).isAcyclic(),
-               "Vcycle" << vcycle << "produced a cyclic partition");
-
-        Metrics current_metrics = {metrics::hyperedgeCut(hypergraph),
-                                   metrics::km1(hypergraph),
-                                   metrics::imbalance(hypergraph, context)};
-        LOG << "imbalance:" << V(current_metrics.imbalance);
-        if (current_metrics.imbalance <= context.partition.epsilon) {
-          break;
-        }
-      }
-    }*/
-
     if (!improved_quality) {
       LOG << "No improvement in V-cycle" << vcycle << ". Stopping global search.";
       break;
     }
-
-//    ASSERT(metrics::hyperedgeCut(hypergraph) <= initial_cut,
-//           metrics::hyperedgeCut(hypergraph) << ">" << initial_cut);
-//    ASSERT(metrics::km1(hypergraph) <= initial_km1,
-//           metrics::km1(hypergraph) << ">" << initial_km1);
-//#ifdef KAHYPAR_USE_ASSERTIONS
-//    initial_cut = metrics::hyperedgeCut(hypergraph);
-//    initial_cut = metrics::km1(hypergraph);
-//#endif
   }
 
   if (context.imbalanced_intermediate_step) {
-    for (std::size_t i = 0; i < 10; ++i) {
+    for (std::size_t i = 0; i < 1; ++i) {
       Metrics current_metrics = {metrics::hyperedgeCut(hypergraph),
                                  metrics::km1(hypergraph),
                                  metrics::imbalance(hypergraph, context)};
