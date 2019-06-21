@@ -8,6 +8,7 @@
 #include "kahypar/partition/context.h"
 #include "kahypar/io/hypergraph_io.h"
 #include "kahypar/definitions.h"
+#include "kahypar/dag/quotient_graph.h"
 
 static constexpr std::size_t HGR_FILENAME = 1;
 static constexpr std::size_t GRAPH_FILENAME = 2;
@@ -57,10 +58,7 @@ int main(int argc, char* argv[]) {
   }
 
   // read hypergraph
-  // TODO integrate this into the file format
-  constexpr bool directed = true;
-  constexpr HypernodeID num_heads_per_edge = 1;
-  Hypergraph hypergraph(io::createHypergraphFromFile(hgr_filename, max_part + 1, directed, num_heads_per_edge));
+  Hypergraph hypergraph(io::createHypergraphFromFile(hgr_filename, max_part + 1));
 
   // read graph
   std::vector<int32_t> node_weights;
@@ -154,6 +152,7 @@ int main(int argc, char* argv[]) {
     std::cout << "k(" << partition_filename << ")=" << max_part + 1 << std::endl;
     std::cout << "imbalance(" << partition_filename << ")=" << imb(hypergraph, context.partition.k) << std::endl;
     std::cout << "km1(" << partition_filename << ")=" << metrics::km1(hypergraph) << std::endl;
+    std::cout << "acyclic(" << partition_filename << ")=" << QuotientGraph<DFSCycleDetector>(hypergraph, context).isAcyclic() << std::endl;
 
     int32_t graph_cut = 0;
     for (std::size_t j = 0; j < edges.size(); ++j) {

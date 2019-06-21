@@ -48,11 +48,13 @@ int main(int argc, char* argv[]) {
   HyperedgeVector edge_vector;
   HyperedgeWeightVector hyperedge_weights;
   HypernodeWeightVector hypernode_weights;
+  NumHeadsVector num_heads;
+  bool is_directed;
 
   kahypar::io::readHypergraphFile(graph_filename, num_hypernodes, num_hyperedges,
-                                  index_vector, edge_vector, &hyperedge_weights, &hypernode_weights);
-  // TODO integrate into file format
-  Hypergraph hypergraph(num_hypernodes, num_hyperedges, index_vector, edge_vector, 2, nullptr, nullptr, true, 1);
+                                  index_vector, edge_vector, is_directed, num_heads,
+                                  &hyperedge_weights, &hypernode_weights);
+  Hypergraph hypergraph(num_hypernodes, num_hyperedges, index_vector, edge_vector, is_directed, num_heads, 2, nullptr, nullptr);
 
   HyperedgeID max_hn_degree = 0;
   HyperedgeID min_hn_degree = std::numeric_limits<HyperedgeID>::max();

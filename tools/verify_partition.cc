@@ -61,10 +61,7 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  // TODO integrate this into the file format
-  constexpr bool directed = true;
-  constexpr HypernodeID num_heads_per_edge = 1;
-  Hypergraph hypergraph(io::createHypergraphFromFile(hgr_filename, max_part + 1, directed, num_heads_per_edge));
+  Hypergraph hypergraph(io::createHypergraphFromFile(hgr_filename, max_part + 1));
 
   if (!partition.empty() && partition.size() != hypergraph.initialNumNodes()) {
     std::cout << "partition file has incorrect size. Exiting." << std::endl;
