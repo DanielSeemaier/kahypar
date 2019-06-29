@@ -303,6 +303,7 @@ struct PartitioningParameters {
   Mode mode = Mode::UNDEFINED;
   Objective objective = Objective::UNDEFINED;
   double epsilon = std::numeric_limits<double>::max();
+  double final_epsilon = std::numeric_limits<double>::max();
   PartitionID k = std::numeric_limits<PartitionID>::max();
   PartitionID rb_lower_k = 0;
   PartitionID rb_upper_k = 0;
@@ -342,6 +343,7 @@ inline std::ostream& operator<< (std::ostream& str, const PartitioningParameters
   str << "  Objective:                          " << params.objective << std::endl;
   str << "  k:                                  " << params.k << std::endl;
   str << "  epsilon:                            " << params.epsilon << std::endl;
+  str << "  final epsilon:                      " << params.final_epsilon << std::endl;
   str << "  seed:                               " << params.seed << std::endl;
   str << "  # V-cycles:                         " << params.global_search_iterations << std::endl;
   str << "  time limit:                         " << params.time_limit << "s" << std::endl;
@@ -417,6 +419,7 @@ class Context {
   mutable PartitioningStats stats;
   bool partition_evolutionary = false;
   bool imbalanced_intermediate_step = false;
+  bool reduce_balance_during_uncoarsening = false;
 
   Context() :
     stats(*this) { }
@@ -430,7 +433,9 @@ class Context {
     evolutionary(other.evolutionary),
     type(other.type),
     stats(*this, &other.stats.topLevel()),
-    partition_evolutionary(other.partition_evolutionary) { }
+    partition_evolutionary(other.partition_evolutionary),
+    imbalanced_intermediate_step(other.imbalanced_intermediate_step),
+    reduce_balance_during_uncoarsening(other.reduce_balance_during_uncoarsening) { }
 
   Context& operator= (const Context&) = delete;
 

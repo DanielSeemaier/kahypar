@@ -252,14 +252,14 @@ class QuotientGraph {
         continue;
       }
       ASSERT(_adjacency_matrix[root][u] == 0);
-      _adjacency_matrix[root][u] = _hg.weightOfHeaviestEdge() + 1;
+      _adjacency_matrix[root][u] = _hg.currentNumEdges() * _hg.weightOfHeaviestEdge() + 1;
       bool connect = _detector.connect(root, u);
       ASSERT(connect);
     }
   }
 
   void addMissingEdges() {
-    const auto ordering = computeWeakTopologicalOrdering();
+    const auto ordering = computeStrictTopologicalOrdering();
     for (QNodeID u = 0; u < numberOfNodes(); ++u) {
       for (QNodeID v = 0; v < numberOfNodes(); ++v) {
         if (ordering[v] > ordering[u]) {
@@ -269,6 +269,14 @@ class QuotientGraph {
         }
       }
     }
+  }
+
+  bool connected(const QNodeID u, const QNodeID v) const {
+    return _adjacency_matrix[u][v] > 0;
+  }
+
+  const std::unordered_map<QNodeID, QEdgeWeight>& outs(const QNodeID u) const {
+    return _adjacency_matrix[u];
   }
 
   std::vector<QNodeID> computeWeakTopologicalOrdering() const {

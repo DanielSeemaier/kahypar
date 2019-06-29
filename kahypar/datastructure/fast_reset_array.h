@@ -115,6 +115,10 @@ class FastResetArray {
     _used_entries.clear();
   }
 
+  std::size_t size() const {
+    return _used_entries.size();
+  }
+
  private:
   const T _initial_value;
   std::vector<size_t> _used_entries;

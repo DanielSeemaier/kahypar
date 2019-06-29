@@ -84,6 +84,8 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
   };
 
  public:
+  using FMRefinerBase<RollbackInfo, AcyclicKWayKMinusOneRefiner<StoppingPolicy, FMImprovementPolicy>>::performMovesAndUpdateCache;
+
   AcyclicKWayKMinusOneRefiner(Hypergraph& hypergraph, const Context& context) :
     Base(hypergraph, context),
     _tmp_gains(_context.partition.k, 0),
@@ -99,6 +101,15 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
 
   AcyclicKWayKMinusOneRefiner(AcyclicKWayKMinusOneRefiner&&) = delete;
   AcyclicKWayKMinusOneRefiner& operator=(AcyclicKWayKMinusOneRefiner&&) = delete;
+
+  void changeEpsilon(const double epsilon) {
+    _context.partition.epsilon = epsilon;
+    _context.setupPartWeights(_hg.totalWeight());
+  }
+
+  const std::vector<Move>& moves() const {
+    return _moves;
+  }
 
  private:
   void initializeImpl(const HyperedgeWeight max_gain) override final {
@@ -152,6 +163,7 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
            V(best_metrics.imbalance) << V(metrics::imbalance(_hg, _context)));
 
     Base::reset();
+    _moves.clear();
     _unremovable_he_parts.reset();
 
     Randomize::instance().shuffleVector(refinement_nodes, refinement_nodes.size());
@@ -249,8 +261,10 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
         // right now, we do not allow a decrease in cut in favor of an increase in balance
         const bool improved_km1_within_balance = (current_imbalance <= _context.partition.epsilon) &&
                                                  (current_km1 < best_metrics.km1);
-        const bool improved_balance_less_equal_km1 = (current_imbalance < best_metrics.imbalance) &&
-                                                     (current_km1 <= best_metrics.km1);
+        bool improved_balance_less_equal_km1 = current_imbalance < best_metrics.imbalance;
+        if (!_context.imbalanced_intermediate_step) {
+          improved_balance_less_equal_km1 &= current_km1 <= best_metrics.km1;
+        }
 
         if (improved_km1_within_balance || improved_balance_less_equal_km1) {
           DBGC(max_gain == 0) << "KWayFM improved balance between" << from_part
@@ -265,6 +279,7 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
           _gain_cache.resetDelta();
         }
         _performed_moves.emplace_back(RollbackInfo{max_gain_node, from_part, to_part});
+        _moves.emplace_back(max_gain_node, from_part, to_part);
       } else {
         // If the HN can't be moved to to_part, it locks all its incident
         // HEs in from_part (i.e., from_part becomes unremovable).
@@ -299,10 +314,17 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
     Base::rollback(_performed_moves.size() - 1, min_cut_index);
     _gain_cache.rollbackDelta();
 
+    int last_index = _performed_moves.size() - 1;
+    while (last_index != min_cut_index) {
+      _moves.pop_back();
+      --last_index;
+    }
+
     ASSERT_THAT_GAIN_CACHE_IS_VALID();
 
     ASSERT(best_metrics.km1 == metrics::km1(_hg));
-    ASSERT(best_metrics.km1 <= initial_km1, V(initial_km1) << V(best_metrics.km1));
+    best_metrics.imbalance = metrics::imbalance(_hg, _context);
+    //ASSERT(best_metrics.km1 <= initial_km1, V(initial_km1) << V(best_metrics.km1));
     return FMImprovementPolicy::improvementFound(best_metrics.km1, initial_km1,
                                                  best_metrics.imbalance, initial_imbalance,
                                                  _context.partition.epsilon);
@@ -653,16 +675,16 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
         }
       }
 
-      if (fromAndToPartAreUnremovable(he, from_part, to_part)) {
-        updateForHEwithUnremovableFromAndToPart(moved_hn, from_part, to_part, he);
-      } else if (fromAndToPartHaveUnequalStates(he, from_part, to_part)) {
-        updateForHEwithUnequalPartState<only_update_cache>(moved_hn, from_part, to_part, he);
-      } else {
+      //if (fromAndToPartAreUnremovable(he, from_part, to_part)) {
+      //  updateForHEwithUnremovableFromAndToPart(moved_hn, from_part, to_part, he);
+      //} else if (fromAndToPartHaveUnequalStates(he, from_part, to_part)) {
+      //  updateForHEwithUnequalPartState<only_update_cache>(moved_hn, from_part, to_part, he);
+      //} else {
         fullUpdate<only_update_cache>(moved_hn, from_part, to_part, he);
-      }
-      _unremovable_he_parts.set(static_cast<size_t>(he) * _context.partition.k + to_part, 1);
+      //}
+      //_unremovable_he_parts.set(static_cast<size_t>(he) * _context.partition.k + to_part, 1);
 
-      ASSERT([&]() {
+      /*ASSERT([&]() {
         // Search parts of hyperedge he which are unremoveable
         std::vector<bool> ur_parts(_context.partition.k, false);
         for (const HypernodeID& pin : _hg.pins(he)) {
@@ -676,7 +698,7 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
                  V(ur_parts[k]) << V(_unremovable_he_parts[he * _context.partition.k + k]));
         }
         return true;
-      }(), "Error in locking of he/parts!");
+      }(), "Error in locking of he/parts!");*/
     }
 
     _gain_cache.updateFromAndToPartOfMovedHN(moved_hn, from_part, to_part,
@@ -1011,5 +1033,7 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
 
   GainCache _gain_cache;
   StoppingPolicy _stopping_policy;
+
+  std::vector<Move> _moves;
 };
 }  // namespace kahypar

@@ -198,6 +198,10 @@ class KwayGainCache {
     _deltas.clear();
   }
 
+  const std::vector<RollbackElement>& deltas() const {
+    return _deltas;
+  }
+
   void resetDelta() {
     _deltas.clear();
   }

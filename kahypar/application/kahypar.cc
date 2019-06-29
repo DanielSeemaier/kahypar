@@ -29,7 +29,8 @@ int main(int argc, char* argv[]) {
 
   kahypar::processCommandLineInput(context, argc, argv);
 
-  context.imbalanced_intermediate_step = true;
+  context.imbalanced_intermediate_step = false;
+  context.reduce_balance_during_uncoarsening = false;
 
   kahypar::Hypergraph hypergraph(
     kahypar::io::createHypergraphFromFile(context.partition.graph_filename,

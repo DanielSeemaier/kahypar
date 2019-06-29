@@ -98,6 +98,7 @@ enum class RefinementAlgorithm : uint8_t {
   kway_fm_flow,
   acyclic_kway_fm_km1,
   acyclic_kway_fm_balance,
+  acyclic_km1,
   do_nothing,
   UNDEFINED
 };
@@ -375,6 +376,7 @@ std::ostream& operator<< (std::ostream& os, const RefinementAlgorithm& algo) {
     case RefinementAlgorithm::kway_fm_flow: return os << "kway_fm_flow";
     case RefinementAlgorithm::acyclic_kway_fm_km1: return os << "acyclic_kway_fm_km1";
     case RefinementAlgorithm::acyclic_kway_fm_balance: return os << "acyclic_kway_fm_balance";
+    case RefinementAlgorithm::acyclic_km1: return os << "acyclic_km1";
     case RefinementAlgorithm::do_nothing: return os << "do_nothing";
     case RefinementAlgorithm::UNDEFINED: return os << "UNDEFINED";
       // omit default case to trigger compiler warning for missing cases
@@ -612,6 +614,8 @@ static RefinementAlgorithm refinementAlgorithmFromString(const std::string& type
     return RefinementAlgorithm::acyclic_kway_fm_km1;
   } else if (type == "acyclic_kway_fm_balance") {
     return RefinementAlgorithm::acyclic_kway_fm_balance;
+  } else if (type == "acyclic_km1") {
+    return RefinementAlgorithm::acyclic_km1;
   } else if (type == "do_nothing") {
     return RefinementAlgorithm::do_nothing;
   }

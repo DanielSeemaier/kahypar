@@ -119,18 +119,12 @@ static inline void partition(Hypergraph& hypergraph, const Context& context) {
     CoarsenerFactory::getInstance().createObject(
       context.coarsening.algorithm, hypergraph, context,
       hypergraph.weightOfHeaviestNode()));
-
-  Context imbalanced_context = context;
-  if (context.imbalanced_intermediate_step) {
-    imbalanced_context.partition.epsilon = 0.33;
-    imbalanced_context.setupPartWeights(hypergraph.totalWeight());
-  }
   std::unique_ptr<IRefiner> km1_refiner(
     RefinerFactory::getInstance().createObject(
-      context.local_search.algorithm, hypergraph, imbalanced_context));
+      context.local_search.algorithm, hypergraph, context));
   std::unique_ptr<IRefiner> ip_refiner(
     RefinerFactory::getInstance().createObject(
-      context.initial_partitioning.local_search.algorithm, hypergraph, imbalanced_context));
+      context.initial_partitioning.local_search.algorithm, hypergraph, context));
   std::unique_ptr<IRefiner> balance_refiner(
     RefinerFactory::getInstance().createObject(
       RefinementAlgorithm::acyclic_kway_fm_balance, hypergraph, context));
@@ -139,14 +133,9 @@ static inline void partition(Hypergraph& hypergraph, const Context& context) {
     performInitialPartitioning(hypergraph, context, *ip_refiner);
   }
 
-//#ifdef KAHYPAR_USE_ASSERTIONS
-//  HyperedgeWeight initial_cut = std::numeric_limits<HyperedgeWeight>::max();
-//  HyperedgeWeight initial_km1 = std::numeric_limits<HyperedgeWeight>::max();
-//#endif
-
   for (uint32_t vcycle = 1; vcycle <= context.partition.global_search_iterations; ++vcycle) {
     context.partition.current_v_cycle = vcycle;
-    const bool improved_quality = partitionVCycle(hypergraph, *coarsener, *km1_refiner, imbalanced_context);
+    const bool improved_quality = partitionVCycle(hypergraph, *coarsener, *km1_refiner, context);
     ASSERT(QuotientGraph<DFSCycleDetector>(hypergraph, context).isAcyclic(), "Vcycle" << vcycle << "produced a cyclic partition");
 
     if (!improved_quality) {
@@ -155,28 +144,18 @@ static inline void partition(Hypergraph& hypergraph, const Context& context) {
     }
   }
 
-  if (context.imbalanced_intermediate_step) {
-    for (std::size_t i = 0; i < 1; ++i) {
-      Metrics current_metrics = {metrics::hyperedgeCut(hypergraph),
-                                 metrics::km1(hypergraph),
-                                 metrics::imbalance(hypergraph, context)};
-      if (current_metrics.imbalance <= context.partition.epsilon) {
-        break;
-      }
-      LOG << "imbalance:" << V(current_metrics.imbalance);
-
-      balance_refiner->initialize(0);
-      UncontractionGainChanges changes;
-      changes.representative.push_back(0);
-      changes.contraction_partner.push_back(0);
-      std::vector<HypernodeID> refinement_nodes;
-      for (const HypernodeID& hn : hypergraph.nodes()) {
-        refinement_nodes.push_back(hn);
-      }
-      balance_refiner->refine(refinement_nodes, {0, 0}, changes, current_metrics);
-      ASSERT(QuotientGraph<DFSCycleDetector>(hypergraph, context).isAcyclic(), "Rebalancing step produced an acyclic quotient graph!");
-    }
-  }
+  // rebalance edge case: graph too small for multilevel
+  AcyclicHardRebalanceRefiner hard_balance_refiner(hypergraph, context);
+  UncontractionGainChanges changes;
+  changes.representative.push_back(0);
+  changes.contraction_partner.push_back(0);
+  hard_balance_refiner.initialize(0);
+  Metrics current_metrics = { metrics::hyperedgeCut(hypergraph),
+                              metrics::km1(hypergraph),
+                              metrics::imbalance(hypergraph, context) };
+  std::vector<HypernodeID> refinement_nodes{};
+  hard_balance_refiner.changeEpsilon(context.partition.final_epsilon);
+  hard_balance_refiner.refine(refinement_nodes, {0, 0}, changes, current_metrics);
 }
 }  // namespace direct_kway
 }  // namespace kahypar
