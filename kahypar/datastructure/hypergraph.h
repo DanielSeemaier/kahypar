@@ -754,6 +754,39 @@ class GenericHypergraph {
 
   ~GenericHypergraph() = default;
 
+  void printDirectedHypergraphNode(const HypernodeID hn) const {
+    std::cout << "HN " << hn << "\n";
+    for (const HyperedgeID& he : incidentHeadEdges(hn)) {
+      std::cout << "\tHeadEdge " << he << ":";
+      for (const HypernodeID& head : heads(he)) {
+        std::cout << "Head[" << head << "] ";
+      }
+      std::cout << " | ";
+      for (const HypernodeID& tail : tails(he)) {
+        std::cout << "Tail[" << tail << "] ";
+      }
+      std::cout << "\n";
+    }
+    for (const HyperedgeID& he : incidentTailEdges(hn)) {
+      std::cout << "\tTailEdge " << he << ":";
+      for (const HypernodeID& head : heads(he)) {
+        std::cout << "Head[" << head << "] ";
+      }
+      std::cout << " | ";
+      for (const HypernodeID& tail : tails(he)) {
+        std::cout << "Tail[" << tail << "] ";
+      }
+      std::cout << "\n";
+    }
+    for (const HyperedgeID& he : incidentEdges(hn)) {
+      std::cout << "\tEdge " << he << ":";
+      for (const HypernodeID& pin : pins(he)) {
+        std::cout << "Pin[" << pin << "] ";
+      }
+      std::cout << "\n";
+    }
+  }
+
   /*!
    * Debug information:
    * Print hypernodes and hyperedges with information for directed hypergraphs to stdout.
@@ -1041,7 +1074,7 @@ class GenericHypergraph {
    * \param v Contraction partner that will be removed from the hypergraph
    *
    */
-  Memento contract(const HypernodeID u, const HypernodeID v) {
+  Memento contract(const HypernodeID u, const HypernodeID v) { // u nicht in HE, v head von HE
     using std::swap;
     ASSERT(!hypernode(u).isDisabled(), "Hypernode" << u << "is disabled");
     ASSERT(!hypernode(v).isDisabled(), "Hypernode" << v << "is disabled");
@@ -1079,6 +1112,7 @@ class GenericHypergraph {
     // Use index-based iteration because case 2 might lead to reallocation!
     for (HyperedgeID he_it = hypernode(v).firstEntry(); he_it != hypernode(v).firstInvalidEntry();
          ++he_it) {
+      //if (v == 1941) LOG << V(he_it) << V(_incidence_array[he_it]);
       const HypernodeID pins_begin = hyperedge(_incidence_array[he_it]).firstEntry();
       const HypernodeID pins_end = hyperedge(_incidence_array[he_it]).firstInvalidEntry();
       HypernodeID slot_of_u = pins_end - 1;
@@ -1086,30 +1120,47 @@ class GenericHypergraph {
       const HypernodeID first_tail_slot = hyperedge(_incidence_array[he_it]).firstTailEntry();
       bool u_is_head = false;
       bool v_is_head = false;
+      bool v_was_already_last = true;
+
+      //LOG << "--" << V(pins_begin) << V(last_pin_slot) << V(pins_end);
 
       for (HypernodeID pin_iter = pins_begin; pin_iter != last_pin_slot; ++pin_iter) {
         const HypernodeID pin = _incidence_array[pin_iter];
+        //LOG << "~~" << V(pin) << V(pin_iter) << V(last_pin_slot) << V(pins_begin) << V(_incidence_array[he_it]);
         if (pin == v) {
+          v_was_already_last = false;
           v_is_head = hyperedge(_incidence_array[he_it]).isHeadID(pin_iter);
+          //if (v == 1941) {
+          //  LOG << V(u) << V(v) << V(v_is_head) << V(_incidence_array[he_it]);
+          //}
 
-          if (v_is_head) {
+          if (v_is_head) { // PROBLEM v could be last
             ASSERT(first_tail_slot <= last_pin_slot);
             std::swap(_incidence_array[pin_iter], _incidence_array[first_tail_slot - 1]); // move v to slot of last head
             std::swap(_incidence_array[first_tail_slot - 1], _incidence_array[last_pin_slot]); // move v to last slot
-            hyperedge(_incidence_array[he_it]).decrementHeadCounter();
+            hyperedge(_incidence_array[he_it]).decrementHeadCounter(); // WHY do we need that?!
           } else {
             std::swap(_incidence_array[pin_iter], _incidence_array[last_pin_slot]);
           }
           --pin_iter;
         } else if (pin == u) {
-          u_is_head = hyperedge(_incidence_array[he_it]).isHeadID(pin_iter);
           slot_of_u = pin_iter;
         }
       }
 
       ASSERT(_incidence_array[last_pin_slot] == v, "v is not last entry in adjacency array!");
 
+      if (v_was_already_last) { // NEW
+        v_is_head = hyperedge(_incidence_array[he_it]).isHeadID(last_pin_slot);
+        if (v_is_head) {
+          hyperedge(_incidence_array[he_it]).decrementHeadCounter();
+        }
+      }
+
       if (slot_of_u != last_pin_slot) {
+        ASSERT(_incidence_array[slot_of_u] == u);
+        u_is_head = hyperedge(_incidence_array[he_it]).isHeadID(slot_of_u);
+
         // Case 1:
         // Hyperedge e contains both u and v. Thus we don't need to connect u to e and
         // can just cut off the last entry in the edge array of e that now contains v.
@@ -1158,6 +1209,9 @@ class GenericHypergraph {
         // This reuses the pin slot of v in e's incidence array (i.e. last_pin_slot!)
         // For directed hypergraphs: u gets the same direction as v, i.e. u is a head iff. v was a head
         hyperedge(_incidence_array[he_it]).contraction_type = ContractionType::Case2;
+        //if (u == 1560) {
+        //  LOG << V(u) << V(v) << V(v_is_head) << V(u_is_head) << V(_incidence_array[he_it]);
+        //}
         connectHyperedgeToRepresentative(_incidence_array[he_it], u, v_is_head, first_call);
       }
     }
@@ -1377,9 +1431,12 @@ class GenericHypergraph {
         }
       }
 
+      DBG << V(obsolete_head_positions);
+
       for (const HyperedgeID& he_it : obsolete_head_positions) {
         ASSERT(he_it < _incidence_array.size());
         ASSERT(hypernode(memento.u).firstTailEntry() - 1 < _incidence_array.size());
+        DBG << "Remove head" << V(_incidence_array[he_it]) << "from" << V(memento.u);
         std::swap(_incidence_array[he_it],
                   _incidence_array[hypernode(memento.u).firstTailEntry() - 1]);
         hypernode(memento.u).decrementHeadCounter();
@@ -1426,6 +1483,7 @@ class GenericHypergraph {
                     _incidence_array[hyperedge(he).firstInvalidEntry() - 1]); // v
 
           // make edge a tail in node
+          DBG << "Make" << V(he) << V(_incidence_array[he_it]) << "tail in" << V(hypernode(memento.u).numHeads());
           for (HyperedgeID he_u_it = hypernode(memento.u).firstHeadEntry();
                he_u_it < hypernode(memento.u).firstTailEntry();
                ++he_u_it) {
@@ -1435,10 +1493,13 @@ class GenericHypergraph {
               ASSERT(hypernode(memento.u).firstTailEntry() - 1 < _incidence_array.size());
               std::swap(_incidence_array[he_u_it],
                         _incidence_array[hypernode(memento.u).firstTailEntry() - 1]);
-              hypernode(memento.u).decrementHeadCounter();
               break;
             }
           }
+          // don't but this decrement in the for loop!
+          // if we reset to another incidence array for memento.u, then he is already in tail position
+          // in this case, the for loop won't find the node but we must still decrement the head counter ...
+          hypernode(memento.u).decrementHeadCounter();
         }
 
         if (connectivity(he) > 1) {
@@ -2042,6 +2103,10 @@ class GenericHypergraph {
     hypernode(u).state = _threshold_marked;
   }
 
+  void unmark(const HypernodeID u) {
+    hypernode(u).state = _threshold_active;
+  }
+
   // ! Marks hypernode as rebalanced
   void markRebalanced(const HypernodeID u) {
     hypernode(u).state = _threshold_marked;
@@ -2049,7 +2114,7 @@ class GenericHypergraph {
 
   // ! Marks hypernode as active
   void activate(const HypernodeID u) {
-    ASSERT(hypernode(u).state < _threshold_active, V(u));
+    ASSERT(hypernode(u).state < _threshold_active, V(u) << V((hypernode(u).state)));
     hypernode(u).state = _threshold_active;
   }
 

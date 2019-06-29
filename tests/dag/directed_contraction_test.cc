@@ -296,5 +296,70 @@ TEST_F(DirectedContractionTest, Regression_C3540_UncoarseningCrash) {
   hg.restoreEdge(1565);
   hg.uncontract(memento); // should not crash
 }
+
+TEST_F(DirectedContractionTest, Regression_C7552_InconsistendContraction) {
+  hg = loadHypergraph("test_instances/c7552.hgr");
+  placeAllHypernodesInPartition(hg, 0);
+
+  std::vector<Hypergraph::Memento> mems;
+  mems.push_back(hg.contract( 1941 , 2365 ));
+  mems.push_back(hg.contract( 1560 , 1941 ));
+  mems.push_back(hg.contract( 471 , 249 ));
+
+  for (const HypernodeID& hn : hg.nodes()) {
+    for (const HyperedgeID& he : hg.incidentHeadEdges(hn)) {
+      ASSERT_TRUE(hg.isHead(hn, he)) << V(hn) << V(he);
+    }
+    for (const HyperedgeID& he : hg.incidentTailEdges(hn)) {
+      ASSERT_TRUE(hg.isTail(hn, he)) << V(hn) << V(he);
+    }
+  }
+
+  for (std::size_t i = mems.size(); i > 0; --i) {
+    const auto& mem = mems[i - 1];
+    hg.uncontract(mem);
+
+    for (const HypernodeID& hn : hg.nodes()) {
+      for (const HyperedgeID& he : hg.incidentHeadEdges(hn)) {
+        ASSERT_TRUE(hg.isHead(hn, he)) << V(hn) << V(he) << "Memento:" << V(mem.u) << V(mem.v);
+      }
+      for (const HyperedgeID& he : hg.incidentTailEdges(hn)) {
+        ASSERT_TRUE(hg.isTail(hn, he)) << V(hn) << V(he) << "Memento:" << V(mem.u) << V(mem.v);
+      }
+    }
+  }
+}
+
+TEST_F(DirectedContractionTest, Regression_C7552_InconsistendUncontraction) {
+  hg = loadHypergraph("test_instances/c7552.hgr");
+  placeAllHypernodesInPartition(hg, 0);
+
+  std::vector<Hypergraph::Memento> mems;
+  mems.push_back(hg.contract( 2617 , 2994 ));
+  mems.push_back(hg.contract( 2761 , 2617 ));
+
+  for (const HypernodeID& hn : hg.nodes()) {
+    for (const HyperedgeID& he : hg.incidentHeadEdges(hn)) {
+      ASSERT_TRUE(hg.isHead(hn, he)) << V(hn) << V(he);
+    }
+    for (const HyperedgeID& he : hg.incidentTailEdges(hn)) {
+      ASSERT_TRUE(hg.isTail(hn, he)) << V(hn) << V(he);
+    }
+  }
+
+  for (std::size_t i = mems.size(); i > 0; --i) {
+    const auto& mem = mems[i - 1];
+    hg.uncontract(mem);
+
+    for (const HypernodeID& hn : hg.nodes()) {
+      for (const HyperedgeID& he : hg.incidentHeadEdges(hn)) {
+        ASSERT_TRUE(hg.isHead(hn, he)) << V(hn) << V(he) << "Memento:" << V(mem.u) << V(mem.v);
+      }
+      for (const HyperedgeID& he : hg.incidentTailEdges(hn)) {
+        ASSERT_TRUE(hg.isTail(hn, he)) << V(hn) << V(he) << "Memento:" << V(mem.u) << V(mem.v);
+      }
+    }
+  }
+}
 } // namespace dag
 } // namespace kahypar
