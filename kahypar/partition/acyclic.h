@@ -77,8 +77,8 @@ static inline void performInitialPartitioning(Hypergraph& hypergraph, const Cont
       << (context.partition.objective == Objective::cut
           ? metrics::hyperedgeCut(hypergraph)
           : metrics::km1(hypergraph));
-
   LOG << "Performing initial refinement";
+
   hypergraph.initializeNumCutHyperedges();
   refiner.initialize(0);
   UncontractionGainChanges changes;
@@ -88,13 +88,12 @@ static inline void performInitialPartitioning(Hypergraph& hypergraph, const Cont
   for (const HypernodeID& hn : hypergraph.nodes()) {
     refinement_nodes.push_back(hn);
   }
-  Metrics current_metrics = { metrics::hyperedgeCut(hypergraph),
-                              metrics::km1(hypergraph),
-                              metrics::imbalance(hypergraph, context) };
-  LOG << "Call refiner";
+  Metrics current_metrics = {metrics::hyperedgeCut(hypergraph),
+                             metrics::km1(hypergraph),
+                             metrics::imbalance(hypergraph, context)};
+
   refiner.refine(refinement_nodes, {0, 0}, changes, current_metrics);
   ASSERT(QuotientGraph<DFSCycleDetector>(hypergraph, context).isAcyclic(), "Initial partition is not acyclic!");
-  LOG << "Initial refinement completed";
 
   auto end = std::chrono::high_resolution_clock::now();
   Timer::instance().add(context, Timepoint::initial_partitioning,
@@ -125,9 +124,6 @@ static inline void partition(Hypergraph& hypergraph, const Context& context) {
   std::unique_ptr<IRefiner> ip_refiner(
     RefinerFactory::getInstance().createObject(
       context.initial_partitioning.local_search.algorithm, hypergraph, context));
-  std::unique_ptr<IRefiner> balance_refiner(
-    RefinerFactory::getInstance().createObject(
-      RefinementAlgorithm::acyclic_kway_fm_balance, hypergraph, context));
 
   if (!context.partition.vcycle_refinement_for_input_partition) {
     performInitialPartitioning(hypergraph, context, *ip_refiner);
@@ -136,7 +132,8 @@ static inline void partition(Hypergraph& hypergraph, const Context& context) {
   for (uint32_t vcycle = 1; vcycle <= context.partition.global_search_iterations; ++vcycle) {
     context.partition.current_v_cycle = vcycle;
     const bool improved_quality = partitionVCycle(hypergraph, *coarsener, *km1_refiner, context);
-    ASSERT(QuotientGraph<DFSCycleDetector>(hypergraph, context).isAcyclic(), "Vcycle" << vcycle << "produced a cyclic partition");
+    ASSERT(QuotientGraph<DFSCycleDetector>(hypergraph, context).isAcyclic(),
+           "Vcycle" << vcycle << "produced a cyclic partition");
 
     if (!improved_quality) {
       LOG << "No improvement in V-cycle" << vcycle << ". Stopping global search.";
@@ -145,17 +142,23 @@ static inline void partition(Hypergraph& hypergraph, const Context& context) {
   }
 
   // rebalance edge case: graph too small for multilevel
-  AcyclicHardRebalanceRefiner hard_balance_refiner(hypergraph, context);
-  UncontractionGainChanges changes;
-  changes.representative.push_back(0);
-  changes.contraction_partner.push_back(0);
-  hard_balance_refiner.initialize(0);
-  Metrics current_metrics = { metrics::hyperedgeCut(hypergraph),
-                              metrics::km1(hypergraph),
-                              metrics::imbalance(hypergraph, context) };
-  std::vector<HypernodeID> refinement_nodes{};
-  hard_balance_refiner.changeEpsilon(context.partition.final_epsilon);
-  hard_balance_refiner.refine(refinement_nodes, {0, 0}, changes, current_metrics);
+  const double imbalance = metrics::imbalance(hypergraph, context);
+  if (imbalance > context.partition.final_epsilon || imbalance > context.partition.epsilon) {
+    LOG << "Running hard rebalance to improve imbalance from" << imbalance << "to min{"
+        << context.partition.final_epsilon << "," << context.partition.epsilon << "}";
+
+    AcyclicHardRebalanceRefiner hard_balance_refiner(hypergraph, context);
+    UncontractionGainChanges changes;
+    changes.representative.push_back(0);
+    changes.contraction_partner.push_back(0);
+    hard_balance_refiner.initialize(0);
+    Metrics current_metrics = {metrics::hyperedgeCut(hypergraph),
+                               metrics::km1(hypergraph),
+                               metrics::imbalance(hypergraph, context)};
+    std::vector<HypernodeID> refinement_nodes{};
+    hard_balance_refiner.changeEpsilon(context.partition.final_epsilon);
+    hard_balance_refiner.refine(refinement_nodes, {0, 0}, changes, current_metrics);
+  }
 }
 }  // namespace direct_kway
 }  // namespace kahypar

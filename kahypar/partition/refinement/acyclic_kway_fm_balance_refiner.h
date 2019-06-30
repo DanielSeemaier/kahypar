@@ -27,6 +27,7 @@
 #include "kahypar/utils/float_compare.h"
 #include "kahypar/utils/randomize.h"
 #include "kahypar/utils/timer.h"
+#include "kahypar/partition/refinement/acyclic_km1_refiner.h"
 
 namespace kahypar {
 template<class StoppingPolicy = Mandatory,
@@ -65,24 +66,49 @@ class AcyclicKWayBalanceRefiner final : public IRefiner {
 #endif
 
  public:
+  using GainCache = KwayGainCache<Gain>;
+
   AcyclicKWayBalanceRefiner(Hypergraph& hypergraph, const Context& context) :
     _hg(hypergraph),
     _context(context),
+    //_gain_cache(_hg.initialNumNodes(), _context.partition.k),
     _pqs() {}
+    //_tmp_gains(_context.partition.k, 0) {}
 
   ~AcyclicKWayBalanceRefiner() override = default;
 
   AcyclicKWayBalanceRefiner(const AcyclicKWayBalanceRefiner&) = delete;
-
   AcyclicKWayBalanceRefiner& operator=(const AcyclicKWayBalanceRefiner&) = delete;
 
   AcyclicKWayBalanceRefiner(AcyclicKWayBalanceRefiner&&) = delete;
-
   AcyclicKWayBalanceRefiner& operator=(AcyclicKWayBalanceRefiner&&) = delete;
 
  private:
   void initializeImpl(const HyperedgeWeight max_gain) override final {
     _is_initialized = true;
+//    _gain_cache.clear();
+//    for (const HypernodeID& hn : _hg.nodes()) {
+//      _tmp_gains.clear();
+//      const PartitionID source_part = _hg.partID(hn);
+//      HyperedgeWeight internal = 0;
+//      for (const HyperedgeID& he : _hg.incidentEdges(hn)) {
+//        const HyperedgeWeight he_weight = _hg.edgeWeight(he);
+//        internal += _hg.pinCountInPart(he, source_part) != 1 ? he_weight : 0;
+//        for (const PartitionID& part : _hg.connectivitySet(he)) {
+//          _tmp_gains[part] += he_weight;
+//        }
+//      }
+//
+//      for (const auto& target_part : _tmp_gains) {
+//        if (target_part.key == source_part) {
+//          ASSERT(!_gain_cache.entryExists(hn, source_part), V(hn) << V(source_part));
+//          continue;
+//        }
+//        ASSERT(target_part.value - internal == gainInducedByHypergraph(hn, target_part.key),
+//               V(gainInducedByHypergraph(hn, target_part.key)) << V(target_part.value - internal));
+//        _gain_cache.initializeEntry(hn, target_part.key, target_part.value - internal);
+//      }
+//    }
   }
 
   void performMovesAndUpdateCacheImpl(const std::vector<Move>& moves,
@@ -107,6 +133,7 @@ class AcyclicKWayBalanceRefiner final : public IRefiner {
     LOG << V(imbalance);
 
     while (imbalance > _context.partition.epsilon) {
+      Randomize::instance().shuffleVector(refinement_nodes, refinement_nodes.size());
       init(refinement_nodes);
 
       QuotientGraph<DFSCycleDetector> qg(_hg, _context);
@@ -150,9 +177,16 @@ class AcyclicKWayBalanceRefiner final : public IRefiner {
           underloaded_blocks.push_back(k);
         }
       }
-      LOG << V(overloaded_blocks);
-      LOG << V(underloaded_blocks);
+      if (underloaded_blocks.empty()) {
+        for (PartitionID k = 0; k < _context.partition.k; ++k) {
+          if (_hg.partWeight(k) < _context.partition.perfect_balance_part_weights[k]) {
+            underloaded_blocks.push_back(k);
+          }
+        }
+        LOG << V(overloaded_blocks) << V(underloaded_blocks);
+      }
       if (overloaded_blocks.empty() || underloaded_blocks.empty()) {
+        LOG << V(overloaded_blocks) << V(underloaded_blocks);
         break;
       }
 
@@ -168,6 +202,10 @@ class AcyclicKWayBalanceRefiner final : public IRefiner {
           for (std::size_t i = path.size() - 1; i > 0; --i) {
             const QNodeID u = path[i - 1];
             const QNodeID v = path[i];
+            if (_pqs[u].empty(v)) { // TODO why.......
+              gain = std::numeric_limits<HyperedgeWeight>::min();
+              break;
+            }
             gain += _pqs[u].maxKey(v);
           }
           if (gain > max_path_gain) {
@@ -175,6 +213,10 @@ class AcyclicKWayBalanceRefiner final : public IRefiner {
             max_path = {from, to};
           }
         }
+      }
+
+      if (max_path_gain == std::numeric_limits<HyperedgeWeight>::min()) {
+        break; // TODO meh..........
       }
       LOG << "Max path from" << max_path.first << "to" << max_path.second << "with gain" << max_path_gain;
 
@@ -184,16 +226,25 @@ class AcyclicKWayBalanceRefiner final : public IRefiner {
       for (std::size_t i = path.size() - 1; i > 0; --i) {
         const QNodeID u = path[i - 1];
         const QNodeID v = path[i];
+        bool move_ok;
         HypernodeID hn;
         HyperedgeWeight gain;
-        _pqs[u].deleteMaxFromPartition(hn, gain, v);
-        bool move_ok = qg.update(hn, u, v);
+        do { // TODO meh....
+          if (_pqs[u].empty(v)) {
+            return false; // TODO meh....
+          }
+          _pqs[u].deleteMaxFromPartition(hn, gain, v);
+          move_ok = qg.update(hn, u, v);
+          ASSERT(move_ok, "bad move" << V(hn) << V(u) << V(v) << V(_hg.partID(hn))); // TODO not meh....?
+        } while (!move_ok);
+
         ASSERT(move_ok, "bad move" << V(hn) << V(u) << V(v) << V(_hg.partID(hn)));
         _hg.changeNodePart(hn, u, v);
       }
 
       imbalance = metrics::imbalance(_hg, _context);
-      LOG << V(imbalance);
+      auto km1 = metrics::km1(_hg);
+      LOG << V(imbalance) << V(km1) << V(overloaded_blocks) << V(underloaded_blocks);
     }
 
     return false;
@@ -275,5 +326,7 @@ class AcyclicKWayBalanceRefiner final : public IRefiner {
   const Context& _context;
   Hypergraph& _hg;
   std::vector<HypernodeID> _hns_to_activate;
+  //GainCache _gain_cache;
+  //ds::SparseMap<PartitionID, Gain> _tmp_gains;
 };
 }  // namespace kahypar

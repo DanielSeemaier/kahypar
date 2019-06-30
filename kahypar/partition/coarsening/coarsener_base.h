@@ -142,6 +142,7 @@ class CoarsenerBase {
                                    Metrics& current_metrics) {
     const HyperedgeWeight old_cut = current_metrics.cut;
     const HyperedgeWeight old_km1 = current_metrics.km1;
+    const double old_imbalance = current_metrics.imbalance;
     bool improvement_found = refiner.refine(refinement_nodes,
                                             { _context.partition.max_part_weights[0]
                                               + _max_hn_weights.back().max_weight,
@@ -150,7 +151,7 @@ class CoarsenerBase {
                                             current_changes,
                                             current_metrics);
 
-    ASSERT(_context.imbalanced_intermediate_step ||
+    ASSERT((current_metrics.imbalance <= old_imbalance && current_metrics.imbalance == metrics::imbalance(_hg, _context)) ||
            (current_metrics.cut <= old_cut && current_metrics.cut == metrics::hyperedgeCut(_hg)) ||
            (current_metrics.km1 <= old_km1 && current_metrics.km1 == metrics::km1(_hg)),
            V(current_metrics.cut) << V(old_cut) << V(metrics::hyperedgeCut(_hg))

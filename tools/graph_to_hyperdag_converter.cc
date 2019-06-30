@@ -4,13 +4,14 @@
 using namespace kahypar;
 
 int main(int argc, char* argv[]) {
-  if (argc != 3) {
-    std::cout << "Usage: " << argv[0] << " <*.graph> <*.hgr>" << std::endl;
+  if (argc < 3) {
+    std::cout << "Usage: " << argv[0] << " <*.graph> <*.hgr> [--skip-verify]" << std::endl;
     std::exit(0);
   }
 
   std::string graph_filename = argv[1];
   std::string hgr_filename = argv[2];
+  const bool skip_verify = (argc == 4) && std::string(argv[3]) == "--skip-verify";
 
   std::vector<int32_t> node_weights;
   std::vector<int32_t> edge_weights;
@@ -67,6 +68,10 @@ int main(int argc, char* argv[]) {
   out.close();
 
   // check result
-  validateHypergraphFile(hgr_filename);
+  if (!skip_verify) {
+    std::cout << "Validating result ... " << std::flush;
+    validateHypergraphFileAndPanic(hgr_filename);
+    std::cout << "OK\n";
+  }
   return 0;
 }
