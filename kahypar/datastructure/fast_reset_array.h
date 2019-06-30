@@ -60,6 +60,10 @@ class FastResetArray {
     _entries[index] = value;
   }
 
+  const std::vector<size_t>& usedEntries() const {
+    return _used_entries;
+  }
+
   void uncheckedSet(const size_t index, const T value) {
     ASSERT(_entries[index] != _initial_value);
     _entries[index] = value;

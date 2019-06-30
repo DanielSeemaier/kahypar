@@ -209,10 +209,10 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
   }
 
   void logPQStats() {
-    LOG << V(_ordering);
-    LOG << V(_inverse_ordering);
+    DBG << V(_ordering);
+    DBG << V(_inverse_ordering);
     for (const PartitionID& part : _inverse_ordering) {
-      LOG << V(part) << V(_pq[PREV].size(part)) << V(_pq[NEXT].size(part)) << V(_hg.partWeight(part));
+      DBG << V(part) << V(_pq[PREV].size(part)) << V(_pq[NEXT].size(part)) << V(_hg.partWeight(part));
     }
   }
 
@@ -662,9 +662,9 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
 
   void processFixtureStateChanges() {
     DBG << "processFixtureStateChanges(): " << V(_state_changes[PREV].size()) << V(_state_changes[NEXT].size());
-    for (const HypernodeID& hn : _hg.nodes()) { // TODO only iterate changed entries
-      const PartitionID part = _hg.partID(hn);
-      for (const std::size_t& direction : kDirections) {
+    for (const std::size_t& direction : kDirections) {
+      for (const auto& hn : _state_changes[direction].usedEntries()) {
+        const PartitionID part = _hg.partID(hn);
         if (!isValidDirection(part, direction)) {
           DBGC(hn == hn_to_debug) << "Invalid direction" << V(part) << V(direction);
           continue;
