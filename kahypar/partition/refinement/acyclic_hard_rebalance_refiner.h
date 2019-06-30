@@ -246,10 +246,7 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
     for (PartitionID part = 0; part < _context.partition.k; ++part) {
       _inverse_ordering[_ordering[part]] = part;
     }
-    //
-    _gain_cache.clear();
-    initializeGainCache();
-    //
+
     initializeFixtures();
     ASSERT([&]() {
       ASSERT_THAT_FIXTURES_ARE_CONSISTENT();
