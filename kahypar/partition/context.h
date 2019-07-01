@@ -420,6 +420,7 @@ class Context {
   bool partition_evolutionary = false;
   bool imbalanced_intermediate_step = false;
   bool reduce_balance_during_uncoarsening = false;
+  bool enable_soft_rebalance = true;
 
   Context() :
     stats(*this) { }

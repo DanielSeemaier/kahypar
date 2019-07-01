@@ -65,6 +65,7 @@ static inline bool partitionVCycle(Hypergraph& hypergraph, ICoarsener& coarsener
                         std::chrono::duration<double>(end - start).count());
 
   io::printLocalSearchResults(context, hypergraph);
+  refiner.printFinalInfo();
   return improved_quality;
 }
 
@@ -129,6 +130,11 @@ static inline void partition(Hypergraph& hypergraph, const Context& context) {
     performInitialPartitioning(hypergraph, context, *ip_refiner);
   }
 
+  LOG << "Initial" << context.partition.objective << " before first Vcycle ="
+      << (context.partition.objective == Objective::cut
+          ? metrics::hyperedgeCut(hypergraph)
+          : metrics::km1(hypergraph));
+
   for (uint32_t vcycle = 1; vcycle <= context.partition.global_search_iterations; ++vcycle) {
     context.partition.current_v_cycle = vcycle;
     const bool improved_quality = partitionVCycle(hypergraph, *coarsener, *km1_refiner, context);
@@ -147,7 +153,8 @@ static inline void partition(Hypergraph& hypergraph, const Context& context) {
     LOG << "Running hard rebalance to improve imbalance from" << imbalance << "to min{"
         << context.partition.final_epsilon << "," << context.partition.epsilon << "}";
 
-    AcyclicHardRebalanceRefiner hard_balance_refiner(hypergraph, context);
+    QuotientGraph<DFSCycleDetector> qg(hypergraph, context);
+    AcyclicHardRebalanceRefiner hard_balance_refiner(hypergraph, context, qg);
     UncontractionGainChanges changes;
     changes.representative.push_back(0);
     changes.contraction_partner.push_back(0);

@@ -194,8 +194,11 @@ class KWayKMinusOneRefiner final : public IRefiner,
 
       _hg.mark(max_gain_node);
       ++touched_hns_since_last_improvement;
+      ++_num_touched_hns;
 
       if (Base::moveIsFeasible(max_gain_node, from_part, to_part)) {
+        ++_num_moves;
+
         // LOG << "performed MOVE:" << V(max_gain_node) << V(from_part) << V(to_part);
         Base::moveHypernode(max_gain_node, from_part, to_part);
 
@@ -258,8 +261,7 @@ class KWayKMinusOneRefiner final : public IRefiner,
         << _performed_moves.size()
         << "local search movements ( min_cut_index=" << min_cut_index << "): stopped because of "
         << (_stopping_policy.searchShouldStop(touched_hns_since_last_improvement, _context, beta,
-                                          best_metrics.km1, current_km1)
-        == true ? "policy" : "empty queue");
+                                          best_metrics.km1, current_km1) == true ? "policy" : "empty queue");
 
     Base::rollback(_performed_moves.size() - 1, min_cut_index);
     _gain_cache.rollbackDelta();
@@ -268,6 +270,7 @@ class KWayKMinusOneRefiner final : public IRefiner,
 
     ASSERT(best_metrics.km1 == metrics::km1(_hg));
     ASSERT(best_metrics.km1 <= initial_km1, V(initial_km1) << V(best_metrics.km1));
+    //LOG << V(_num_moves) << V(_num_touched_hns);
     return FMImprovementPolicy::improvementFound(best_metrics.km1, initial_km1,
                                                  best_metrics.imbalance, initial_imbalance,
                                                  _context.partition.epsilon);
@@ -976,5 +979,8 @@ class KWayKMinusOneRefiner final : public IRefiner,
 
   GainCache _gain_cache;
   StoppingPolicy _stopping_policy;
+
+  std::size_t _num_moves = 0;
+  std::size_t _num_touched_hns = 0;
 };
 }  // namespace kahypar

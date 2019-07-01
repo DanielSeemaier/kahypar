@@ -369,7 +369,10 @@ po::options_description createRefinementOptionsDescription(Context& context,
     ((initial_partitioning ? "i-r-fm-stop-alpha" : "r-fm-stop-alpha"),
     po::value<double>((initial_partitioning ? &context.initial_partitioning.local_search.fm.adaptive_stopping_alpha : &context.local_search.fm.adaptive_stopping_alpha))->value_name("<double>"),
     "Parameter alpha for adaptive stopping rule \n"
-    "(infinity: -1)");
+    "(infinity: -1)")
+    ((initial_partitioning ? "i-r-soft-rebalancing" : "r-soft-rebalancing"),
+    po::value<bool>(&context.enable_soft_rebalance)->value_name("<bool>"),
+    "Use soft rebalance");
   options.add(createFlowRefinementOptionsDescription(context, num_columns, initial_partitioning));
   return options;
 }

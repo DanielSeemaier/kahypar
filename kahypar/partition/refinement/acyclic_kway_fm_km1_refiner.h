@@ -92,7 +92,8 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
     _new_adjacent_part(_hg.initialNumNodes(), Hypergraph::kInvalidPartition),
     _unremovable_he_parts(_hg.initialNumEdges() * context.partition.k),
     _gain_cache(_hg.initialNumNodes(), _context.partition.k),
-    _stopping_policy() {}
+    _stopping_policy(),
+    _qg(hypergraph, context) {}
 
   ~AcyclicKWayKMinusOneRefiner() override = default;
 
@@ -111,8 +112,46 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
     return _moves;
   }
 
+  std::size_t numMoves() const {
+    return _num_moves;
+  }
+
+  std::size_t numPosGains() const {
+    return _num_pos_gains;
+  }
+
+  std::size_t numNegGains() const {
+    return _num_neg_gains;
+  }
+
+  std::size_t numZeroGains() const {
+    return _num_zero_gains;
+  }
+
+  void preUncontraction(const HypernodeID u) override {
+    DBG << "preUncontraction(" << u << ")";
+    HighResClockTimepoint start = std::chrono::high_resolution_clock::now();
+    _qg.preUncontraction(u);
+    HighResClockTimepoint end = std::chrono::high_resolution_clock::now();
+    Timer::instance().add(_context, Timepoint::cycle_detector,
+                          std::chrono::duration<double>(end - start).count());
+  }
+
+  void postUncontraction(const HypernodeID u, const HypernodeID v) override {
+    DBG << "postUncontraction(" << u << "," << v << ")";
+    HighResClockTimepoint start = std::chrono::high_resolution_clock::now();
+    _qg.postUncontraction(u, v);
+    HighResClockTimepoint end = std::chrono::high_resolution_clock::now();
+    Timer::instance().add(_context, Timepoint::cycle_detector,
+                          std::chrono::duration<double>(end - start).count());
+  }
+
+  QuotientGraph<DFSCycleDetector>& qg() {
+    return _qg;
+  }
+
  private:
-  void initializeImpl(const HyperedgeWeight max_gain) override final {
+  void initializeImpl(const HyperedgeWeight max_gain) override {
     if (!_is_initialized) {
 #ifdef USE_BUCKET_QUEUE
       _pq.initialize(_hg.initialNumNodes(), max_gain);
@@ -124,6 +163,11 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
     }
     _gain_cache.clear();
     initializeGainCache();
+    HighResClockTimepoint start = std::chrono::high_resolution_clock::now();
+    _qg.rebuild();
+    HighResClockTimepoint end = std::chrono::high_resolution_clock::now();
+    Timer::instance().add(_context, Timepoint::cycle_detector,
+                          std::chrono::duration<double>(end - start).count());
   }
 
   void performMovesAndUpdateCacheImpl(const std::vector<Move>& moves,
@@ -137,25 +181,6 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
                   const std::array<HypernodeWeight, 2>& metrics,
                   const UncontractionGainChanges& changes,
                   Metrics& best_metrics) override final {
-    switch (_context.local_search.cycle_detector_type) {
-      case CycleDetectorType::dfs:
-        return refineImpl2<DFSCycleDetector>(refinement_nodes, metrics, changes, best_metrics);
-      case CycleDetectorType::kahn:
-        return refineImpl2<KahnCycleDetector>(refinement_nodes, metrics, changes, best_metrics);
-      case CycleDetectorType::bender:
-        return refineImpl2<PseudoTopologicalOrderingCycleDetector>(refinement_nodes, metrics, changes, best_metrics);
-      default:
-        LOG << "No cycle detector set";
-        return false;
-    }
-  }
-
-  template<typename Detector>
-  bool refineImpl2(std::vector<HypernodeID>& refinement_nodes,
-                   const std::array<HypernodeWeight, 2>&,
-                   const UncontractionGainChanges&,
-                   Metrics& best_metrics) {
-    // LOG << "=================================================";
     ASSERT(best_metrics.km1 == metrics::km1(_hg),
            V(best_metrics.km1) << V(metrics::km1(_hg)));
     ASSERT(FloatingPoint<double>(best_metrics.imbalance).AlmostEquals(
@@ -184,8 +209,6 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
     int touched_hns_since_last_improvement = 0;
     _stopping_policy.resetStatistics();
 
-    QuotientGraph<Detector> qg(_hg, _context);
-
     const double beta = log(_hg.currentNumNodes());
     while (!_pq.empty() && !_stopping_policy.searchShouldStop(touched_hns_since_last_improvement,
                                                               _context, beta, best_metrics.km1,
@@ -195,6 +218,13 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
       PartitionID to_part = Hypergraph::kInvalidPartition;
       _pq.deleteMax(max_gain_node, max_gain, to_part);
       const PartitionID from_part = _hg.partID(max_gain_node);
+      if (max_gain > 0) {
+        ++_num_pos_gains;
+      } else if (max_gain < 0) {
+        ++_num_neg_gains;
+      } else {
+        ++_num_zero_gains;
+      }
 
       DBG << V(current_km1) << V(max_gain_node) << V(max_gain)
           << V(_hg.partID(max_gain_node)) << V(to_part);
@@ -227,17 +257,20 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
 
       _hg.mark(max_gain_node);
       ++touched_hns_since_last_improvement;
+      ++_num_touched_hns;
 
       bool do_move = Base::moveIsFeasible(max_gain_node, from_part, to_part);
       if (do_move) {
         HighResClockTimepoint start = std::chrono::high_resolution_clock::now();
-        do_move = do_move && qg.update(max_gain_node, from_part, to_part);
+        do_move = do_move && _qg.update(max_gain_node, from_part, to_part);
         HighResClockTimepoint end = std::chrono::high_resolution_clock::now();
         Timer::instance().add(_context, Timepoint::cycle_detector,
                               std::chrono::duration<double>(end - start).count());
       }
 
       if (do_move) {
+        ++_num_moves;
+
         // LOG << "performed MOVE:" << V(max_gain_node) << V(from_part) << V(to_part);
         Base::moveHypernode(max_gain_node, from_part, to_part);
 
@@ -307,24 +340,38 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
                                               best_metrics.km1, current_km1)
             == true ? "policy" : "empty queue");
 
-    ASSERT(qg.isAcyclic(), "Refinement produced a cyclic quotient graph!");
+    ASSERT(_qg.isAcyclic(), "Refinement produced a cyclic quotient graph!");
     ASSERT(QuotientGraph<DFSCycleDetector>(_hg, _context).isAcyclic(),
            "Refinement produced a cyclic quotient graph not detected by the QG!");
 
-    Base::rollback(_performed_moves.size() - 1, min_cut_index);
-    _gain_cache.rollbackDelta();
-
     int last_index = _performed_moves.size() - 1;
     while (last_index != min_cut_index) {
+      const HypernodeID hn = _performed_moves[last_index].hn;
+      const PartitionID from_part = _performed_moves[last_index].to_part;
+      const PartitionID to_part = _performed_moves[last_index].from_part;
+      _hg.changeNodePart(hn, from_part, to_part);
+      HighResClockTimepoint start = std::chrono::high_resolution_clock::now();
+      const bool success = _qg.update(hn, from_part, to_part);
+      ASSERT(success);
+      HighResClockTimepoint end = std::chrono::high_resolution_clock::now();
+      Timer::instance().add(_context, Timepoint::cycle_detector,
+                            std::chrono::duration<double>(end - start).count());
       _moves.pop_back();
       --last_index;
+      --_num_moves;
     }
 
+    _gain_cache.rollbackDelta();
+
     ASSERT_THAT_GAIN_CACHE_IS_VALID();
+    ASSERT(_qg.isAcyclic(), "Rollback produced a cyclic quotient graph!");
+    ASSERT(QuotientGraph<DFSCycleDetector>(_hg, _context).isAcyclic(),
+           "Rollback produced a cyclic quotient graph not detected by the QG!");
 
     ASSERT(best_metrics.km1 == metrics::km1(_hg));
     best_metrics.imbalance = metrics::imbalance(_hg, _context);
     //ASSERT(best_metrics.km1 <= initial_km1, V(initial_km1) << V(best_metrics.km1));
+    //LOG << V(_num_moves) << V(_num_touched_hns);
     return FMImprovementPolicy::improvementFound(best_metrics.km1, initial_km1,
                                                  best_metrics.imbalance, initial_imbalance,
                                                  _context.partition.epsilon);
@@ -675,30 +722,30 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
         }
       }
 
-      //if (fromAndToPartAreUnremovable(he, from_part, to_part)) {
-      //  updateForHEwithUnremovableFromAndToPart(moved_hn, from_part, to_part, he);
-      //} else if (fromAndToPartHaveUnequalStates(he, from_part, to_part)) {
-      //  updateForHEwithUnequalPartState<only_update_cache>(moved_hn, from_part, to_part, he);
-      //} else {
+//      if (fromAndToPartAreUnremovable(he, from_part, to_part)) {
+//        updateForHEwithUnremovableFromAndToPart(moved_hn, from_part, to_part, he);
+//      } else if (fromAndToPartHaveUnequalStates(he, from_part, to_part)) {
+//        updateForHEwithUnequalPartState<only_update_cache>(moved_hn, from_part, to_part, he);
+//      } else {
         fullUpdate<only_update_cache>(moved_hn, from_part, to_part, he);
-      //}
-      //_unremovable_he_parts.set(static_cast<size_t>(he) * _context.partition.k + to_part, 1);
+//      }
+//      _unremovable_he_parts.set(static_cast<size_t>(he) * _context.partition.k + to_part, 1);
 
-      /*ASSERT([&]() {
-        // Search parts of hyperedge he which are unremoveable
-        std::vector<bool> ur_parts(_context.partition.k, false);
-        for (const HypernodeID& pin : _hg.pins(he)) {
-          if (_hg.marked(pin)) {
-            ur_parts[_hg.partID(pin)] = true;
-          }
-        }
-        // _unremovable_he_parts should have the same bits set as ur_parts
-        for (PartitionID k = 0; k < _context.partition.k; k++) {
-          ASSERT(ur_parts[k] == _unremovable_he_parts[he * _context.partition.k + k],
-                 V(ur_parts[k]) << V(_unremovable_he_parts[he * _context.partition.k + k]));
-        }
-        return true;
-      }(), "Error in locking of he/parts!");*/
+//      ASSERT([&]() {
+//        // Search parts of hyperedge he which are unremoveable
+//        std::vector<bool> ur_parts(_context.partition.k, false);
+//        for (const HypernodeID& pin : _hg.pins(he)) {
+//          if (_hg.marked(pin)) {
+//            ur_parts[_hg.partID(pin)] = true;
+//          }
+//        }
+//        // _unremovable_he_parts should have the same bits set as ur_parts
+//        for (PartitionID k = 0; k < _context.partition.k; k++) {
+//          ASSERT(ur_parts[k] == _unremovable_he_parts[he * _context.partition.k + k],
+//                 V(ur_parts[k]) << V(_unremovable_he_parts[he * _context.partition.k + k]));
+//        }
+//        return true;
+//      }(), "Error in locking of he/parts!");
     }
 
     _gain_cache.updateFromAndToPartOfMovedHN(moved_hn, from_part, to_part,
@@ -1035,5 +1082,14 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
   StoppingPolicy _stopping_policy;
 
   std::vector<Move> _moves;
+
+  QuotientGraph<DFSCycleDetector> _qg;
+
+  std::size_t _num_moves = 0;
+  std::size_t _num_touched_hns = 0;
+
+  std::size_t _num_pos_gains = 0;
+  std::size_t _num_zero_gains = 0;
+  std::size_t _num_neg_gains = 0;
 };
 }  // namespace kahypar

@@ -755,33 +755,33 @@ class GenericHypergraph {
   ~GenericHypergraph() = default;
 
   void printDirectedHypergraphNode(const HypernodeID hn) const {
-    std::cout << "HN " << hn << "\n";
+    std::cout << "HN " << hn << "(" << partID(hn) << ")\n";
     for (const HyperedgeID& he : incidentHeadEdges(hn)) {
-      std::cout << "\tHeadEdge " << he << ":";
+      std::cout << "\tHeadEdge " << he << ": ";
       for (const HypernodeID& head : heads(he)) {
-        std::cout << "Head[" << head << "] ";
+        std::cout << "Head[" << head << "(" << partID(head) << ")] ";
       }
       std::cout << " | ";
       for (const HypernodeID& tail : tails(he)) {
-        std::cout << "Tail[" << tail << "] ";
+        std::cout << "Tail[" << tail << "(" << partID(tail) << ")] ";
       }
       std::cout << "\n";
     }
     for (const HyperedgeID& he : incidentTailEdges(hn)) {
-      std::cout << "\tTailEdge " << he << ":";
+      std::cout << "\tTailEdge " << he << ": ";
       for (const HypernodeID& head : heads(he)) {
-        std::cout << "Head[" << head << "] ";
+        std::cout << "Head[" << head << "(" << partID(head) << ")] ";
       }
       std::cout << " | ";
       for (const HypernodeID& tail : tails(he)) {
-        std::cout << "Tail[" << tail << "] ";
+        std::cout << "Tail[" << tail << "(" << partID(tail) << ")] ";
       }
       std::cout << "\n";
     }
     for (const HyperedgeID& he : incidentEdges(hn)) {
-      std::cout << "\tEdge " << he << ":";
+      std::cout << "\tEdge " << he << ": ";
       for (const HypernodeID& pin : pins(he)) {
-        std::cout << "Pin[" << pin << "] ";
+        std::cout << "Pin[" << pin << "(" << partID(pin) << ")] ";
       }
       std::cout << "\n";
     }

@@ -107,6 +107,8 @@ class VertexPairCoarsenerBase : public CoarsenerBase {
         _max_hn_weights.pop_back();
       }
 
+      refiner.preUncontraction(refinement_nodes.front());
+
       if (_context.local_search.algorithm == RefinementAlgorithm::twoway_fm ||
           _context.local_search.algorithm == RefinementAlgorithm::twoway_fm_flow) {
         _hg.uncontract(_history.back().contraction_memento, changes,
@@ -114,6 +116,8 @@ class VertexPairCoarsenerBase : public CoarsenerBase {
       } else {
         _hg.uncontract(_history.back().contraction_memento);
       }
+
+      refiner.postUncontraction(refinement_nodes.front(), refinement_nodes.back());
 
       performLocalSearch(refiner, refinement_nodes, current_metrics, changes);
       changes.representative[0] = 0;

@@ -66,6 +66,12 @@ class IRefiner {
     return rollbackImpl();
   }
 
+  virtual void preUncontraction(const HypernodeID u) {}
+
+  virtual void postUncontraction(const HypernodeID u, const HypernodeID v) {}
+
+  virtual void printFinalInfo() {}
+
  protected:
   IRefiner() = default;
   bool _is_initialized = false;

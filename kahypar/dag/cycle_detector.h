@@ -186,7 +186,7 @@ class DFSCycleDetector : public OutCycleDetector {
 
   void bulkConnect(const Edgelist& edges) override {
     OutCycleDetector::bulkConnect(edges);
-    ASSERT(!calculateTopologicalOrdering().empty());
+    //ASSERT(!calculateTopologicalOrdering().empty());
   }
 
   bool connect(std::size_t s, std::size_t t) override {

@@ -11,15 +11,15 @@
 namespace kahypar {
 class AcyclicKMinusOneRefiner final : public IRefiner {
  private:
-  constexpr static bool debug = true;
+  constexpr static bool debug = false;
 
  public:
   AcyclicKMinusOneRefiner(Hypergraph& hypergraph, const Context& context) :
     _hg(hypergraph),
     _original_context(context),
-    _soft_rebalance(hypergraph, context),
     _local_search(hypergraph, context),
-    _hard_rebalance(hypergraph, context) {}
+    _soft_rebalance(hypergraph, context, _local_search.qg()),
+    _hard_rebalance(hypergraph, context, _local_search.qg()) {}
 
   ~AcyclicKMinusOneRefiner() override = default;
 
@@ -29,9 +29,36 @@ class AcyclicKMinusOneRefiner final : public IRefiner {
   AcyclicKMinusOneRefiner(AcyclicKMinusOneRefiner&&) = delete;
   AcyclicKMinusOneRefiner& operator=(AcyclicKMinusOneRefiner&&) = delete;
 
+  void preUncontraction(const HypernodeID u) override {
+    _local_search.qg().preUncontraction(u);
+    ASSERT(dag::isAcyclic(_hg), V(u));
+  }
+
+  void postUncontraction(const HypernodeID u, const HypernodeID v) override {
+    _local_search.qg().postUncontraction(u, v);
+    ASSERT(dag::isAcyclic(_hg), V(u) << V(v));
+  }
+
+  void printFinalInfo() override {
+    LOG << "Moves by _local_search:" << _local_search.numMoves();
+    LOG << "Moves by _soft_rebalance:" << _soft_rebalance.numMoves();
+    LOG << "Imbalance improved by _soft_rebalance:" << _soft_rebalance.improvedImbalanceBy();
+    LOG << "Rejected due to balance:" << _soft_rebalance.numRejectedDueToBalance();
+    LOG << "Rejected due to KM1:" << _soft_rebalance.numRejectedDueToKM1();
+    LOG << "Imbalance improved by _hard_rebalance:" << _hard_rebalance.improvedImbalance();
+    LOG << "Positive Gains in _soft_rebalance:" << _soft_rebalance.numPosGains();
+    LOG << "Zero Gains in _soft_rebalance:" << _soft_rebalance.numZeroGains();
+    LOG << "Negative Gains in _soft_rebalance:" << _soft_rebalance.numNegGains();
+    LOG << "Positive Gains in _local_search:" << _local_search.numPosGains();
+    LOG << "Zero Gains in _local_search:" << _local_search.numZeroGains();
+    LOG << "Negative Gains in _local_search:" << _local_search.numNegGains();
+  }
+
  private:
   void initializeImpl(const HyperedgeWeight max_gain) final {
-    _soft_rebalance.initialize(max_gain);
+    if (_original_context.enable_soft_rebalance) {
+      _soft_rebalance.initialize(max_gain);
+    }
     _local_search.initialize(max_gain);
     _hard_rebalance.initialize(max_gain);
     _least_num_nodes = _hg.currentNumNodes();
@@ -41,7 +68,9 @@ class AcyclicKMinusOneRefiner final : public IRefiner {
   void performMovesAndUpdateCacheImpl(const std::vector<Move>& moves,
                                       std::vector<HypernodeID>& refinement_nodes,
                                       const UncontractionGainChanges& changes) final {
-    _soft_rebalance.performMovesAndUpdateCache(moves, refinement_nodes, changes);
+    if (_original_context.enable_soft_rebalance) {
+      _soft_rebalance.performMovesAndUpdateCache(moves, refinement_nodes, changes);
+    }
     _local_search.performMovesAndUpdateCache(moves, refinement_nodes, changes);
     _hard_rebalance.performMovesAndUpdateCache(moves, refinement_nodes, changes);
   }
@@ -57,14 +86,18 @@ class AcyclicKMinusOneRefiner final : public IRefiner {
     const double current_imbalance = best_metrics.imbalance;
     DBG << V(epsilon) << V(current_imbalance);
 
-    _soft_rebalance.changeEpsilon(epsilon);
+    if (_original_context.enable_soft_rebalance) {
+      _soft_rebalance.changeEpsilon(epsilon);
+    }
     _hard_rebalance.changeEpsilon(epsilon);
     _local_search.changeEpsilon(epsilon);
 
     _hard_rebalance.enableRefinementNodes(refinement_nodes);
-    _soft_rebalance.enableRefinementNodes(refinement_nodes);
+    if (_original_context.enable_soft_rebalance) {
+      _soft_rebalance.enableRefinementNodes(refinement_nodes);
+    }
 
-    if (current_imbalance > epsilon) {
+    if (_original_context.enable_soft_rebalance && current_imbalance > epsilon) {
       _soft_rebalance.refine(refinement_nodes, max_allowed_part_weights, uncontraction_changes, best_metrics);
       const auto& moves = mergeMultiMoves(_soft_rebalance.moves());
       _hard_rebalance.performMovesAndUpdateCache(moves, refinement_nodes, uncontraction_changes);
@@ -75,14 +108,18 @@ class AcyclicKMinusOneRefiner final : public IRefiner {
     if (current_imbalance > epsilon) {
       _hard_rebalance.refine(refinement_nodes, max_allowed_part_weights, uncontraction_changes, best_metrics);
       const auto& moves = mergeMultiMoves(_hard_rebalance.moves());
-      _soft_rebalance.performMovesAndUpdateCache(moves, refinement_nodes, uncontraction_changes);
+      if (_original_context.enable_soft_rebalance) {
+        _soft_rebalance.performMovesAndUpdateCache(moves, refinement_nodes, uncontraction_changes);
+      }
       _local_search.performMovesAndUpdateCache(moves, refinement_nodes, uncontraction_changes);
       DBG << "_hard_rebalance:" << current_imbalance << "-->" << best_metrics.imbalance << V(epsilon);
     }
 
     bool improvement = _local_search.refine(refinement_nodes, max_allowed_part_weights, uncontraction_changes, best_metrics);
     const auto& moves = _local_search.moves();
-    _soft_rebalance.performMovesAndUpdateCache(moves, refinement_nodes, uncontraction_changes);
+    if (_original_context.enable_soft_rebalance) {
+      _soft_rebalance.performMovesAndUpdateCache(moves, refinement_nodes, uncontraction_changes);
+    }
     _hard_rebalance.performMovesAndUpdateCache(moves, refinement_nodes, uncontraction_changes);
 
     return improvement;
@@ -120,8 +157,8 @@ class AcyclicKMinusOneRefiner final : public IRefiner {
   Hypergraph& _hg;
   const Context& _original_context;
 
+  AcyclicKWayKMinusOneRefiner<NumberOfFruitlessMovesStopsSearch> _local_search;
   AcyclicSoftRebalanceRefiner _soft_rebalance;
-  AcyclicKWayKMinusOneRefiner<AdvancedRandomWalkModelStopsSearch> _local_search;
   AcyclicHardRebalanceRefiner _hard_rebalance;
 
   HypernodeID _least_num_nodes;

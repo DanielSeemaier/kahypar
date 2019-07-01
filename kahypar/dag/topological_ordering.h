@@ -11,13 +11,58 @@
 namespace kahypar {
 namespace dag {
 struct CyclicGraphException : public std::exception {
-  const char *what() const noexcept {
+  const char *what() const noexcept override {
     return "Hypergraph contains a cycle!";
   }
 };
 
+std::vector<HypernodeID> calculateWeakTopologicalOrdering(const Hypergraph& hg) {
+  std::vector<HypernodeID> rank(hg.initialNumNodes());
+  for (const HyperedgeID& he : hg.edges()) {
+    for (const HypernodeID& hh : hg.heads(he)) {
+      rank[hh] += hg.edgeNumTails(he);
+    }
+  }
+
+  std::vector<HypernodeID> todo;
+  for (const HypernodeID& hn : hg.nodes()) {
+    if (rank[hn] == 0) {
+      todo.push_back(hn);
+    }
+  }
+
+  std::vector<HypernodeID> topological_ordering(hg.initialNumNodes());
+  std::size_t level = 0;
+  while (!todo.empty()) {
+    std::vector<HypernodeID> next_todo;
+    for (const HypernodeID& u : todo) {
+      topological_ordering[u] = level;
+
+      for (const HyperedgeID &he : hg.incidentEdges(u)) {
+        if (hg.isTail(u, he)) {
+          for (const HypernodeID& hh : hg.heads(he)) {
+            ASSERT(rank[hh] > 0);
+            --rank[hh];
+            if (rank[hh] == 0) {
+              next_todo.push_back(hh);
+            }
+          }
+        }
+      }
+    }
+
+    ++level;
+    todo = next_todo;
+  }
+
+  if (topological_ordering.size() != hg.currentNumNodes()) {
+    throw CyclicGraphException{};
+  }
+  return topological_ordering;
+}
+
 std::vector<HypernodeID> calculateTopologicalOrdering(const Hypergraph& hg) {
-  std::vector<HypernodeID> rank(hg.currentNumNodes());
+  std::vector<HypernodeID> rank(hg.initialNumNodes());
   for (const HyperedgeID& he : hg.edges()) {
     for (const HypernodeID& hh : hg.heads(he)) {
       rank[hh] += hg.edgeNumTails(he);

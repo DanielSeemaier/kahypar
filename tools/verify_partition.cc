@@ -77,6 +77,7 @@ int main(int argc, char* argv[]) {
 
   std::cout << "***********************" << hypergraph.k()
             << "-way Partition Result************************" << std::endl;
+  std::cout << "k=" << max_part << std::endl;
   std::cout << "cut=" << metrics::hyperedgeCut(hypergraph) << std::endl;
   std::cout << "soed=" << metrics::soed(hypergraph) << std::endl;
   std::cout << "km1=" << metrics::km1(hypergraph) << std::endl;

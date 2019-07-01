@@ -361,5 +361,20 @@ TEST_F(DirectedContractionTest, Regression_C7552_InconsistendUncontraction) {
     }
   }
 }
+
+// THIS TEST CASE IS WRONG
+//TEST_F(DirectedContractionTest, Regression_C6288) {
+//  hg = loadHypergraph("test_instances/c6288.hgr");
+//  placeAllHypernodesInPartition(hg, 0);
+//
+//  hg.printDirectedHypergraphNode(1467);
+//  hg.printDirectedHypergraphNode(1040);
+//  std::vector<Hypergraph::Memento> mems;
+//  mems.push_back(hg.contract( 1467 , 1040 ));
+//  hg.printDirectedHypergraphNode(1467);
+//
+//
+//  ASSERT_TRUE(dag::isAcyclic(hg));
+//}
 } // namespace dag
 } // namespace kahypar

@@ -164,9 +164,65 @@ class QuotientGraph {
                            });
   }
 
+  void rebuild() {
+    constructFromHypergraph();
+  }
+
   bool update(const HypernodeID hn, const PartitionID from, const PartitionID to) {
     bool changed;
     return update(hn, from, to, changed);
+  }
+
+  void updateWithoutCycleDetector(const HypernodeID hn, const PartitionID from, const PartitionID to) {
+    // TODO more work might be required for some cycle detectors
+    if (from == to) {
+      return;
+    }
+
+    AdjacencyMatrix deltas(numberOfNodes());
+
+    // find changes to edge weights of the quotient graph caused by this movement
+    for (const HyperedgeID& he : _hg.incidentEdges(hn)) {
+      if (_hg.isHead(hn, he)) { // hn is head
+        for (const HypernodeID& ht : _hg.tails(he)) {
+          if (_hg.partID(ht) != from) {
+            deltas[_hg.partID(ht)][from] -= 1;
+          }
+          if (_hg.partID(ht) != to) {
+            deltas[_hg.partID(ht)][to] += 1;
+          }
+        }
+      } else { // hn is tail
+        ASSERT(_hg.isTail(hn, he));
+        for (const HypernodeID& hh : _hg.heads(he)) {
+          if (_hg.partID(hh) != from) {
+            deltas[from][_hg.partID(hh)] -= 1;
+          }
+          if (_hg.partID(hh) != to) {
+            deltas[to][_hg.partID(hh)] += 1;
+          }
+        }
+      }
+    }
+
+    // commit changes
+    for (QNodeID u = 0; u < numberOfNodes(); ++u) {
+      for (const auto& delta : deltas[u]) {
+        const QNodeID& v = delta.first;
+        const QEdgeWeight& weight = delta.second;
+        _adjacency_matrix[u][v] += weight;
+      }
+    }
+  }
+
+  // Note: uncontraction cannot change the state of the cycle detector
+  void preUncontraction(const HypernodeID rep) {
+    removeHN(rep);
+  }
+
+  void postUncontraction(const HypernodeID rep, const HypernodeID partner) {
+    addHN(rep);
+    addHN(partner);
   }
 
   bool update(const HypernodeID hn, const PartitionID from, const PartitionID to, bool& changed) {
@@ -232,10 +288,11 @@ class QuotientGraph {
         const QNodeID& v = delta.first;
         const QEdgeWeight& weight = delta.second;
         _adjacency_matrix[u][v] += weight;
+        ASSERT(_adjacency_matrix[u][v] >= 0, V(u) << V(v) << V(_adjacency_matrix[u][v]) << V(weight) << V(hn) << V(from) << V(to));
       }
     }
 
-    changed = !todo_insert.empty() || !todo_remove.empty();
+    changed = !todo_insert.empty();
     return true;
   }
 
@@ -458,16 +515,8 @@ class QuotientGraph {
     _adjacency_matrix.clear();
     _adjacency_matrix.resize(_context.partition.k);
 
-    for (const HyperedgeID& he : _hg.edges()) {
-      for (const HypernodeID& hh : _hg.heads(he)) {
-        for (const HypernodeID& ht : _hg.tails(he)) {
-          PartitionID from = _hg.partID(ht);
-          PartitionID to = _hg.partID(hh);
-          if (from != to) {
-            ++_adjacency_matrix[from][to];
-          }
-        }
-      }
+    for (const HypernodeID& hn : _hg.nodes()) {
+      addHN(hn);
     }
 
     // add initial edges to the cycle detector
@@ -481,6 +530,50 @@ class QuotientGraph {
       }
     }
     _detector.bulkConnect(initial_edges);
+  }
+
+  void removeHN(const HypernodeID hn) {
+    for (const HyperedgeID& he : _hg.incidentTailEdges(hn)) {
+      for (const HypernodeID& head : _hg.heads(he)) {
+        const PartitionID tail_part = _hg.partID(hn);
+        const PartitionID head_part = _hg.partID(head);
+        if (tail_part != head_part) {
+          ASSERT(_adjacency_matrix[tail_part][head_part] > 0);
+          --_adjacency_matrix[tail_part][head_part];
+        }
+      }
+    }
+    for (const HyperedgeID& he : _hg.incidentHeadEdges(hn)) {
+      for (const HypernodeID& tail : _hg.tails(he)) {
+        const PartitionID tail_part = _hg.partID(tail);
+        const PartitionID head_part = _hg.partID(hn);
+        if (tail_part != head_part) {
+          ASSERT(_adjacency_matrix[tail_part][head_part] > 0);
+          --_adjacency_matrix[tail_part][head_part];
+        }
+      }
+    }
+  }
+
+  void addHN(const HypernodeID hn) {
+    for (const HyperedgeID& he : _hg.incidentTailEdges(hn)) {
+      for (const HypernodeID& head : _hg.heads(he)) {
+        const PartitionID tail_part = _hg.partID(hn);
+        const PartitionID head_part = _hg.partID(head);
+        if (tail_part != head_part) {
+          ++_adjacency_matrix[tail_part][head_part];
+        }
+      }
+    }
+    for (const HyperedgeID& he : _hg.incidentHeadEdges(hn)) {
+      for (const HypernodeID& tail : _hg.tails(he)) {
+        const PartitionID tail_part = _hg.partID(tail);
+        const PartitionID head_part = _hg.partID(hn);
+        if (tail_part != head_part) {
+          ++_adjacency_matrix[tail_part][head_part];
+        }
+      }
+    }
   }
 
   const Hypergraph& _hg;

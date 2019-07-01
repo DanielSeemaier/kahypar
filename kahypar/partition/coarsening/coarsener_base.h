@@ -70,6 +70,7 @@ class CoarsenerBase {
 
  protected:
   void performContraction(const HypernodeID rep_node, const HypernodeID contracted_node) {
+    LOG << "mems.push_back(hg.contract(" << rep_node << "," << contracted_node << "));";
     _history.emplace_back(_hg.contract(rep_node, contracted_node));
     if (_hg.nodeWeight(rep_node) > _max_hn_weights.back().max_weight) {
       _max_hn_weights.emplace_back(CurrentMaxNodeWeight { _hg.currentNumNodes(),

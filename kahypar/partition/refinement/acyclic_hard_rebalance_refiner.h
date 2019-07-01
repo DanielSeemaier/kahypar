@@ -37,9 +37,10 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
   };
 
  public:
-  AcyclicHardRebalanceRefiner(Hypergraph& hypergraph, const Context& context) :
+  AcyclicHardRebalanceRefiner(Hypergraph& hypergraph, const Context& context, QuotientGraph<DFSCycleDetector>& qg) :
     _hg(hypergraph),
     _context(context),
+    _qg(qg),
     _pq{KWayRefinementPQ(context.partition.k), KWayRefinementPQ(context.partition.k)},
     _fixtures{std::vector<HypernodeID>(), std::vector<HypernodeID>()},
     _state_changes{ds::FastResetArray<std::size_t>(hypergraph.initialNumNodes(), 0),
@@ -47,7 +48,8 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
     _gain_cache(_hg.initialNumNodes(), _context.partition.k),
     _tmp_gains(_context.partition.k, 0),
     _nonadjacent_gain_cache(_hg.initialNumNodes()),
-    _new_adjacent_part(_hg.initialNumNodes(), Hypergraph::kInvalidPartition) {}
+    _new_adjacent_part(_hg.initialNumNodes(), Hypergraph::kInvalidPartition),
+    _updated_neighbors(_hg.initialNumNodes(), false) {}
 
   ~AcyclicHardRebalanceRefiner() override = default;
 
@@ -66,16 +68,27 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
     return _moves;
   }
 
+  double improvedImbalance() const {
+    return _improved_imbalance;
+  }
+
   void enableRefinementNodes(std::vector<HypernodeID>& refinement_nodes) {
-    LOG << "enableRefinementNodes(" << refinement_nodes << ")";
     _hg.resetHypernodeState();
+    _updated_neighbors.resetUsedEntries();
+
     for (const HypernodeID& hn : refinement_nodes) {
       DBGC(hn == hn_to_debug) << "Reset" << V(hn);
       _gain_cache.clear(hn);
       initializeGainCacheFor(hn);
+      initializeFixturesFor(hn);
+      _updated_neighbors.set(hn, true);
 
       for (const HyperedgeID& he : _hg.incidentEdges(hn)) {
         for (const HypernodeID& pin : _hg.pins(he)) {
+          if (_updated_neighbors.get(pin)) {
+            continue;
+          }
+          _updated_neighbors.set(pin, true);
           initializeFixturesFor(pin);
         }
       }
@@ -106,7 +119,6 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
   void performMovesAndUpdateCacheImpl(const std::vector<Move>& moves,
                                       std::vector<HypernodeID>& refinement_nodes,
                                       const UncontractionGainChanges& changes) final {
-    LOG << "performMovesAndUpdateCacheImpl()";
     _hg.resetHypernodeState();
 
     for (std::size_t i = moves.size(); i > 0; --i) {
@@ -116,9 +128,6 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
 
     for (const Move& move : moves) {
       DBG << "move(" << V(move.hn) << V(move.from) << V(move.to) << ")";
-      if (!_hg.active(move.hn)) {
-        _hg.activate(move.hn);
-      }
       for (const std::size_t& direction : kDirections) {
         if (_pq[direction].contains(move.hn, move.from)) {
           _pq[direction].remove(move.hn, move.from);
@@ -138,7 +147,6 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
                   const std::array<HypernodeWeight, 2>&,
                   const UncontractionGainChanges&,
                   Metrics& best_metrics) final {
-    LOG << "refineImpl()";
     LOG << "refineImpl(" << refinement_nodes << "): imbalance" << best_metrics.imbalance;
     ASSERT(best_metrics.imbalance == metrics::imbalance(_hg, _context));
     _moves.clear();
@@ -147,15 +155,17 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
 
     if (!orderingStillTopological()) {
       refreshTopologicalOrdering();
-    } else {
-      activateMovableHNs();
     }
+
+    const double initial_imbalance = best_metrics.imbalance;
 
     while (best_metrics.imbalance > _context.partition.epsilon) {
       DBG << "while(" << V(best_metrics.imbalance) << V(_context.partition.epsilon) << ")";
       ASSERT([&]() {
         ASSERT_THAT_FIXTURES_ARE_CONSISTENT();
         ASSERT_THAT_GAIN_CACHE_IS_VALID();
+        ASSERT(_qg.isAcyclic());
+        ASSERT(QuotientGraph<DFSCycleDetector>(_hg, _context).isAcyclic());
         return true;
       }());
       logPQStats();
@@ -165,9 +175,42 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
       const std::size_t direction = _ordering[start] > _ordering[end] ? PREV : NEXT;
 
       for (PartitionID part = start; part != end; part = adjacentPart(part, direction)) {
+        ASSERT([&]() {
+          ASSERT_THAT_FIXTURES_ARE_CONSISTENT();
+          return true;
+        }());
+
         const PartitionID to_part = part;
         const PartitionID from_part = adjacentPart(to_part, direction);
         ASSERT(isAdjacent(from_part, to_part), V(from_part) << V(to_part) << V(_ordering) << V(_inverse_ordering));
+        // DELETE ME
+        if (!_pq[reverse(direction)].isEnabled(from_part)) {
+          ASSERT(_qg.isAcyclic());
+          ASSERT(QuotientGraph<DFSCycleDetector>(_hg, _context).isAcyclic());
+          ASSERT(dag::isAcyclic(_hg));
+          logPQStats();
+          std::vector<bool> s(_hg.initialNumNodes());
+          for (const HypernodeID& hn : _hg.nodes()) {
+            if (_hg.partID(hn) != from_part) {
+              continue;
+            }
+            for (const HyperedgeID& he : _hg.incidentTailEdges(hn)) {
+              for (const HypernodeID& head : _hg.heads(he)) {
+                if (_hg.partID(hn) == _hg.partID(head) && !s[hn]) {
+                  LOG << V(hn) << "cannot be moved due to" << V(head);
+                  s[hn] = true;
+                }
+              }
+            }
+          }
+          for (const HypernodeID& hn : _hg.nodes()) {
+            if (_hg.partID(hn) != from_part) {
+              continue;
+            }
+            LOG << V(hn) << V(s[hn]);
+          }
+        }
+        // end DELETE ME
         ASSERT(_pq[reverse(direction)].isEnabled(from_part), V(from_part) << V(reverse(direction)));
         ASSERT(!_pq[reverse(direction)].empty(from_part), V(from_part) << V(reverse(direction)));
         HypernodeID max_gain_hn = 0;
@@ -176,16 +219,18 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
         if (_pq[direction].contains(max_gain_hn, from_part)) {
           _pq[direction].remove(max_gain_hn, from_part);
         }
-        ASSERT(_hg.active(max_gain_hn), V(max_gain_hn) << "not active");
         ASSERT(_hg.partID(max_gain_hn) == from_part, V(max_gain_hn) << V(_hg.partID(max_gain_hn)) << V(from_part));
 
         DBG << "refine.while(move:" << V(max_gain_hn) << V(max_gain) << ")";
-        ASSERT([&]() {
-          ASSERT_THAT_FIXTURES_ARE_CONSISTENT();
-          return true;
-        }());
-
         _hg.changeNodePart(max_gain_hn, from_part, to_part);
+
+        HighResClockTimepoint start = std::chrono::high_resolution_clock::now();
+        const bool success = _qg.update(max_gain_hn, from_part, to_part);
+        ASSERT(success);
+        HighResClockTimepoint end = std::chrono::high_resolution_clock::now();
+        Timer::instance().add(_context, Timepoint::cycle_detector,
+                              std::chrono::duration<double>(end - start).count());
+        ASSERT(success, V(max_gain_hn) << V(from_part) << V(to_part));
         move(max_gain_hn, from_part, to_part);
         _moves.emplace_back(max_gain_hn, from_part, to_part);
         _moved_hns.push_back(max_gain_hn);
@@ -198,6 +243,8 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
     ASSERT([&]() {
       ASSERT_THAT_FIXTURES_ARE_CONSISTENT();
       ASSERT_THAT_GAIN_CACHE_IS_VALID();
+      ASSERT(_qg.isAcyclic());
+      ASSERT(QuotientGraph<DFSCycleDetector>(_hg, _context).isAcyclic());
       return true;
     }());
     ASSERT(best_metrics.imbalance <= _context.partition.epsilon);
@@ -205,6 +252,7 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
     DBG << "Imbalance after refineImpl():" << best_metrics.imbalance;
     best_metrics.km1 = metrics::km1(_hg);
     best_metrics.cut = metrics::hyperedgeCut(_hg);
+    _improved_imbalance += initial_imbalance - best_metrics.imbalance;
     return false;
   }
 
@@ -213,16 +261,6 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
     DBG << V(_inverse_ordering);
     for (const PartitionID& part : _inverse_ordering) {
       DBG << V(part) << V(_pq[PREV].size(part)) << V(_pq[NEXT].size(part)) << V(_hg.partWeight(part));
-    }
-  }
-
-  void activateMovableHNs() {
-    for (const HypernodeID& hn : _hg.nodes()) {
-      for (const std::size_t& direction : kDirections) {
-        if (_fixtures[direction][hn] == 0 && !_hg.active(hn)) {
-          _hg.activate(hn);
-        }
-      }
     }
   }
 
@@ -237,9 +275,8 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
     _fixtures[NEXT].resize(_hg.initialNumNodes());
     _pq[PREV].clear();
     _pq[NEXT].clear();
-    QuotientGraph<DFSCycleDetector> qg(_hg, _context);
     _ordering.clear();
-    const auto& new_order = qg.computeStrictTopologicalOrdering();
+    const auto& new_order = _qg.computeStrictTopologicalOrdering();
     _ordering.insert(_ordering.begin(), new_order.begin(), new_order.end());
     _inverse_ordering.clear();
     _inverse_ordering.resize(_context.partition.k);
@@ -256,9 +293,8 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
   }
 
   bool orderingStillTopological() const {
-    QuotientGraph<DFSCycleDetector> qg(_hg, _context);
     for (PartitionID u = 0; u < _context.partition.k; ++u) {
-      for (const auto& edge : qg.outs(u)) {
+      for (const auto& edge : _qg.outs(u)) {
         const PartitionID& v = edge.first;
         const HyperedgeWeight& weight = edge.second;
         if (weight == 0) { // not a real edge
@@ -350,11 +386,13 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
   void move(const HypernodeID moved_hn, const PartitionID from_part, const PartitionID to_part) {
     DBG << "move(" << V(moved_hn) << V(from_part) << V(to_part) << ")";
 
+    if (!_hg.active(moved_hn)) {
+      _hg.activate(moved_hn);
+    }
     _hg.mark(moved_hn);
     _new_adjacent_part.resetUsedEntries();
 
     ASSERT(!_gain_cache.entryExists(moved_hn, from_part), V(moved_hn) << V(from_part));
-
     if (!_gain_cache.entryExists(moved_hn, to_part)) {
       _gain_cache.initializeEntry(moved_hn, to_part, _nonadjacent_gain_cache[moved_hn]);
     }
@@ -405,7 +443,7 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
     for (const HypernodeID& pin : _hg.pins(he)) {
       DBGC(pin == hn_to_debug) << "updateNeighborsOfMovedHN.for(" << V(pin) << V(_hg.partID(pin))
                                << V(moved_hn) << V(from_part) << V(to_part) << V(he) << ")";
-      if (!_hg.marked(pin) && _hg.active(pin)) {
+      if (!_hg.marked(pin) && (_fixtures[PREV][pin] == 0 || _fixtures[NEXT][pin] == 0)) {
         ASSERT(pin != moved_hn, V(pin));
         connectivityUpdateForCache(pin, from_part, to_part, he,
                                    move_decreased_connectivity,
@@ -671,21 +709,17 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
           const PartitionID to_part = adjacentPart(part, direction);
           DBGC(hn == hn_to_debug) << "Activate HN" << V(hn) << V(direction) << V(part) << V(to_part)
                                   << V(cachedGainValue(hn, to_part));
+          if (_hg.marked(hn)) {
+            _gain_cache.clear(hn);
+            initializeGainCacheFor(hn);
+            _hg.unmark(hn);
+          }
           if (_pq[direction].contains(hn, part)) {
             _pq[direction].updateKey(hn, part, cachedGainValue(hn, to_part));
           } else {
             _pq[direction].insert(hn, part, cachedGainValue(hn, to_part));
           }
           _pq[direction].enablePart(part);
-          if (_hg.marked(hn)) {
-            _gain_cache.clear(hn);
-            initializeGainCacheFor(hn);
-            _hg.unmark(hn);
-          }
-          if (!_hg.active(hn)) {
-            DBGC(hn == hn_to_debug) << "_hg.activate(" << V(hn) << ")";
-            _hg.activate(hn);
-          }
         } else if (_state_changes[direction].get(hn) == DEACTIVATE) {
           DBGC(hn == hn_to_debug) << "Deactivate HN" << V(hn) << V(direction) << V(part);
           if (_pq[direction].contains(hn, part)) {
@@ -887,6 +921,7 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
 
   Hypergraph& _hg;
   Context _context;
+  QuotientGraph<DFSCycleDetector>& _qg;
   std::array<KWayRefinementPQ, TARGETS> _pq;
   std::array<std::vector<HypernodeID>, TARGETS> _fixtures;
   std::array<ds::FastResetArray<std::size_t>, 2> _state_changes;
@@ -898,6 +933,9 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
   ds::FastResetArray<PartitionID> _new_adjacent_part;
   std::vector<Move> _moves;
   std::vector<HypernodeID> _moved_hns;
+  ds::FastResetArray<bool> _updated_neighbors;
+
+  double _improved_imbalance = 0.0;
 };
 
 constexpr std::array<std::size_t, 2> AcyclicHardRebalanceRefiner::kDirections;
