@@ -8,8 +8,6 @@
 #include "kahypar/partition/refinement/policies/fm_stop_policy.h"
 #include "kahypar/partition/context.h"
 
-#include "kahypar/partition/refinement/km1_gain_manager.h"
-
 namespace kahypar {
 class AcyclicKMinusOneRefiner final : public IRefiner {
  private:
