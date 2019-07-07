@@ -104,7 +104,6 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
 
  private:
   void initializeImpl(const HyperedgeWeight max_gain) final {
-    LOG << "initializeImpl()";
     if (!_is_initialized) {
       _pq[PREV].initialize(_hg.initialNumNodes());
       _pq[NEXT].initialize(_hg.initialNumNodes());
@@ -147,7 +146,6 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
                   const std::array<HypernodeWeight, 2>&,
                   const UncontractionGainChanges&,
                   Metrics& best_metrics) final {
-    LOG << "refineImpl(" << refinement_nodes << "): imbalance" << best_metrics.imbalance;
     ASSERT(best_metrics.imbalance == metrics::imbalance(_hg, _context));
     _moves.clear();
     _moved_hns.clear();
@@ -248,6 +246,7 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
       return true;
     }());
     ASSERT(best_metrics.imbalance <= _context.partition.epsilon);
+    ASSERT(orderingStillTopological());
 
     DBG << "Imbalance after refineImpl():" << best_metrics.imbalance;
     best_metrics.km1 = metrics::km1(_hg);

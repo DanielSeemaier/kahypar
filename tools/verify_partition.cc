@@ -54,7 +54,6 @@ int main(int argc, char* argv[]) {
   std::vector<PartitionID> partition;
   if (argc == 3) {
     std::string partition_filename(argv[2]);
-    std::cout << "Reading partition file: " << partition_filename << std::endl;
     io::readPartitionFile(partition_filename, partition);
     for (size_t index = 0; index < partition.size(); ++index) {
       max_part = std::max(max_part, partition[index]);
@@ -65,6 +64,7 @@ int main(int argc, char* argv[]) {
 
   if (!partition.empty() && partition.size() != hypergraph.initialNumNodes()) {
     std::cout << "partition file has incorrect size. Exiting." << std::endl;
+    std::cout << "partition size: " << partition.size() << ", hgr size: " << hypergraph.initialNumNodes() << std::endl;
     exit(-1);
   }
 
@@ -75,8 +75,6 @@ int main(int argc, char* argv[]) {
   Context context;
   context.partition.k = max_part + 1;
 
-  std::cout << "***********************" << hypergraph.k()
-            << "-way Partition Result************************" << std::endl;
   std::cout << "k=" << max_part << std::endl;
   std::cout << "cut=" << metrics::hyperedgeCut(hypergraph) << std::endl;
   std::cout << "soed=" << metrics::soed(hypergraph) << std::endl;

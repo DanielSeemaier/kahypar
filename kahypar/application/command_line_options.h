@@ -73,6 +73,9 @@ po::options_description createGeneralOptionsDescription(Context& context, const 
     ("final-epsilon",
     po::value<double>(&context.partition.final_epsilon)->value_name("<double>"),
     "Epsilon on coarsest level")
+    ("graph-partition-filename",
+    po::value<std::string>(&context.partition.graph_partition_filename)->value_name("<string>"),
+    "Output partition filename")
     ("fixed-vertices,f",
     po::value<std::string>(&context.partition.fixed_vertex_filename)->value_name("<string>"),
     "Fixed vertex filename")
@@ -694,15 +697,17 @@ void processCommandLineInput(Context& context, int argc, char* argv[]) {
   std::string epsilon_str = std::to_string(context.partition.epsilon);
   epsilon_str.erase(epsilon_str.find_last_not_of('0') + 1, std::string::npos);
 
-  context.partition.graph_partition_filename =
-    context.partition.graph_filename
-    + ".part"
-    + std::to_string(context.partition.k)
-    + ".epsilon"
-    + epsilon_str
-    + ".seed"
-    + std::to_string(context.partition.seed)
-    + ".KaHyPar";
+  if (context.partition.graph_partition_filename.empty()) {
+    context.partition.graph_partition_filename =
+      context.partition.graph_filename
+      + ".part"
+      + std::to_string(context.partition.k)
+      + ".epsilon"
+      + epsilon_str
+      + ".seed"
+      + std::to_string(context.partition.seed)
+      + ".KaHyPar";
+  }
 
   if (context.partition.use_individual_part_weights) {
     context.partition.epsilon = 0;

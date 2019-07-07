@@ -8,6 +8,8 @@
 #include "kahypar/partition/refinement/policies/fm_stop_policy.h"
 #include "kahypar/partition/context.h"
 
+#include "kahypar/partition/refinement/km1_gain_manager.h"
+
 namespace kahypar {
 class AcyclicKMinusOneRefiner final : public IRefiner {
  private:
@@ -109,7 +111,7 @@ class AcyclicKMinusOneRefiner final : public IRefiner {
       _hard_rebalance.refine(refinement_nodes, max_allowed_part_weights, uncontraction_changes, best_metrics);
       const auto& moves = mergeMultiMoves(_hard_rebalance.moves());
       if (_original_context.enable_soft_rebalance) {
-        _soft_rebalance.performMovesAndUpdateCache(moves, refinement_nodes, uncontraction_changes);
+        _soft_rebalance.performMovesAfterHardRebalance(_hard_rebalance.moves(), refinement_nodes, uncontraction_changes);
       }
       _local_search.performMovesAndUpdateCache(moves, refinement_nodes, uncontraction_changes);
       DBG << "_hard_rebalance:" << current_imbalance << "-->" << best_metrics.imbalance << V(epsilon);

@@ -71,7 +71,7 @@ class AcyclicSoftRebalanceRefiner final : public IRefiner {
   }
 
   void enableRefinementNodes(std::vector<HypernodeID>& refinement_nodes) {
-    LOG << "enableRefinementNodes(" << refinement_nodes << ")";
+    DBG << "SoftRebalance::enableRefinementNodes(" << refinement_nodes << ")";
     _hg.resetHypernodeState();
     _updated_neighbors.resetUsedEntries();
 
@@ -95,6 +95,39 @@ class AcyclicSoftRebalanceRefiner final : public IRefiner {
 
   std::size_t numZeroGains() const {
     return _num_zero_gain_hns;
+  }
+
+  void performMovesAfterHardRebalance(const std::vector<Move>& moves,
+                                      std::vector<HypernodeID>& refinement_nodes,
+                                      const UncontractionGainChanges& changes) {
+    ASSERT(orderingStillTopological(), V(orderingStillTopologicalDebug()));
+
+    _hg.resetHypernodeState();
+    for (std::size_t i = moves.size(); i > 0; --i) {
+      const Move& move = moves[i - 1];
+      _hg.changeNodePart(move.hn, move.to, move.from);
+    }
+
+    for (const Move& move : moves) {
+      if (!_hg.active(move.hn)) {
+        _hg.activate(move.hn);
+      }
+      _hg.mark(move.hn);
+
+      _hg.changeNodePart(move.hn, move.from, move.to);
+      if (!_skip_pq_updates && !_pq_inst[move.hn].empty()) {
+        ASSERT(_pq.contains(move.hn, move.from));
+        _pq.remove(move.hn, move.from);
+        _pq_inst[move.hn].clear();
+      }
+      this->move(move.hn, move.from, move.to);
+
+      _hg.unmark(move.hn);
+      resetMinMaxNeighborsFor(move.hn);
+      initializeMinMaxNeighborsFor(move.hn);
+    }
+
+    _gain_cache.resetDelta();
   }
 
  private:

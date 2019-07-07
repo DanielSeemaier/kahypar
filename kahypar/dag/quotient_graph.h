@@ -166,6 +166,7 @@ class QuotientGraph {
 
   void rebuild() {
     constructFromHypergraph();
+    _changed = true;
   }
 
   bool update(const HypernodeID hn, const PartitionID from, const PartitionID to) {
@@ -213,6 +214,8 @@ class QuotientGraph {
         _adjacency_matrix[u][v] += weight;
       }
     }
+
+    _changed = true;
   }
 
   // Note: uncontraction cannot change the state of the cycle detector
@@ -282,6 +285,8 @@ class QuotientGraph {
       return false; // illegal move, don't commit
     }
 
+    _changed |= changed;
+
     // commit changes
     for (QNodeID u = 0; u < numberOfNodes(); ++u) {
       for (const auto& delta : deltas[u]) {
@@ -341,7 +346,35 @@ class QuotientGraph {
   }
 
   std::vector<QNodeID> computeStrictTopologicalOrdering() const {
-    return computeTopologicalOrdering(true);
+    if (_cached_ordering.empty()) {
+      const_cast<QuotientGraph<Detector>*>(this)->_cached_ordering = computeTopologicalOrdering(true);
+      const_cast<QuotientGraph<Detector>*>(this)->_changed = false;
+      return _cached_ordering;
+
+    }
+    if (_changed && !cachedOrderingStillTopological()) {
+      const_cast<QuotientGraph<Detector>*>(this)->_cached_ordering = computeTopologicalOrdering(true);
+      const_cast<QuotientGraph<Detector>*>(this)->_changed = false;
+    }
+    return _cached_ordering;
+  }
+
+  bool cachedOrderingStillTopological() const {
+    ASSERT(!_cached_ordering.empty());
+    for (PartitionID u = 0; u < _context.partition.k; ++u) {
+      for (const auto& edge : outs(u)) {
+        const PartitionID& v = edge.first;
+        const HyperedgeWeight& weight = edge.second;
+        if (weight == 0) { // not a real edge
+          continue;
+        }
+        if (_cached_ordering[u] > _cached_ordering[v]) {
+          return false;
+        }
+      }
+    }
+
+    return true;
   }
 
   std::vector<QNodeID> computeTopologicalOrdering(bool strict = true) const {
@@ -530,6 +563,8 @@ class QuotientGraph {
       }
     }
     _detector.bulkConnect(initial_edges);
+
+    _changed = true;
   }
 
   void removeHN(const HypernodeID hn) {
@@ -553,6 +588,8 @@ class QuotientGraph {
         }
       }
     }
+
+    _changed = true;
   }
 
   void addHN(const HypernodeID hn) {
@@ -574,12 +611,16 @@ class QuotientGraph {
         }
       }
     }
+
+    _changed = true;
   }
 
   const Hypergraph& _hg;
   const Context& _context;
   AdjacencyMatrix _adjacency_matrix;
   Detector _detector;
+  bool _changed = false;
+  std::vector<QNodeID> _cached_ordering;
 };
 } // namespace ds
 
