@@ -7,10 +7,4 @@ function(add_gmock_test target)
     set_property(TARGET ${target} PROPERTY CXX_STANDARD_REQUIRED ON)
 
     add_test(${target} ${target})
-
-    add_custom_command(TARGET ${target}
-                       POST_BUILD
-                       COMMAND ${target}
-                       WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-                       COMMENT "Running ${target}" VERBATIM)
 endfunction()
