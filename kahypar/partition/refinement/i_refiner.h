@@ -66,11 +66,11 @@ class IRefiner {
     return rollbackImpl();
   }
 
-  virtual void preUncontraction(const HypernodeID u) {}
+  virtual void preUncontraction(const HypernodeID representant) {}
 
-  virtual void postUncontraction(const HypernodeID u, const HypernodeID v) {}
+  virtual void postUncontraction(const HypernodeID representant, const std::vector<HypernodeID>&& partners) {}
 
-  virtual void printFinalInfo() {}
+  virtual void printSummarization() const {}
 
  protected:
   IRefiner() = default;

@@ -112,7 +112,7 @@ class MLCoarsener final : public ICoarsener,
           continue;
         }
 
-        bool accept = top[u] + 1 == v;
+        bool accept = top[u] + 1 == top[v]; // v --> u
         if (!accept) {
           bool v_is_succ = false;
           bool other_node_is_succ = false;
@@ -161,11 +161,11 @@ class MLCoarsener final : public ICoarsener,
 
         _rater.markAsMatched(u);
         _rater.markAsMatched(rating.target);
-        //LOG << "Contracting" << V(u) << V(v);
+        LOG << "Contracting" << V(u) << V(v);
 
         if (v_is_pred) {
           performContraction(v, u);
-          ASSERT(dag::isAcyclic(_hg));
+          if (!dag::isAcyclic(_hg)) { LOG << "Error:" << V(u) << V(v); std::exit(1); }
 
           for (const HyperedgeID& he : _hg.incidentTailEdges(v)) {
             for (const HypernodeID& head : _hg.heads(he)) {
@@ -176,7 +176,7 @@ class MLCoarsener final : public ICoarsener,
           }
         } else {
           performContraction(u, v);
-          ASSERT(dag::isAcyclic(_hg));
+          if (!dag::isAcyclic(_hg)) { LOG << "Error:" << V(u) << V(v); std::exit(1); }
 
           for (const HyperedgeID& he : _hg.incidentTailEdges(u)) {
             for (const HypernodeID& head : _hg.heads(he)) {

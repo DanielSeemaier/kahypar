@@ -94,7 +94,7 @@ static inline void performInitialPartitioning(Hypergraph& hypergraph, const Cont
                              metrics::imbalance(hypergraph, context)};
 
   refiner.refine(refinement_nodes, {0, 0}, changes, current_metrics);
-  ASSERT(QuotientGraph<DFSCycleDetector>(hypergraph, context).isAcyclic(), "Initial partition is not acyclic!");
+  ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hypergraph, context).isAcyclic(), "Initial partition is not acyclic!");
 
   auto end = std::chrono::high_resolution_clock::now();
   Timer::instance().add(context, Timepoint::initial_partitioning,
@@ -138,7 +138,7 @@ static inline void partition(Hypergraph& hypergraph, const Context& context) {
   for (uint32_t vcycle = 1; vcycle <= context.partition.global_search_iterations; ++vcycle) {
     context.partition.current_v_cycle = vcycle;
     const bool improved_quality = partitionVCycle(hypergraph, *coarsener, *km1_refiner, context);
-    ASSERT(QuotientGraph<DFSCycleDetector>(hypergraph, context).isAcyclic(),
+    ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hypergraph, context).isAcyclic(),
            "Vcycle" << vcycle << "produced a cyclic partition");
 
     if (!improved_quality) {
@@ -153,7 +153,7 @@ static inline void partition(Hypergraph& hypergraph, const Context& context) {
     LOG << "Running hard rebalance to improve imbalance from" << imbalance << "to min{"
         << context.partition.final_epsilon << "," << context.partition.epsilon << "}";
 
-    QuotientGraph<DFSCycleDetector> qg(hypergraph, context);
+    AdjacencyMatrixQuotientGraph<DFSCycleDetector> qg(hypergraph, context);
     AcyclicHardRebalanceRefiner hard_balance_refiner(hypergraph, context, qg);
     UncontractionGainChanges changes;
     changes.representative.push_back(0);

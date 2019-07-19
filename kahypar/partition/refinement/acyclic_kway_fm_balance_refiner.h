@@ -136,7 +136,7 @@ class AcyclicKWayBalanceRefiner final : public IRefiner {
       Randomize::instance().shuffleVector(refinement_nodes, refinement_nodes.size());
       init(refinement_nodes);
 
-      QuotientGraph<DFSCycleDetector> qg(_hg, _context);
+      HashMapQuotientGraph<DFSCycleDetector> qg(_hg, _context);
       qg.addMissingEdges();
       qg.reduceToOneRoot();
       const auto qmg = qg.computeMoveGraph();

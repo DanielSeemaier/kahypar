@@ -146,7 +146,7 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
                           std::chrono::duration<double>(end - start).count());
   }
 
-  QuotientGraph<DFSCycleDetector>& qg() {
+  AdjacencyMatrixQuotientGraph<DFSCycleDetector>& qg() {
     return _qg;
   }
 
@@ -262,7 +262,7 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
       bool do_move = Base::moveIsFeasible(max_gain_node, from_part, to_part);
       if (do_move) {
         HighResClockTimepoint start = std::chrono::high_resolution_clock::now();
-        do_move = do_move && _qg.update(max_gain_node, from_part, to_part);
+        do_move = do_move && _qg.testAndUpdateBeforeMovement(max_gain_node, from_part, to_part);
         HighResClockTimepoint end = std::chrono::high_resolution_clock::now();
         Timer::instance().add(_context, Timepoint::cycle_detector,
                               std::chrono::duration<double>(end - start).count());
@@ -341,7 +341,7 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
             == true ? "policy" : "empty queue");
 
     ASSERT(_qg.isAcyclic(), "Refinement produced a cyclic quotient graph!");
-    ASSERT(QuotientGraph<DFSCycleDetector>(_hg, _context).isAcyclic(),
+    ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(_hg, _context).isAcyclic(),
            "Refinement produced a cyclic quotient graph not detected by the QG!");
 
     int last_index = _performed_moves.size() - 1;
@@ -351,7 +351,7 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
       const PartitionID to_part = _performed_moves[last_index].from_part;
       _hg.changeNodePart(hn, from_part, to_part);
       HighResClockTimepoint start = std::chrono::high_resolution_clock::now();
-      const bool success = _qg.update(hn, from_part, to_part);
+      const bool success = _qg.testAndUpdateBeforeMovement(hn, from_part, to_part);
       ASSERT(success);
       HighResClockTimepoint end = std::chrono::high_resolution_clock::now();
       Timer::instance().add(_context, Timepoint::cycle_detector,
@@ -365,7 +365,7 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
 
     ASSERT_THAT_GAIN_CACHE_IS_VALID();
     ASSERT(_qg.isAcyclic(), "Rollback produced a cyclic quotient graph!");
-    ASSERT(QuotientGraph<DFSCycleDetector>(_hg, _context).isAcyclic(),
+    ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(_hg, _context).isAcyclic(),
            "Rollback produced a cyclic quotient graph not detected by the QG!");
 
     ASSERT(best_metrics.km1 == metrics::km1(_hg));
@@ -1083,7 +1083,7 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
 
   std::vector<Move> _moves;
 
-  QuotientGraph<DFSCycleDetector> _qg;
+  AdjacencyMatrixQuotientGraph<DFSCycleDetector> _qg;
 
   std::size_t _num_moves = 0;
   std::size_t _num_touched_hns = 0;

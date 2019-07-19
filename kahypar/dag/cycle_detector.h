@@ -6,6 +6,7 @@
 #include <cmath>
 #include <algorithm>
 #include <set>
+#include <kahypar/meta/typelist.h>
 
 #include "kahypar/macros.h"
 
@@ -40,6 +41,10 @@ class CycleDetector {
    * \param t Target node, head of the edge
    */
   virtual void disconnect(std::size_t s, std::size_t t) = 0;
+
+  virtual void log() {}
+
+  virtual void reset() = 0;
 };
 
 /**!
@@ -52,7 +57,7 @@ class OutCycleDetector : CycleDetector {
       _out[pair.first].push_back(pair.second);
     }
   }
- public:
+
   void disconnect(std::size_t s, std::size_t t) override {
     for (std::size_t i = 0; i < _out[s].size(); ++i) {
       if (_out[s][i] == t) {
@@ -60,6 +65,20 @@ class OutCycleDetector : CycleDetector {
         _out[s].pop_back();
       }
     }
+  }
+
+  void log() override {
+    LOG << "State of the Cycle Detector:";
+    for (std::size_t u = 0; u < _out.size(); ++u) {
+      LOG << u << ":" << _out[u];
+    }
+    LOG << "End of the state";
+  }
+
+  void reset() override {
+    const std::size_t n = _out.size();
+    _out.clear();
+    _out.resize(n);
   }
 
  protected:
@@ -288,6 +307,21 @@ class PseudoTopologicalOrderingCycleDetector : CycleDetector {
     }
   }
 
+  void reset() override {
+    const std::size_t n = _out.size();
+    _level.clear();
+    _level.resize(n);
+    _out.clear();
+    _out.resize(n);
+    _in.clear();
+    _in.resize(n);
+    _marked.clear();
+    _marked.resize(n);
+    _delta = 0;
+    _size = 0;
+    _mark = 0;
+  }
+
  private:
   bool insertEdge(std::size_t u, std::size_t v) {
     _out[u].insert(v);
@@ -449,4 +483,6 @@ using cycledetector::CycleDetector;
 using cycledetector::KahnCycleDetector;
 using cycledetector::DFSCycleDetector;
 using cycledetector::PseudoTopologicalOrderingCycleDetector;
+
+using CycleDetectors = meta::Typelist<KahnCycleDetector, DFSCycleDetector, PseudoTopologicalOrderingCycleDetector>;
 } // namespace kahypar

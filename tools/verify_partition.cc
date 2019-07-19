@@ -82,7 +82,7 @@ int main(int argc, char* argv[]) {
   std::cout << "absorption=" << metrics::absorption(hypergraph) << std::endl;
   std::cout << "imbalance=" << imb(hypergraph, context.partition.k) << std::endl;
   if (hypergraph.isDirected()) {
-    std::cout << "acyclic=" << QuotientGraph<DFSCycleDetector>(hypergraph, context).isAcyclic() << std::endl;
+    std::cout << "acyclic=" << AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hypergraph, context).isAcyclic() << std::endl;
   } else {
     std::cout << "acyclic=0" << std::endl;
   }

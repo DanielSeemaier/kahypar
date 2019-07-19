@@ -191,6 +191,10 @@ class CacheElement {
     }
   }
 
+  PartitionID numAdjacentParts() const {
+    return _size;
+  }
+
  private:
   // To avoid code duplication we implement non-const version in terms of const version
   PartitionID & dense(const PartitionID part) {

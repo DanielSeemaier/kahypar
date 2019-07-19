@@ -11,10 +11,9 @@
 #include <stack>
 #include <queue>
 
-#include "gtest/gtest_prod.h"
+#include <boost/iterator/filter_iterator.hpp>
 
 #include "kahypar/macros.h"
-
 #include "kahypar/datastructure/sparse_map.h"
 #include "kahypar/definitions.h"
 #include "kahypar/partition/context.h"
@@ -132,261 +131,134 @@ class DynamicUnweightedGraph {
 
 using QuotientMoveGraph = DynamicUnweightedGraph;
 
-template<typename Detector>
+class QuotientGraph;
+
+struct IsNonzeroEdge {
+  explicit IsNonzeroEdge(const QuotientGraph& qg, const QNodeID u) :
+    _qg(qg),
+    _u(u) {}
+
+  bool operator()(QNodeID v);
+
+ private:
+  const QuotientGraph& _qg;
+  const QNodeID _u;
+};
+
+using QuotientGraphOutsIterator = boost::filter_iterator<IsNonzeroEdge, const QNodeID*>;
+
+struct OutsIteratorPair {
+  QuotientGraphOutsIterator begin() {
+    return _begin;
+  }
+
+  QuotientGraphOutsIterator end() {
+    return _end;
+  }
+
+  QuotientGraphOutsIterator _begin;
+  QuotientGraphOutsIterator _end;
+};
+
 class QuotientGraph {
  public:
-  QuotientGraph(const Hypergraph& hypergraph, const Context& context) :
-    _hg(hypergraph),
-    _context(context),
-    _adjacency_matrix(context.partition.k),
-    _detector(context.partition.k) {
-    constructFromHypergraph();
+  explicit QuotientGraph(const PartitionID k) :
+    _nodes(k) {
+    std::iota(_nodes.begin(), _nodes.end(), 0);
   }
 
-  QuotientGraph(const QuotientGraph& other) = delete;
+  virtual QNodeID numberOfNodes() const = 0;
+  virtual QEdgeID numberOfEdges() const = 0;
+  virtual QEdgeWeight edgeWeight(QNodeID u, QNodeID v) const = 0;
+  virtual bool testAndUpdateBeforeMovement(HypernodeID hn, PartitionID from_part, PartitionID to_part) = 0;
+  virtual void updateAfterMovement(HypernodeID hn, PartitionID from_part, PartitionID to_part) = 0;
 
-  QuotientGraph& operator=(const QuotientGraph& other) = delete;
-
-  QuotientGraph(QuotientGraph&& other) noexcept = default;
-
-  QuotientGraph& operator=(QuotientGraph&& other) = default;
-
-  ~QuotientGraph() = default;
-
-  QNodeID numberOfNodes() const {
-    return _adjacency_matrix.size();
+  virtual void updateBeforeMovement(HypernodeID hn, PartitionID from_part, PartitionID to_part) {
+    updateAfterMovement(hn, from_part, to_part);
   }
 
-  QEdgeID numberOfEdges() const {
-    return std::accumulate(_adjacency_matrix.begin(), _adjacency_matrix.end(), 0,
-                           [](const QEdgeID& acc, const std::unordered_map<QNodeID, QEdgeWeight>& map) {
-                             return acc + map.size();
-                           });
-  }
+  virtual bool connected(QNodeID u, QNodeID v) const = 0;
+  virtual OutsIteratorPair outs(QNodeID u) const = 0;
+  virtual void preUncontraction(HypernodeID representant) = 0;
+  virtual void postUncontraction(HypernodeID representant, const std::vector<HypernodeID>&& partners) = 0;
 
-  void rebuild() {
-    constructFromHypergraph();
-    _changed = true;
-  }
-
-  bool update(const HypernodeID hn, const PartitionID from, const PartitionID to) {
-    bool changed;
-    return update(hn, from, to, changed);
-  }
-
-  void updateWithoutCycleDetector(const HypernodeID hn, const PartitionID from, const PartitionID to) {
-    // TODO more work might be required for some cycle detectors
-    if (from == to) {
-      return;
-    }
-
-    AdjacencyMatrix deltas(numberOfNodes());
-
-    // find changes to edge weights of the quotient graph caused by this movement
-    for (const HyperedgeID& he : _hg.incidentEdges(hn)) {
-      if (_hg.isHead(hn, he)) { // hn is head
-        for (const HypernodeID& ht : _hg.tails(he)) {
-          if (_hg.partID(ht) != from) {
-            deltas[_hg.partID(ht)][from] -= 1;
-          }
-          if (_hg.partID(ht) != to) {
-            deltas[_hg.partID(ht)][to] += 1;
-          }
-        }
-      } else { // hn is tail
-        ASSERT(_hg.isTail(hn, he));
-        for (const HypernodeID& hh : _hg.heads(he)) {
-          if (_hg.partID(hh) != from) {
-            deltas[from][_hg.partID(hh)] -= 1;
-          }
-          if (_hg.partID(hh) != to) {
-            deltas[to][_hg.partID(hh)] += 1;
-          }
+  virtual const std::vector<QNodeID>& topologicalOrdering() const {
+    if (!cachedTopologicalOrderingStillTopological()) {
+      auto* nc_this = const_cast<QuotientGraph*>(this);
+      nc_this->_cached_topological_ordering = computeTopologicalOrdering();
+      if (!_cached_topological_ordering.empty()) {
+        nc_this->_cached_inverse_topological_ordering.resize(numberOfNodes());
+        for (QNodeID u = 0; u < numberOfNodes(); ++u) {
+          nc_this->_cached_inverse_topological_ordering[_cached_topological_ordering[u]] = u;
         }
       }
+      nc_this->_outdated_topological_ordering = false;
+      nc_this->_changed = true;
     }
+    return _cached_topological_ordering;
+  }
 
-    // commit changes
+  virtual const std::vector<QNodeID>& inverseTopologicalOrdering() const {
+    if (!cachedTopologicalOrderingStillTopological()) {
+      topologicalOrdering();
+    }
+    return _cached_inverse_topological_ordering;
+  }
+
+  virtual std::vector<QNodeID> randomizedTopologicalOrdering() const {
+    return computeTopologicalOrdering(true, true);
+  }
+
+  virtual const std::vector<QNodeID>& weakTopologicalOrdering() const {
+    if (!cachedWeakTopologicalOrderingStillWeakTopological()) {
+      const_cast<QuotientGraph*>(this)->_cached_weak_topological_ordering = computeTopologicalOrdering(false);
+      const_cast<QuotientGraph*>(this)->_outdated_weak_topological_ordering = false;
+      const_cast<QuotientGraph*>(this)->_changed = true;
+    }
+    return _cached_weak_topological_ordering;
+  }
+
+  virtual void log() const {
+    LOG << "Quotient graph with" << numberOfNodes() << "nodes and" << numberOfEdges() << "directed edges";
     for (QNodeID u = 0; u < numberOfNodes(); ++u) {
-      for (const auto& delta : deltas[u]) {
-        const QNodeID& v = delta.first;
-        const QEdgeWeight& weight = delta.second;
-        _adjacency_matrix[u][v] += weight;
+      std::stringstream ss;
+      ss << u << ": ";
+      for (const auto& v : outs(u)) {
+        ss << v << ", ";
       }
+      ss << "\b\b";
+      LOG << ss.str();
     }
-
-    _changed = true;
+    LOG << "End of quotient graph";
   }
 
-  // Note: uncontraction cannot change the state of the cycle detector
-  void preUncontraction(const HypernodeID rep) {
-    removeHN(rep);
+  virtual bool isAcyclic() const {
+    return !topologicalOrdering().empty();
   }
 
-  void postUncontraction(const HypernodeID rep, const HypernodeID partner) {
-    addHN(rep);
-    addHN(partner);
+  virtual void rebuild() = 0;
+
+  virtual bool changed() {
+    return _changed;
   }
 
-  bool update(const HypernodeID hn, const PartitionID from, const PartitionID to, bool& changed) {
-    if (from == to) {
-      changed = false;
-      return true;
-    }
-
-    AdjacencyMatrix deltas(numberOfNodes());
-
-    // find changes to edge weights of the quotient graph caused by this movement
-    for (const HyperedgeID& he : _hg.incidentEdges(hn)) {
-      if (_hg.isHead(hn, he)) { // hn is head
-        for (const HypernodeID& ht : _hg.tails(he)) {
-          if (_hg.partID(ht) != from) {
-            deltas[_hg.partID(ht)][from] -= 1;
-          }
-          if (_hg.partID(ht) != to) {
-            deltas[_hg.partID(ht)][to] += 1;
-          }
-        }
-      } else { // hn is tail
-        ASSERT(_hg.isTail(hn, he));
-        for (const HypernodeID& hh : _hg.heads(he)) {
-          if (_hg.partID(hh) != from) {
-            deltas[from][_hg.partID(hh)] -= 1;
-          }
-          if (_hg.partID(hh) != to) {
-            deltas[to][_hg.partID(hh)] += 1;
-          }
-        }
-      }
-    }
-
-    // find edges that must be removed or inserted
-    Edgelist todo_remove, todo_insert;
-    for (QNodeID u = 0; u < numberOfNodes(); ++u) {
-      for (const auto& delta : deltas[u]) {
-        const QNodeID& v = delta.first;
-        const QEdgeWeight& weight = delta.second;
-        if (weight != 0) {
-          if (_adjacency_matrix[u][v] == 0) {
-            ASSERT(weight > 0);
-            todo_insert.emplace_back(u, v);
-          } else if (_adjacency_matrix[u][v] + weight == 0) {
-            todo_remove.emplace_back(u, v);
-          }
-        }
-      }
-    }
-
-    // legal movement or does it induce a cycle?
-    // note: if successful, testChanges does not rollback edge insertions / deletions, i.e. the detector is up to date
-    // with the changes after a successful call
-    if (!testChanges(todo_remove, todo_insert)) {
-      changed = false;
-      return false; // illegal move, don't commit
-    }
-
-    _changed |= changed;
-
-    // commit changes
-    for (QNodeID u = 0; u < numberOfNodes(); ++u) {
-      for (const auto& delta : deltas[u]) {
-        const QNodeID& v = delta.first;
-        const QEdgeWeight& weight = delta.second;
-        _adjacency_matrix[u][v] += weight;
-        ASSERT(_adjacency_matrix[u][v] >= 0, V(u) << V(v) << V(_adjacency_matrix[u][v]) << V(weight) << V(hn) << V(from) << V(to));
-      }
-    }
-
-    changed = !todo_insert.empty();
-    return true;
+  virtual void resetChanged() {
+    _changed = false;
   }
 
-  void reduceToOneRoot() {
-    const auto ordering = computeWeakTopologicalOrdering();
-    QNodeID root = numberOfNodes();
-
-    for (QNodeID u = 0; u < numberOfNodes(); ++u) {
-      if (ordering[u] > 0) {
-        continue;
-      }
-      if (root == numberOfNodes()) {
-        root = u;
-        continue;
-      }
-      ASSERT(_adjacency_matrix[root][u] == 0);
-      _adjacency_matrix[root][u] = _hg.currentNumEdges() * _hg.weightOfHeaviestEdge() + 1;
-      bool connect = _detector.connect(root, u);
-      ASSERT(connect);
-    }
+ protected:
+  void notifyGraphChanged() {
+    _outdated_topological_ordering = true;
+    _outdated_weak_topological_ordering = true;
   }
 
-  void addMissingEdges() {
-    const auto ordering = computeStrictTopologicalOrdering();
-    for (QNodeID u = 0; u < numberOfNodes(); ++u) {
-      for (QNodeID v = 0; v < numberOfNodes(); ++v) {
-        if (ordering[v] > ordering[u]) {
-          _adjacency_matrix[u][v] = _hg.currentNumEdges() * _hg.weightOfHeaviestEdge() + 1;
-          bool connect = _detector.connect(u, v);
-          ASSERT(connect);
-        }
-      }
-    }
-  }
+  std::vector<QNodeID> computeTopologicalOrdering(bool strict = true, bool randomized = false) const {
+    ASSERT(!randomized, "randomized topological ordering currently not implemented");
 
-  bool connected(const QNodeID u, const QNodeID v) const {
-    return _adjacency_matrix[u][v] > 0;
-  }
-
-  const std::unordered_map<QNodeID, QEdgeWeight>& outs(const QNodeID u) const {
-    return _adjacency_matrix[u];
-  }
-
-  std::vector<QNodeID> computeWeakTopologicalOrdering() const {
-    return computeTopologicalOrdering(false);
-  }
-
-  std::vector<QNodeID> computeStrictTopologicalOrdering() const {
-    if (_cached_ordering.empty()) {
-      const_cast<QuotientGraph<Detector>*>(this)->_cached_ordering = computeTopologicalOrdering(true);
-      const_cast<QuotientGraph<Detector>*>(this)->_changed = false;
-      return _cached_ordering;
-
-    }
-    if (_changed && !cachedOrderingStillTopological()) {
-      const_cast<QuotientGraph<Detector>*>(this)->_cached_ordering = computeTopologicalOrdering(true);
-      const_cast<QuotientGraph<Detector>*>(this)->_changed = false;
-    }
-    return _cached_ordering;
-  }
-
-  bool cachedOrderingStillTopological() const {
-    ASSERT(!_cached_ordering.empty());
-    for (PartitionID u = 0; u < _context.partition.k; ++u) {
-      for (const auto& edge : outs(u)) {
-        const PartitionID& v = edge.first;
-        const HyperedgeWeight& weight = edge.second;
-        if (weight == 0) { // not a real edge
-          continue;
-        }
-        if (_cached_ordering[u] > _cached_ordering[v]) {
-          return false;
-        }
-      }
-    }
-
-    return true;
-  }
-
-  std::vector<QNodeID> computeTopologicalOrdering(bool strict = true) const {
     std::vector<QEdgeID> in_degree(numberOfNodes());
     for (QNodeID u = 0; u < numberOfNodes(); ++u) {
-      for (const auto& edge : _adjacency_matrix[u]) {
-        const QNodeID& v = edge.first;
-        const QEdgeWeight& weight = edge.second;
-        if (weight != 0) {
-          ASSERT(weight > 0, V(u) << V(v) << V(weight));
-          ++in_degree[v];
-        }
+      for (const QNodeID& v : outs(u)) {
+        ++in_degree[v];
       }
     }
 
@@ -409,16 +281,11 @@ class QuotientGraph {
         }
         ++processed_nodes;
 
-        for (const auto& edge : _adjacency_matrix[u]) {
-          const QNodeID& v = edge.first;
-          const QEdgeWeight& weight = edge.second;
-          if (weight != 0) {
-            ASSERT(weight > 0);
-            ASSERT(in_degree[v] > 0);
-            --in_degree[v];
-            if (in_degree[v] == 0) {
-              next_todo.push_back(v);
-            }
+        for (const QNodeID& v : outs(u)) {
+          ASSERT(in_degree[v] > 0);
+          --in_degree[v];
+          if (in_degree[v] == 0) {
+            next_todo.push_back(v);
           }
         }
       }
@@ -436,81 +303,354 @@ class QuotientGraph {
     }
   }
 
-  QuotientMoveGraph computeMoveGraph() const {
-    QuotientMoveGraph qmg(numberOfNodes());
-    const auto ordering = computeWeakTopologicalOrdering();
+  bool cachedTopologicalOrderingStillTopological() const {
+    if (_cached_topological_ordering.empty()) {
+      return false;
+    }
+    if (!_outdated_topological_ordering) {
+      return true;
+    }
 
     for (QNodeID u = 0; u < numberOfNodes(); ++u) {
-      std::vector<QNodeID> min_neighbors;
-      for (const auto& edge : _adjacency_matrix[u]) {
-        const QNodeID v = edge.first;
-        const QEdgeWeight& weight = edge.second;
-        if (weight == 0) {
-          continue;
-        }
-
-        if (min_neighbors.empty()) {
-          min_neighbors.push_back(v);
-        } else {
-          const QNodeID min_neighbor = min_neighbors[0];
-          if (ordering[v] == ordering[min_neighbor]) {
-            min_neighbors.push_back(v);
-          } else if (ordering[v] < ordering[min_neighbor]) {
-            min_neighbors.clear();
-            min_neighbors.push_back(v);
-          }
-        }
-      }
-
-      for (const QNodeID& min_neighbor : min_neighbors) {
-        if (ordering[min_neighbor] == ordering[u] + 1) {
-          qmg.newUndirectedEdge(u, min_neighbor);
-        } else {
-          qmg.newDirectedEdge(u, min_neighbor);
+      for (const QNodeID v : outs(u)) {
+        if (_cached_topological_ordering[u] >= _cached_topological_ordering[v]) {
+          return false;
         }
       }
     }
 
-    return qmg;
+    return true;
   }
 
-  /**!
-   * Checks whether the quotient graph is acyclic. Note that a quotient graph that is acyclic initially should never
-   * become cyclic by calling the public member functions, i.e. this is just a method for ASSERTs.
-   *
-   * \return Whether the quotient graph is acyclic.
-   */
-  bool isAcyclic() const {
-    return computeTopologicalOrdering().size() == numberOfNodes();
-  }
-
-  void log() const {
-    LOG << "Quotient graph with" << numberOfNodes() << "nodes and" << numberOfEdges() << "directed edges";
-    for (QNodeID u = 0; u < numberOfNodes(); ++u) {
-      std::stringstream ss;
-      ss << u << ": ";
-      for (const auto& edge : _adjacency_matrix[u]) {
-        const QNodeID& v = edge.first;
-        const QEdgeWeight& weight = edge.second;
-        ss << v << "(" << weight << "), ";
-      }
-      ss << "\b\b";
-      LOG << ss.str();
+  bool cachedWeakTopologicalOrderingStillWeakTopological() const {
+    if (_cached_weak_topological_ordering.empty()) {
+      return false;
     }
-    LOG << "End of quotient graph";
+    if (!_outdated_weak_topological_ordering) {
+      return true;
+    }
+
+    for (QNodeID u = 0; u < numberOfNodes(); ++u) {
+      for (const QNodeID v : outs(u)) {
+        if (_cached_weak_topological_ordering[u] > _cached_weak_topological_ordering[v]) {
+          return false;
+        }
+      }
+    }
+
+    return true;
+  }
+
+ protected:
+  std::vector<QNodeID> _nodes;
+
+ private:
+  bool _outdated_topological_ordering{false};
+  bool _outdated_weak_topological_ordering{false};
+  bool _changed{false};
+  std::vector<QNodeID> _cached_topological_ordering{};
+  std::vector<QNodeID> _cached_weak_topological_ordering{};
+  std::vector<QNodeID> _cached_inverse_topological_ordering{};
+};
+
+bool IsNonzeroEdge::operator()(QNodeID v) {
+  return _qg.connected(_u, v);
+}
+
+template<typename CycleDetector>
+class AdjacencyMatrixQuotientGraph : public QuotientGraph {
+  using AdjacencyMatrix = std::vector<std::vector<QEdgeWeight>>;
+  using Edgelist = std::vector<std::pair<QNodeID, QNodeID>>;
+
+ public:
+  AdjacencyMatrixQuotientGraph(const Hypergraph& hg, const Context& context) :
+    QuotientGraph(context.partition.k),
+    _hg(hg),
+    _context(context),
+    _detector(context.partition.k),
+    _adj_matrix(context.partition.k, std::vector<QEdgeWeight>(context.partition.k)),
+    _delta_matrix(context.partition.k, std::vector<QEdgeWeight>(context.partition.k)) {
+    buildFromHypergraph();
+  }
+
+  AdjacencyMatrixQuotientGraph(const AdjacencyMatrixQuotientGraph&) = delete;
+  AdjacencyMatrixQuotientGraph& operator= (const AdjacencyMatrixQuotientGraph&) = delete;
+
+  AdjacencyMatrixQuotientGraph(AdjacencyMatrixQuotientGraph&&) noexcept = default;
+  AdjacencyMatrixQuotientGraph& operator= (AdjacencyMatrixQuotientGraph&&) = delete;
+
+  QNodeID numberOfNodes() const override {
+    return _context.partition.k;
+  }
+
+  QEdgeID numberOfEdges() const override {
+    return _num_edges;
+  }
+
+  QEdgeWeight edgeWeight(const QNodeID u, const QNodeID v) const override {
+    return _adj_matrix[u][v];
+  }
+
+  bool connected(const QNodeID u, const QNodeID v) const override {
+    return edgeWeight(u, v) > 0;
+  }
+
+  bool testAndUpdateBeforeMovement(const HypernodeID hn, const PartitionID from_part, const PartitionID to_part) override {
+    ASSERT(_hg.partID(hn) == from_part, "You must call this method before moving the hypernode!");
+
+    resetDeltaMatrix();
+
+    ASSERT([&]() {
+      ASSERT_THAT_ADJACENCY_MATRIX_IS_CORRECT();
+      return true;
+    }());
+
+    // note: during graph construction, edges are counted twice, thus we increment / decrement the delta matrix by 2
+
+    // changes due to tail --> hn edges
+    for (const HyperedgeID& he : _hg.incidentHeadEdges(hn)) {
+      for (const HypernodeID& tail : _hg.tails(he)) {
+        if (_hg.partID(tail) != from_part) {
+          changeDeltaMatrixBy(_hg.partID(tail), from_part, -2);
+        }
+        if (_hg.partID(tail) != to_part) {
+          changeDeltaMatrixBy(_hg.partID(tail), to_part, 2);
+        }
+      }
+    }
+
+    // changes to to hn --> head edges
+    for (const HyperedgeID& he : _hg.incidentTailEdges(hn)) {
+      for (const HypernodeID& head : _hg.heads(he)) {
+        if (_hg.partID(head) != from_part) {
+          changeDeltaMatrixBy(from_part, _hg.partID(head), -2);
+        }
+        if (_hg.partID(head) != to_part) {
+          changeDeltaMatrixBy(to_part, _hg.partID(head), 2);
+        }
+      }
+    }
+
+    // find edges that must be removed or inserted
+    Edgelist todo_remove, todo_insert;
+    for (const auto& entry : _used_delta_entries) {
+      const QNodeID u = entry.first;
+      const QNodeID v = entry.second;
+      ASSERT(_adj_matrix[u][v] >= 0);
+      ASSERT(_adj_matrix[u][v] + _delta_matrix[u][v] >= 0);
+      if (_adj_matrix[u][v] > 0 && _adj_matrix[u][v] + _delta_matrix[u][v] == 0) {
+        todo_remove.emplace_back(u, v);
+      } else if (_adj_matrix[u][v] == 0 && _delta_matrix[u][v] > 0) {
+        todo_insert.emplace_back(u, v);
+      }
+    }
+
+    // legal movement or does it induce a cycle?
+    // note: if successful, testChanges does not rollback edge insertions / deletions, i.e. the detector is up to date
+    // with the changes after a successful call
+    if (!testChanges(todo_remove, todo_insert)) {
+      return false; // illegal move, don't commit
+    }
+
+    commitDeltaMatrix();
+    ASSERT([&]() {
+      const_cast<Hypergraph*>(&_hg)->changeNodePart(hn, from_part, to_part);
+      ASSERT_THAT_ADJACENCY_MATRIX_IS_CORRECT();
+      const_cast<Hypergraph*>(&_hg)->changeNodePart(hn, to_part, from_part);
+      return true;
+    }());
+
+     if (!todo_insert.empty()) {
+       notifyGraphChanged();
+     }
+    return true;
+  }
+
+  void updateAfterMovement(const HypernodeID hn, const PartitionID from_part, const PartitionID to_part) override {
+    ASSERT(false, "Not implemented");
+  }
+
+  OutsIteratorPair outs(const QNodeID u) const override {
+    IsNonzeroEdge predicate(*this, u);
+    QuotientGraphOutsIterator first(predicate, _nodes.data(), _nodes.data() + numberOfNodes());
+    QuotientGraphOutsIterator last(predicate, _nodes.data() + numberOfNodes(), _nodes.data() + numberOfNodes());
+    return {first, last};
+  }
+
+  void preUncontraction(const HypernodeID representant) override {
+    removeHypernodePreUncontraction(representant);
+  }
+
+  void postUncontraction(const HypernodeID representant, const std::vector<HypernodeID>&& partners) override {
+    ASSERT(partners.size() == 1);
+    const HypernodeID partner = partners.front();
+
+    addHypernodePostUncontraction(representant, partner);
+    addHypernodePostUncontraction(partner, representant);
+
+    ASSERT([&]() {
+      ASSERT_THAT_ADJACENCY_MATRIX_IS_CORRECT();
+      return true;
+    }());
+  }
+
+  void rebuild() override {
+    _adj_matrix.clear();
+    _adj_matrix.resize(_context.partition.k, std::vector<QEdgeWeight>(_context.partition.k));
+    _num_edges = 0;
+    _detector.reset();
+    buildFromHypergraph();
   }
 
  private:
-  using Edgelist = std::vector<std::pair<QNodeID, QNodeID>>;
-  using AdjacencyMatrix = std::vector<std::unordered_map<QNodeID, QEdgeWeight>>;
+  void buildFromHypergraph() {
+    for (const HypernodeID& hn : _hg.nodes()) {
+      addHypernode(hn);
+    }
 
-  /**
-   * Tests whether removing and inserting a given set of edges induces a cycle in this quotient graph.
-   *
-   * \param todo_remove Existing edges to be removed
-   * \param todo_insert Nonexisting edges to be inserted
-   * \return Whether the changes form a cycle in this quotient graph.
-   */
+    ASSERT([&]() {
+      ASSERT_THAT_ADJACENCY_MATRIX_IS_CORRECT();
+      return true;
+    }());
+  }
+
+  void removeHypernodePreUncontraction(const HypernodeID hn) {
+    std::vector<std::pair<QNodeID, QNodeID>> edges;
+
+    // hn --> head
+    for (const HyperedgeID& he : _hg.incidentTailEdges(hn)) {
+      for (const HypernodeID& head : _hg.heads(he)) {
+        const PartitionID tail_part = _hg.partID(hn);
+        const PartitionID head_part = _hg.partID(head);
+        if (tail_part != head_part) {
+          ASSERT(_adj_matrix[tail_part][head_part] >= 2);
+          if (_adj_matrix[tail_part][head_part] == 2) {
+            edges.emplace_back(tail_part, head_part);
+          }
+          _adj_matrix[tail_part][head_part] -= 2;
+        }
+      }
+    }
+
+    // tail --> hn
+    for (const HyperedgeID& he : _hg.incidentHeadEdges(hn)) {
+      for (const HypernodeID& tail : _hg.tails(he)) {
+        const PartitionID tail_part = _hg.partID(tail);
+        const PartitionID head_part = _hg.partID(hn);
+        if (tail_part != head_part) {
+          ASSERT(_adj_matrix[tail_part][head_part] >= 2);
+          if (_adj_matrix[tail_part][head_part] == 2) {
+            edges.emplace_back(tail_part, head_part);
+          }
+          _adj_matrix[tail_part][head_part] -= 2;
+        }
+      }
+    }
+
+    for (const auto& edge : edges) {
+      _detector.disconnect(edge.first, edge.second);
+    }
+  }
+
+  void addHypernode(const HypernodeID hn) {
+    std::vector<std::pair<std::size_t, std::size_t>> edges;
+
+    // hn --> head
+    for (const HyperedgeID& he : _hg.incidentTailEdges(hn)) {
+      for (const HypernodeID& head : _hg.heads(he)) {
+        const PartitionID tail_part = _hg.partID(hn);
+        const PartitionID head_part = _hg.partID(head);
+        if (tail_part != head_part) {
+          if (_adj_matrix[tail_part][head_part] == 0) {
+            edges.emplace_back(tail_part, head_part);
+          }
+          ++_adj_matrix[tail_part][head_part];
+        }
+      }
+    }
+
+    // tail --> hn
+    for (const HyperedgeID& he : _hg.incidentHeadEdges(hn)) {
+      for (const HypernodeID& tail : _hg.tails(he)) {
+        const PartitionID tail_part = _hg.partID(tail);
+        const PartitionID head_part = _hg.partID(hn);
+        if (tail_part != head_part) {
+          if (_adj_matrix[tail_part][head_part] == 0) {
+            edges.emplace_back(tail_part, head_part);
+          }
+          ++_adj_matrix[tail_part][head_part];
+        }
+      }
+    }
+
+    if (!edges.empty()) {
+      notifyGraphChanged();
+      _detector.bulkConnect(edges);
+      _num_edges += edges.size();
+    }
+  }
+
+  void addHypernodePostUncontraction(const HypernodeID hn, const HypernodeID partner) {
+    std::vector<std::pair<std::size_t, std::size_t>> edges;
+
+    // hn --> head
+    for (const HyperedgeID& he : _hg.incidentTailEdges(hn)) {
+      for (const HypernodeID& head : _hg.heads(he)) {
+        const PartitionID tail_part = _hg.partID(hn);
+        const PartitionID head_part = _hg.partID(head);
+        if (tail_part != head_part) {
+          if (_adj_matrix[tail_part][head_part] == 0) {
+            edges.emplace_back(tail_part, head_part);
+          }
+          _adj_matrix[tail_part][head_part] += (head == partner) ? 1 : 2;
+        }
+      }
+    }
+
+    // tail --> hn
+    for (const HyperedgeID& he : _hg.incidentHeadEdges(hn)) {
+      for (const HypernodeID& tail : _hg.tails(he)) {
+        const PartitionID tail_part = _hg.partID(tail);
+        const PartitionID head_part = _hg.partID(hn);
+        if (tail_part != head_part) {
+          if (_adj_matrix[tail_part][head_part] == 0) {
+            edges.emplace_back(tail_part, head_part);
+          }
+          _adj_matrix[tail_part][head_part] += (tail == partner) ? 1 : 2;
+        }
+      }
+    }
+
+    if (!edges.empty()) {
+      notifyGraphChanged();
+      _detector.bulkConnect(edges);
+      _num_edges += edges.size();
+    }
+  }
+
+  void changeDeltaMatrixBy(const std::size_t u, const std::size_t v, const QEdgeWeight delta) {
+    if (_delta_matrix[u][v] == 0) {
+      _used_delta_entries.emplace_back(u, v);
+    }
+    _delta_matrix[u][v] += delta;
+  }
+
+  void resetDeltaMatrix() {
+    for (const auto& entry : _used_delta_entries) {
+      _delta_matrix[entry.first][entry.second] = 0;
+    }
+    _used_delta_entries.clear();
+  }
+
+  void commitDeltaMatrix() {
+    for (const auto& entry : _used_delta_entries) {
+      const QNodeID u = entry.first;
+      const QNodeID v = entry.second;
+      _adj_matrix[u][v] += _delta_matrix[u][v];
+      _delta_matrix[u][v] = 0;
+    }
+  }
+
   bool testChanges(const Edgelist& todo_remove, const Edgelist& todo_insert) {
     for (const auto& edge : todo_remove) {
       _detector.disconnect(edge.first, edge.second);
@@ -538,92 +678,84 @@ class QuotientGraph {
     return true; // no cycle
   }
 
-  /**!
-   * Construct the initial quotient graph based on a partitioned hypergraph.
-   */
-  void constructFromHypergraph() {
-    ASSERT(_context.partition.k > 0);
-
-    // clear previous quotient graph
-    _adjacency_matrix.clear();
-    _adjacency_matrix.resize(_context.partition.k);
+  void ASSERT_THAT_ADJACENCY_MATRIX_IS_CORRECT() {
+    AdjacencyMatrix tmp_matrix(numberOfNodes(), std::vector<QEdgeWeight>(numberOfNodes()));
 
     for (const HypernodeID& hn : _hg.nodes()) {
-      addHN(hn);
+      for (const HyperedgeID& he : _hg.incidentTailEdges(hn)) {
+        for (const HypernodeID& head : _hg.heads(he)) {
+          const PartitionID tail_part = _hg.partID(hn);
+          const PartitionID head_part = _hg.partID(head);
+          if (tail_part != head_part) {
+            ++tmp_matrix[tail_part][head_part];
+          }
+        }
+      }
+
+      // tail --> hn
+      for (const HyperedgeID& he : _hg.incidentHeadEdges(hn)) {
+        for (const HypernodeID& tail : _hg.tails(he)) {
+          const PartitionID tail_part = _hg.partID(tail);
+          const PartitionID head_part = _hg.partID(hn);
+          if (tail_part != head_part) {
+            ++tmp_matrix[tail_part][head_part];
+          }
+        }
+      }
     }
 
-    // add initial edges to the cycle detector
-    cycledetector::Edgelist initial_edges;
     for (QNodeID u = 0; u < numberOfNodes(); ++u) {
-      for (const auto& edge : _adjacency_matrix[u]) {
-        const QNodeID& v = edge.first;
-        const QEdgeWeight& weight = edge.second;
-        ASSERT(weight > 0);
-        initial_edges.emplace_back(u, v);
+      for (QNodeID v = 0; v < numberOfNodes(); ++v) {
+        ASSERT(tmp_matrix[u][v] == _adj_matrix[u][v], V(tmp_matrix[u][v]) << V(_adj_matrix[u][v]) << V(u) << V(v));
       }
     }
-    _detector.bulkConnect(initial_edges);
-
-    _changed = true;
   }
 
-  void removeHN(const HypernodeID hn) {
-    for (const HyperedgeID& he : _hg.incidentTailEdges(hn)) {
-      for (const HypernodeID& head : _hg.heads(he)) {
-        const PartitionID tail_part = _hg.partID(hn);
-        const PartitionID head_part = _hg.partID(head);
-        if (tail_part != head_part) {
-          ASSERT(_adjacency_matrix[tail_part][head_part] > 0);
-          --_adjacency_matrix[tail_part][head_part];
-        }
-      }
-    }
-    for (const HyperedgeID& he : _hg.incidentHeadEdges(hn)) {
-      for (const HypernodeID& tail : _hg.tails(he)) {
-        const PartitionID tail_part = _hg.partID(tail);
-        const PartitionID head_part = _hg.partID(hn);
-        if (tail_part != head_part) {
-          ASSERT(_adjacency_matrix[tail_part][head_part] > 0);
-          --_adjacency_matrix[tail_part][head_part];
-        }
-      }
-    }
-
-    _changed = true;
-  }
-
-  void addHN(const HypernodeID hn) {
-    for (const HyperedgeID& he : _hg.incidentTailEdges(hn)) {
-      for (const HypernodeID& head : _hg.heads(he)) {
-        const PartitionID tail_part = _hg.partID(hn);
-        const PartitionID head_part = _hg.partID(head);
-        if (tail_part != head_part) {
-          ++_adjacency_matrix[tail_part][head_part];
-        }
-      }
-    }
-    for (const HyperedgeID& he : _hg.incidentHeadEdges(hn)) {
-      for (const HypernodeID& tail : _hg.tails(he)) {
-        const PartitionID tail_part = _hg.partID(tail);
-        const PartitionID head_part = _hg.partID(hn);
-        if (tail_part != head_part) {
-          ++_adjacency_matrix[tail_part][head_part];
-        }
-      }
-    }
-
-    _changed = true;
-  }
+//  void ASSERT_THAT_DELTA_MATRIX_IS_CORRECT() {
+//    AdjacencyMatrix tmp_matrix(numberOfNodes(), std::vector<QEdgeWeight>(numberOfNodes()));
+//
+//    for (const HypernodeID& hn : _hg.nodes()) {
+//      for (const HyperedgeID& he : _hg.incidentTailEdges(hn)) {
+//        for (const HypernodeID& head : _hg.heads(he)) {
+//          const PartitionID tail_part = _hg.partID(hn);
+//          const PartitionID head_part = _hg.partID(head);
+//          if (tail_part != head_part) {
+//            ++tmp_matrix[tail_part][head_part];
+//          }
+//        }
+//      }
+//
+//      // tail --> hn
+//      for (const HyperedgeID& he : _hg.incidentHeadEdges(hn)) {
+//        for (const HypernodeID& tail : _hg.tails(he)) {
+//          const PartitionID tail_part = _hg.partID(tail);
+//          const PartitionID head_part = _hg.partID(hn);
+//          if (tail_part != head_part) {
+//            ++tmp_matrix[tail_part][head_part];
+//          }
+//        }
+//      }
+//    }
+//
+//    for (QNodeID u = 0; u < numberOfNodes(); ++u) {
+//      for (QNodeID v = 0; v < numberOfNodes(); ++v) {
+//        ASSERT(tmp_matrix[u][v] == _adj_matrix[u][v] + _delta_matrix[u][v],
+//               V(tmp_matrix[u][v]) << V(_adj_matrix[u][v]) << V(_delta_matrix[u][v]) << V(u) << V(v));
+//      }
+//    }
+//  }
 
   const Hypergraph& _hg;
   const Context& _context;
-  AdjacencyMatrix _adjacency_matrix;
-  Detector _detector;
-  bool _changed = false;
-  std::vector<QNodeID> _cached_ordering;
+  CycleDetector _detector;
+
+  AdjacencyMatrix _adj_matrix;
+  AdjacencyMatrix _delta_matrix;
+  std::vector<std::pair<std::size_t, std::size_t>> _used_delta_entries{};
+  QEdgeID _num_edges{0};
 };
 } // namespace ds
 
 using ds::QuotientGraph;
-using ds::QuotientMoveGraph;
+using ds::AdjacencyMatrixQuotientGraph;
 } // namespace kahypar

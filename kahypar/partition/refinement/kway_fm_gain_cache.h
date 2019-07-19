@@ -82,6 +82,9 @@ class KwayGainCache {
     return _cache[hn] != nullptr;
   }
 
+  KAHYPAR_ATTRIBUTE_ALWAYS_INLINE bool nonemptyEntryExists(const HypernodeID hn) const {
+    return _cache[hn] != nullptr && cacheElement(hn)->numAdjacentParts() > 0;
+  }
 
   KAHYPAR_ATTRIBUTE_ALWAYS_INLINE void removeEntryDueToConnectivityDecrease(const HypernodeID hn,
                                                                             const PartitionID part) {

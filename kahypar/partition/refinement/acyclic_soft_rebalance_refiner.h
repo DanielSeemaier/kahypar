@@ -24,7 +24,7 @@ class AcyclicSoftRebalanceRefiner final : public IRefiner {
   using GainCache = KwayGainCache<Gain>;
   using KWayRefinementPQ = ds::KWayPriorityQueue<HypernodeID, Gain, std::numeric_limits<Gain>>;
 
-  AcyclicSoftRebalanceRefiner(Hypergraph& hypergraph, const Context& context, QuotientGraph<DFSCycleDetector>& qg) :
+  AcyclicSoftRebalanceRefiner(Hypergraph& hypergraph, const Context& context, AdjacencyMatrixQuotientGraph<DFSCycleDetector>& qg) :
     _hg(hypergraph),
     _context(context),
     _qg(qg),
@@ -157,7 +157,7 @@ class AcyclicSoftRebalanceRefiner final : public IRefiner {
     for (std::size_t i = moves.size(); i > 0; --i) {
       const Move& move = moves[i - 1];
       bool changed;
-      const bool success = _qg.update(move.hn, move.to, move.from, changed);
+      const bool success = _qg.testAndUpdateBeforeMovement(move.hn, move.to, move.from, changed);
       ASSERT(success);
       if (changed) {
         _skip_pq_updates = true;
@@ -176,7 +176,7 @@ class AcyclicSoftRebalanceRefiner final : public IRefiner {
       }
       _hg.mark(move.hn);
       bool changed = false;
-      const bool success = _qg.update(move.hn, move.from, move.to, changed);
+      const bool success = _qg.testAndUpdateBeforeMovement(move.hn, move.from, move.to, changed);
       ASSERT(success);
       if (changed) {
         _skip_pq_updates = true;
@@ -315,7 +315,7 @@ class AcyclicSoftRebalanceRefiner final : public IRefiner {
       DBG << "Revert" << V(hn) << V(from_part) << V(to_part);
       _hg.changeNodePart(hn, from_part, to_part);
       HighResClockTimepoint start = std::chrono::high_resolution_clock::now();
-      const bool success = _qg.update(hn, from_part, to_part);
+      const bool success = _qg.testAndUpdateBeforeMovement(hn, from_part, to_part);
       ASSERT(success);
       HighResClockTimepoint end = std::chrono::high_resolution_clock::now();
       Timer::instance().add(_context, Timepoint::cycle_detector,
@@ -345,7 +345,7 @@ class AcyclicSoftRebalanceRefiner final : public IRefiner {
 
     ASSERT_THAT_GAIN_CACHE_IS_VALID();
     ASSERT(_qg.isAcyclic(), "Rollback produced a cyclic quotient graph!");
-    ASSERT(QuotientGraph<DFSCycleDetector>(_hg, _context).isAcyclic(),
+    ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(_hg, _context).isAcyclic(),
            "Rollback produced a cyclic quotient graph not detected by the QG!");
 
     DBG << "Imbalance before _soft_rebalance::refineImpl():" << initial_imbalance;
@@ -502,7 +502,7 @@ class AcyclicSoftRebalanceRefiner final : public IRefiner {
 
     _hg.resetHypernodeState();
     _ordering.clear();
-    const auto& new_order = _qg.computeStrictTopologicalOrdering();
+    const auto& new_order = _qg.topologicalOrdering();
     _ordering.insert(_ordering.begin(), new_order.begin(), new_order.end());
     _inverse_ordering.clear();
     _inverse_ordering.resize(_context.partition.k);
@@ -518,12 +518,7 @@ class AcyclicSoftRebalanceRefiner final : public IRefiner {
 
   bool orderingStillTopological() const {
     for (PartitionID u = 0; u < _context.partition.k; ++u) {
-      for (const auto& edge : _qg.outs(u)) {
-        const PartitionID& v = edge.first;
-        const HyperedgeWeight& weight = edge.second;
-        if (weight == 0) { // not a real edge
-          continue;
-        }
+      for (const auto& v : _qg.outs(u)) {
         if (_ordering[u] > _ordering[v]) {
           return false;
         }
@@ -534,14 +529,9 @@ class AcyclicSoftRebalanceRefiner final : public IRefiner {
   }
 
   bool orderingStillTopologicalDebug() const {
-    QuotientGraph<DFSCycleDetector> qg(_hg, _context);
+    AdjacencyMatrixQuotientGraph<DFSCycleDetector> qg(_hg, _context);
     for (PartitionID u = 0; u < _context.partition.k; ++u) {
-      for (const auto& edge : qg.outs(u)) {
-        const PartitionID& v = edge.first;
-        const HyperedgeWeight& weight = edge.second;
-        if (weight == 0) { // not a real edge
-          continue;
-        }
+      for (const auto& v : qg.outs(u)) {
         if (_ordering[u] > _ordering[v]) {
           return false;
         }
@@ -891,7 +881,7 @@ class AcyclicSoftRebalanceRefiner final : public IRefiner {
 
   Hypergraph& _hg;
   Context _context;
-  QuotientGraph<DFSCycleDetector>& _qg;
+  AdjacencyMatrixQuotientGraph<DFSCycleDetector>& _qg;
 
   KWayRefinementPQ _pq;
   std::vector<BinaryMaxHeap<PartitionID, Gain>> _pq_inst;

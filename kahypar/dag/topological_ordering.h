@@ -61,7 +61,7 @@ std::vector<HypernodeID> calculateWeakTopologicalOrdering(const Hypergraph& hg) 
   return topological_ordering;
 }
 
-std::vector<HypernodeID> calculateTopologicalOrdering(const Hypergraph& hg) {
+std::vector<HypernodeID> calculateTopologicalOrdering(const Hypergraph& hg, bool randomize = true) {
   std::vector<HypernodeID> rank(hg.initialNumNodes());
   for (const HyperedgeID& he : hg.edges()) {
     for (const HypernodeID& hh : hg.heads(he)) {
@@ -78,7 +78,14 @@ std::vector<HypernodeID> calculateTopologicalOrdering(const Hypergraph& hg) {
 
   std::vector<HypernodeID> topological_ordering;
   while (!candidates.empty()) {
-    HypernodeID u = Randomize::instance().popRandomElement(candidates);
+    HypernodeID u;
+    if (randomize) {
+      u = Randomize::instance().popRandomElement(candidates);
+    } else {
+      u = candidates.back();
+      candidates.pop_back();
+    }
+
     topological_ordering.push_back(u);
 
     for (const HyperedgeID &he : hg.incidentEdges(u)) {
@@ -102,7 +109,7 @@ std::vector<HypernodeID> calculateTopologicalOrdering(const Hypergraph& hg) {
 
 bool isAcyclic(const Hypergraph& hg) {
   try {
-    calculateTopologicalOrdering(hg);
+    calculateTopologicalOrdering(hg, false);
     return true;
   } catch (const CyclicGraphException& e) {
     return false;
