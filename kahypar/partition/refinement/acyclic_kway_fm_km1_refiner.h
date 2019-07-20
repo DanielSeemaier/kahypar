@@ -137,10 +137,13 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
                           std::chrono::duration<double>(end - start).count());
   }
 
-  void postUncontraction(const HypernodeID u, const HypernodeID v) override {
+  void postUncontraction(const HypernodeID u, const std::vector<HypernodeID>&& partners) override {
+    ASSERT(partners.size() == 1);
+    const HypernodeID v = partners.front();
+
     DBG << "postUncontraction(" << u << "," << v << ")";
     HighResClockTimepoint start = std::chrono::high_resolution_clock::now();
-    _qg.postUncontraction(u, v);
+    _qg.postUncontraction(u, {v});
     HighResClockTimepoint end = std::chrono::high_resolution_clock::now();
     Timer::instance().add(_context, Timepoint::cycle_detector,
                           std::chrono::duration<double>(end - start).count());
@@ -349,13 +352,13 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
       const HypernodeID hn = _performed_moves[last_index].hn;
       const PartitionID from_part = _performed_moves[last_index].to_part;
       const PartitionID to_part = _performed_moves[last_index].from_part;
-      _hg.changeNodePart(hn, from_part, to_part);
       HighResClockTimepoint start = std::chrono::high_resolution_clock::now();
       const bool success = _qg.testAndUpdateBeforeMovement(hn, from_part, to_part);
       ASSERT(success);
       HighResClockTimepoint end = std::chrono::high_resolution_clock::now();
       Timer::instance().add(_context, Timepoint::cycle_detector,
                             std::chrono::duration<double>(end - start).count());
+      _hg.changeNodePart(hn, from_part, to_part);
       _moves.pop_back();
       --last_index;
       --_num_moves;

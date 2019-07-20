@@ -34,6 +34,7 @@
 #include "kahypar/partition/metrics.h"
 #include "kahypar/utils/math.h"
 #include "kahypar/utils/timer.h"
+#include "kahypar/dag/quotient_graph.h"
 
 namespace kahypar {
 namespace io {
@@ -227,6 +228,8 @@ inline void printPartitioningResults(const Hypergraph& hypergraph,
     printPartSizesAndWeights(hypergraph);
 
     const auto& timings = Timer::instance().result();
+
+    LOG << "\nAcyclic =" << AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hypergraph, context).isAcyclic();
 
     LOG << "\nTimings:";
     LOG << "Cycle Detector                     =" << timings.total_cycle_detector << "s";

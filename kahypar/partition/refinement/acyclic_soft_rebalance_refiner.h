@@ -1,5 +1,21 @@
 #pragma once
 
+#include <array>
+
+#include "kahypar/datastructure/fast_reset_array.h"
+#include "kahypar/datastructure/fast_reset_flag_array.h"
+#include "kahypar/datastructure/sparse_map.h"
+#include "kahypar/dag/quotient_graph.h"
+#include "kahypar/definitions.h"
+#include "kahypar/meta/template_parameter_to_string.h"
+#include "kahypar/partition/context.h"
+#include "kahypar/partition/metrics.h"
+#include "kahypar/partition/refinement/i_refiner.h"
+#include "kahypar/partition/refinement/km1_gain_manager.h"
+#include "kahypar/datastructure/kway_priority_queue.h"
+#include "kahypar/utils/randomize.h"
+#include "kahypar/utils/timer.h"
+
 namespace kahypar {
 class AcyclicSoftRebalanceRefiner final : public IRefiner {
  private:
@@ -29,12 +45,8 @@ class AcyclicSoftRebalanceRefiner final : public IRefiner {
     _context(context),
     _qg(qg),
     _pq(context.partition.k),
-    _new_adjacent_part(_hg.initialNumNodes(), Hypergraph::kInvalidPartition),
     _min_successor_part(_hg.initialNumNodes()),
     _max_predecessor_part(_hg.initialNumNodes()),
-    _gain_cache(_hg.initialNumNodes(), _context.partition.k),
-    _tmp_gains(_context.partition.k, 0),
-    _nonadjacent_gain_cache(_hg.initialNumNodes()),
     _updated_neighbors(_hg.initialNumNodes(), false) {}
 
   ~AcyclicSoftRebalanceRefiner() override = default;
@@ -45,56 +57,12 @@ class AcyclicSoftRebalanceRefiner final : public IRefiner {
   AcyclicSoftRebalanceRefiner(AcyclicSoftRebalanceRefiner&&) = delete;
   AcyclicSoftRebalanceRefiner& operator=(AcyclicSoftRebalanceRefiner&&) = delete;
 
-  void changeEpsilon(const double epsilon) {
-    _context.partition.epsilon = epsilon;
-    _context.setupPartWeights(_hg.totalWeight());
-  }
-
-  const std::vector<Move>& moves() {
+  const std::vector<Move>& moves() const {
     return _moves;
   }
 
-  std::size_t numMoves() const {
-    return _num_moves;
-  }
+  void printSummary() const override {
 
-  double improvedImbalanceBy() const {
-    return _improved_imbalance_by;
-  }
-
-  std::size_t numRejectedDueToBalance() const {
-    return _num_rejected_due_to_balance;
-  }
-
-  std::size_t numRejectedDueToKM1() const {
-    return _num_rejected_due_to_km1;
-  }
-
-  void enableRefinementNodes(std::vector<HypernodeID>& refinement_nodes) {
-    DBG << "SoftRebalance::enableRefinementNodes(" << refinement_nodes << ")";
-    _hg.resetHypernodeState();
-    _updated_neighbors.resetUsedEntries();
-
-    for (const HypernodeID& hn : refinement_nodes) {
-      DBGC(hn == hn_to_debug) << "Reset" << V(hn);
-      _gain_cache.clear(hn);
-      initializeGainCacheFor(hn);
-      reinitNodeWithNeighbors(hn, false);
-    }
-
-    _gain_cache.resetDelta();
-  }
-
-  std::size_t numPosGains() const {
-    return _num_pos_gain_hns;
-  }
-
-  std::size_t numNegGains() const {
-    return _num_neg_gain_hns;
-  }
-
-  std::size_t numZeroGains() const {
-    return _num_zero_gain_hns;
   }
 
   void performMovesAfterHardRebalance(const std::vector<Move>& moves,
@@ -462,35 +430,6 @@ class AcyclicSoftRebalanceRefiner final : public IRefiner {
         initializeMinMaxNeighborsFor(pin);
       }
     }
-//    for (const HyperedgeID& he : _hg.incidentTailEdges(moved_hn)) {
-//      for (const HypernodeID& head : _hg.heads(he)) {
-//        if (_updated_neighbors.get(head) || _hg.marked(head)) {
-//          continue;
-//        }
-//        const bool reinitialize = _max_predecessor_part[head] == _ordering[from_part]
-//                                  || _max_predecessor_part[head] < _ordering[to_part];
-//        DBGC(head == hn_to_debug) << V(head) << V(reinitialize);
-//        if (reinitialize) {
-//          initializeMinMaxNeighborsFor(head);
-//          _updated_neighbors.set(head, true);
-//        }
-//      }
-//    }
-//
-//    for (const HyperedgeID& he : _hg.incidentHeadEdges(moved_hn)) {
-//      for (const HypernodeID& tail : _hg.tails(he)) {
-//        if (_updated_neighbors.get(tail) || _hg.marked(tail)) {
-//          continue;
-//        }
-//        const bool reinitialize = _min_successor_part[tail] == _ordering[from_part]
-//                                  || _min_successor_part[tail] > _ordering[to_part];
-//        DBGC(tail == hn_to_debug) << V(tail) << V(reinitialize);
-//        if (reinitialize) {
-//          initializeMinMaxNeighborsFor(tail);
-//          _updated_neighbors.set(tail, true);
-//        }
-//      }
-//    }
   }
 
   /*********************************************************************************
@@ -516,31 +455,6 @@ class AcyclicSoftRebalanceRefiner final : public IRefiner {
     initializeMinMaxNeighbors();
   }
 
-  bool orderingStillTopological() const {
-    for (PartitionID u = 0; u < _context.partition.k; ++u) {
-      for (const auto& v : _qg.outs(u)) {
-        if (_ordering[u] > _ordering[v]) {
-          return false;
-        }
-      }
-    }
-
-    return true;
-  }
-
-  bool orderingStillTopologicalDebug() const {
-    AdjacencyMatrixQuotientGraph<DFSCycleDetector> qg(_hg, _context);
-    for (PartitionID u = 0; u < _context.partition.k; ++u) {
-      for (const auto& v : qg.outs(u)) {
-        if (_ordering[u] > _ordering[v]) {
-          return false;
-        }
-      }
-    }
-
-    return true;
-  }
-
   /*********************************************************************************
    * GAIN UPDATE METHODS
    *********************************************************************************/
@@ -548,44 +462,6 @@ class AcyclicSoftRebalanceRefiner final : public IRefiner {
     DBG << "move(" << V(moved_hn) << V(from_part) << V(to_part) << ")";
     ASSERT(_hg.marked(moved_hn));
 
-    _new_adjacent_part.resetUsedEntries();
-
-    ASSERT(!_gain_cache.entryExists(moved_hn, from_part), V(moved_hn) << V(from_part));
-    if (!_gain_cache.entryExists(moved_hn, to_part)) {
-      DBGC(moved_hn == hn_to_debug) << V(to_part) << V(_nonadjacent_gain_cache[moved_hn]);
-      _gain_cache.initializeEntry(moved_hn, to_part, _nonadjacent_gain_cache[moved_hn]);
-    }
-
-    bool moved_hn_remains_connected_to_from_part = false;
-    for (const HyperedgeID& he : _hg.incidentEdges(moved_hn)) {
-      const HypernodeID pins_in_source_part_after = _hg.pinCountInPart(he, from_part);
-      moved_hn_remains_connected_to_from_part |= pins_in_source_part_after != 0;
-
-      if (pins_in_source_part_after == 0 && _hg.pinCountInPart(he, to_part) != 1) {
-        ASSERT(_gain_cache.entryExists(moved_hn), V(moved_hn));
-        for (const PartitionID& part : _gain_cache.adjacentParts(moved_hn)) {
-          if (part != from_part && part != to_part) {
-            _gain_cache.updateExistingEntry(moved_hn, part, -_hg.edgeWeight(he));
-          }
-        }
-      } else if (pins_in_source_part_after != 0 && _hg.pinCountInPart(he, to_part) == 1) {
-        ASSERT(_gain_cache.entryExists(moved_hn), V(moved_hn));
-        for (const PartitionID& part : _gain_cache.adjacentParts(moved_hn)) {
-          if (part != from_part && part != to_part) {
-            _gain_cache.updateExistingEntry(moved_hn, part, _hg.edgeWeight(he));
-          }
-        }
-      }
-
-      updateNeighborsOfMovedHN(moved_hn, from_part, to_part, he);
-    }
-    _gain_cache.updateFromAndToPartOfMovedHN(moved_hn, from_part, to_part, moved_hn_remains_connected_to_from_part);
-
-    // TODO why doesn't it work without this?!
-    _gain_cache.clear(moved_hn);
-    initializeGainCacheFor(moved_hn);
-
-    if (!_skip_pq_updates) {
       updateMinMaxNeighborsAfterMove(moved_hn, from_part, to_part);
       ASSERT([&]() {
         for (const HypernodeID& hn : _hg.nodes()) {
@@ -603,99 +479,11 @@ class AcyclicSoftRebalanceRefiner final : public IRefiner {
         }
         return true;
       }());
-    }
 
-    ASSERT_THAT_GAIN_CACHE_IS_VALID();
   }
 
-  void updateNeighborsOfMovedHN(const HypernodeID moved_hn,
-                                const PartitionID from_part,
-                                const PartitionID to_part,
-                                const HyperedgeID he) {
-    const HypernodeID pin_count_from_part_before_move = _hg.pinCountInPart(he, from_part) + 1;
-    const HypernodeID pin_count_to_part_after_move = _hg.pinCountInPart(he, to_part);
-    const bool move_decreased_connectivity = pin_count_from_part_before_move - 1 == 0;
-    const bool move_increased_connectivity = pin_count_to_part_after_move == 1;
-    const HyperedgeWeight he_weight = _hg.edgeWeight(he);
-    const PinState pin_state(pin_count_from_part_before_move == 1,
-                             pin_count_to_part_after_move == 1,
-                             pin_count_from_part_before_move == 2,
-                             pin_count_to_part_after_move == 2);
-
-    for (const HypernodeID& pin : _hg.pins(he)) {
-      DBGC(pin == hn_to_debug) << "updateNeighborsOfMovedHN.for(" << V(pin) << V(_hg.partID(pin))
-                               << V(moved_hn) << V(from_part) << V(to_part) << V(he) << ")";
-      if (!_hg.marked(pin) && !_pq_inst[pin].empty()) {
-        ASSERT(pin != moved_hn, V(pin));
-        connectivityUpdateForCache(pin, from_part, to_part, he,
-                                   move_decreased_connectivity,
-                                   move_increased_connectivity);
-        deltaGainUpdates<true>(pin, from_part, to_part, he);
-      } else if (pin != moved_hn) {
-        connectivityUpdateForCache(pin, from_part, to_part, he,
-                                   move_decreased_connectivity,
-                                   move_increased_connectivity);
-        deltaGainUpdates<false>(pin, from_part, to_part, he);
-      }
-    }
-  }
-
-  // deltaGainUpdate for pin after another pin in he was moved from from_part to to_part
-  template<bool update_pq>
-  void deltaGainUpdates(const HypernodeID pin,
-                        const PartitionID from_part,
-                        const PartitionID to_part,
-                        const HyperedgeID he) {
-    const HypernodeID pin_count_from_part_before_move = _hg.pinCountInPart(he, from_part) + 1;
-    const HypernodeID pin_count_to_part_after_move = _hg.pinCountInPart(he, to_part);
-    const HyperedgeWeight he_weight = _hg.edgeWeight(he);
-    const PinState pin_state(pin_count_from_part_before_move == 1,
-                             pin_count_to_part_after_move == 1,
-                             pin_count_from_part_before_move == 2,
-                             pin_count_to_part_after_move == 2);
-    const PartitionID source_part = _hg.partID(pin);
-    if (source_part == from_part) {
-      if (pin_state.two_pins_in_from_part_before) {
-        for (const PartitionID& part : _gain_cache.adjacentParts(pin)) {
-          if (_new_adjacent_part.get(pin) != part) {
-            if (update_pq) {
-              updatePin(pin, part, he, he_weight);
-            }
-            _gain_cache.updateExistingEntry(pin, part, he_weight);
-          }
-        }
-      }
-    } else if (source_part == to_part && pin_state.two_pins_in_to_part_after) {
-      for (const PartitionID& part : _gain_cache.adjacentParts(pin)) {
-        if (_new_adjacent_part.get(pin) != part) {
-          if (update_pq) {
-            updatePin(pin, part, he, -he_weight);
-          }
-          _gain_cache.updateExistingEntry(pin, part, -he_weight);
-        }
-      }
-    }
-
-    if (pin_state.one_pin_in_from_part_before && _gain_cache.entryExists(pin, from_part)) {
-      if (update_pq) {
-        updatePin(pin, from_part, he, -he_weight);
-      }
-      _gain_cache.updateExistingEntry(pin, from_part, -he_weight);
-    }
-
-    if (pin_state.one_pin_in_to_part_after && _new_adjacent_part.get(pin) != to_part) {
-      if (update_pq) {
-        updatePin(pin, to_part, he, he_weight);
-      }
-      _gain_cache.updateExistingEntry(pin, to_part, he_weight);
-    }
-  }
 
   void updatePin(const HypernodeID pin, const PartitionID part, const HyperedgeID he, const Gain delta) {
-    if (_skip_pq_updates) {
-      return;
-    }
-
     const PartitionID source_part = _hg.partID(pin);
     if (movableTo(pin, part)) {
       ASSERT(_pq_inst[pin].contains(part));
@@ -727,56 +515,7 @@ class AcyclicSoftRebalanceRefiner final : public IRefiner {
            && _ordering[part] <= _min_successor_part[hn];
   }
 
-  void connectivityUpdateForCache(const HypernodeID pin, const PartitionID from_part,
-                                  const PartitionID to_part, const HyperedgeID he,
-                                  const bool move_decreased_connectivity,
-                                  const bool move_increased_connectivity) {
-    if (move_decreased_connectivity && _gain_cache.entryExists(pin, from_part) &&
-        !hypernodeIsConnectedToPart(pin, from_part)) {
-      _gain_cache.removeEntryDueToConnectivityDecrease(pin, from_part);
-    }
-    if (move_increased_connectivity && !_gain_cache.entryExists(pin, to_part)) {
-      _gain_cache.addEntryDueToConnectivityIncrease(pin, to_part, gainInducedByHypergraph(pin, to_part));
-      _new_adjacent_part.set(pin, to_part);
-    }
-  }
-
-  void connectivityUpdate(const HypernodeID pin, const PartitionID from_part,
-                          const PartitionID to_part, const HyperedgeID he,
-                          const bool move_decreased_connectivity,
-                          const bool move_increased_connectivity) KAHYPAR_ATTRIBUTE_ALWAYS_INLINE {
-    ONLYDEBUG(he);
-    const PartitionID source_part = _hg.partID(pin);
-    if (move_decreased_connectivity && _gain_cache.entryExists(pin, from_part) &&
-        !hypernodeIsConnectedToPart(pin, from_part)) {
-      // switch to _nonadjacent_gain_cache
-      if (!_skip_pq_updates && movableTo(pin, from_part)) {
-        updatePinTo(pin, from_part, _nonadjacent_gain_cache[pin]);
-      }
-      _gain_cache.removeEntryDueToConnectivityDecrease(pin, from_part);
-    }
-    if (move_increased_connectivity && !_gain_cache.entryExists(pin, to_part)) {
-      Gain gain = GainCache::kNotCached;
-      if (_gain_cache.entryExists(pin, to_part)) {
-        gain = _gain_cache.entry(pin, to_part);
-      } else {
-        gain = gainInducedByHypergraph(pin, to_part);
-        _gain_cache.addEntryDueToConnectivityIncrease(pin, to_part, gain);
-      }
-      // switch to _gain_cache
-      if (!_skip_pq_updates && likely(!_hg.isFixedVertex(pin)) && movableTo(pin, to_part)) {
-        updatePinTo(pin, to_part, gain);
-      }
-      _new_adjacent_part.set(pin, to_part);
-    }
-  }
-
-  Gain cachedGainValue(const HypernodeID hn, const PartitionID to) const {
-    DBGC(hn == hn_to_debug) << V(hn) << V(to) << V(_gain_cache.entryExists(hn, to)) << V(_nonadjacent_gain_cache[hn]);
-    return _gain_cache.entryExists(hn, to) ? _gain_cache.entry(hn, to)
-                                           : _nonadjacent_gain_cache[hn]; // TODO entryExists really necessary?
-  }
-
+#ifdef KAHYPAR_USE_ASSERTIONS
   Gain gainInducedByHyperedge(const HypernodeID hn, const HyperedgeID he, const PartitionID target_part) const {
     const HypernodeID pins_in_source_part = _hg.pinCountInPart(he, _hg.partID(hn));
     const HypernodeID pins_in_target_part = _hg.pinCountInPart(he, target_part);
@@ -796,41 +535,7 @@ class AcyclicSoftRebalanceRefiner final : public IRefiner {
     return gain;
   }
 
-  void initializeGainCache() {
-    for (const HypernodeID& hn : _hg.nodes()) {
-      initializeGainCacheFor(hn);
-    }
-  }
-
-  void initializeGainCacheFor(const HypernodeID hn) {
-    DBGC(hn == hn_to_debug) << "initializeGainCacheFor(" << V(hn) << ")";
-
-    _tmp_gains.clear();
-    const PartitionID source_part = _hg.partID(hn);
-    HyperedgeWeight internal = 0;
-    for (const HyperedgeID& he : _hg.incidentEdges(hn)) {
-      const HyperedgeWeight he_weight = _hg.edgeWeight(he);
-      internal += _hg.pinCountInPart(he, source_part) != 1 ? he_weight : 0;
-      for (const PartitionID& part : _hg.connectivitySet(he)) {
-        _tmp_gains[part] += he_weight;
-      }
-    }
-
-    for (const auto& target_part : _tmp_gains) {
-      if (target_part.key == source_part) {
-        ASSERT(!_gain_cache.entryExists(hn, source_part), V(hn) << V(source_part));
-        continue;
-      }
-      ASSERT(target_part.value - internal == gainInducedByHypergraph(hn, target_part.key),
-             V(gainInducedByHypergraph(hn, target_part.key)) << V(target_part.value - internal));
-      DBGC(hn == hn_to_debug) << V(target_part.key) << V(target_part.value - internal);
-      _gain_cache.initializeEntry(hn, target_part.key, target_part.value - internal);
-    }
-
-    _nonadjacent_gain_cache[hn] = -internal;
-  }
-
-  bool hypernodeIsConnectedToPart(const HypernodeID pin, const PartitionID part) const {
+  bool isConnectedTo(const HypernodeID pin, const PartitionID part) const {
     for (const HyperedgeID& he : _hg.incidentEdges(pin)) {
       if (_hg.pinCountInPart(he, part) > 0) {
         return true;
@@ -838,49 +543,10 @@ class AcyclicSoftRebalanceRefiner final : public IRefiner {
     }
     return false;
   }
-
-  void ASSERT_THAT_GAIN_CACHE_IS_VALID() {
-    ASSERT([&]() {
-      for (const HypernodeID& hn : _hg.nodes()) {
-        ASSERT_THAT_CACHE_IS_VALID_FOR_HN(hn);
-      }
-      return true;
-    }(), "Gain Cache inconsistent");
-  }
-
-  void ASSERT_THAT_CACHE_IS_VALID_FOR_HN(const HypernodeID hn) const {
-    if (_gain_cache.entryExists(hn)) {
-      std::vector<bool> adjacent_parts(_context.partition.k, false);
-      for (PartitionID part = 0; part < _context.partition.k; ++part) {
-        if (hypernodeIsConnectedToPart(hn, part)) {
-          adjacent_parts[part] = true;
-        }
-        if (_gain_cache.entry(hn, part) != GainCache::kNotCached) {
-          ASSERT(_gain_cache.entryExists(hn, part), V(hn) << V(part));
-          ASSERT(_gain_cache.entry(hn, part) == gainInducedByHypergraph(hn, part),
-                 V(hn) << V(part) << V(_gain_cache.entry(hn, part)) <<
-                       V(gainInducedByHypergraph(hn, part)) << V(_hg.partID(hn)));
-          ASSERT(hypernodeIsConnectedToPart(hn, part), V(hn) << V(part));
-        } else if (_hg.partID(hn) != part && !hypernodeIsConnectedToPart(hn, part)) {
-          ASSERT(!_gain_cache.entryExists(hn, part), V(hn) << V(part)
-                                                           << "_hg.partID(hn) != part");
-          ASSERT(_gain_cache.entry(hn, part) == GainCache::kNotCached, V(hn) << V(part));
-        }
-        if (_hg.partID(hn) == part) {
-          ASSERT(!_gain_cache.entryExists(hn, part), V(hn) << V(part)
-                                                           << "_hg.partID(hn) == part");
-          ASSERT(_gain_cache.entry(hn, part) == GainCache::kNotCached,
-                 V(hn) << V(part));
-        }
-      }
-      for (const PartitionID& part : _gain_cache.adjacentParts(hn)) {
-        ASSERT(adjacent_parts[part], V(part));
-      }
-    }
-  }
+#endif // KAHYPAR_USE_ASSERTIONS
 
   Hypergraph& _hg;
-  Context _context;
+  const Context& _context;
   AdjacencyMatrixQuotientGraph<DFSCycleDetector>& _qg;
 
   KWayRefinementPQ _pq;
@@ -889,12 +555,6 @@ class AcyclicSoftRebalanceRefiner final : public IRefiner {
   std::vector<PartitionID> _min_successor_part;
   std::vector<PartitionID> _max_predecessor_part;
 
-  std::vector<PartitionID> _ordering;
-  std::vector<PartitionID> _inverse_ordering;
-  GainCache _gain_cache;
-  ds::SparseMap<PartitionID, Gain> _tmp_gains;
-  std::vector<Gain> _nonadjacent_gain_cache;
-  ds::FastResetArray<PartitionID> _new_adjacent_part;
   std::vector<Move> _moves;
 
   ds::FastResetArray<bool> _updated_neighbors;
@@ -904,13 +564,6 @@ class AcyclicSoftRebalanceRefiner final : public IRefiner {
   std::size_t _num_rejected_due_to_balance = 0;
   std::size_t _num_rejected_due_to_km1 = 0;
 
-  std::vector<HypernodeID> _marked_hns;
-
-  bool _skip_pq_updates = false;
   double _improved_imbalance_by = 0.0;
-
-  std::size_t _num_zero_gain_hns = 0;
-  std::size_t _num_pos_gain_hns = 0;
-  std::size_t _num_neg_gain_hns = 0;
 };
 } // namespace kahypar

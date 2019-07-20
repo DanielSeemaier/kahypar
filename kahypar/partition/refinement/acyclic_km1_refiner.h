@@ -126,30 +126,6 @@ class AcyclicKMinusOneRefiner final : public IRefiner {
     return stop;
   }
 
-//  std::vector<Move> mergeMoves(const std::vector<Move>& moves) {
-//    std::vector<std::size_t> first(_hg.initialNumNodes());
-//    std::vector<std::size_t> last(_hg.initialNumNodes());
-//    for (std::size_t i = moves.size(); i > 0; --i) {
-//      const Move& move = moves[i - 1];
-//      ASSERT(move.hn < _hg.initialNumNodes());
-//      first[move.hn] = i - 1;
-//    }
-//
-//    for (std::size_t i = 0; i < moves.size(); ++i) {
-//      last[moves[i].hn] = i;
-//    }
-//
-//    std::vector<Move> merged;
-//    for (std::size_t i = 0; i < moves.size(); ++i) {
-//      const Move& move = moves[i];
-//      if (i == first[move.hn] && move.from != moves[last[move.hn]].to) {
-//        merged.emplace_back(move.hn, move.from, moves[last[move.hn]].to);
-//      }
-//    }
-//
-//    return merged;
-//  }
-
   Hypergraph& _hg;
   const Context& _original_context;
   Context _context;

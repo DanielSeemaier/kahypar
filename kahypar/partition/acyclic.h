@@ -65,7 +65,7 @@ static inline bool partitionVCycle(Hypergraph& hypergraph, ICoarsener& coarsener
                         std::chrono::duration<double>(end - start).count());
 
   io::printLocalSearchResults(context, hypergraph);
-  refiner.printFinalInfo();
+  refiner.printSummary();
   return improved_quality;
 }
 
@@ -153,18 +153,23 @@ static inline void partition(Hypergraph& hypergraph, const Context& context) {
     LOG << "Running hard rebalance to improve imbalance from" << imbalance << "to min{"
         << context.partition.final_epsilon << "," << context.partition.epsilon << "}";
 
-    AdjacencyMatrixQuotientGraph<DFSCycleDetector> qg(hypergraph, context);
-    AcyclicHardRebalanceRefiner hard_balance_refiner(hypergraph, context, qg);
-    UncontractionGainChanges changes;
-    changes.representative.push_back(0);
-    changes.contraction_partner.push_back(0);
+    Context balanced_context = context;
+    balanced_context.partition.epsilon = context.partition.final_epsilon;
+    balanced_context.setupPartWeights(hypergraph.totalWeight());
+
+    AdjacencyMatrixQuotientGraph<DFSCycleDetector> qg(hypergraph, balanced_context);
+    KMinusOneGainManager gain_manager(hypergraph, balanced_context);
+    gain_manager.initialize();
+    AcyclicHardRebalanceRefiner hard_balance_refiner(hypergraph, balanced_context, qg, gain_manager);
     hard_balance_refiner.initialize(0);
     Metrics current_metrics = {metrics::hyperedgeCut(hypergraph),
                                metrics::km1(hypergraph),
                                metrics::imbalance(hypergraph, context)};
+    UncontractionGainChanges changes{};
     std::vector<HypernodeID> refinement_nodes{};
-    hard_balance_refiner.changeEpsilon(context.partition.final_epsilon);
     hard_balance_refiner.refine(refinement_nodes, {0, 0}, changes, current_metrics);
+
+    hard_balance_refiner.printSummary();
   }
 }
 }  // namespace direct_kway

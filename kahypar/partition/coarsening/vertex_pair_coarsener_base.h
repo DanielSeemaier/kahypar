@@ -117,7 +117,7 @@ class VertexPairCoarsenerBase : public CoarsenerBase {
         _hg.uncontract(_history.back().contraction_memento);
       }
 
-      refiner.postUncontraction(refinement_nodes.front(), refinement_nodes.back());
+      refiner.postUncontraction(refinement_nodes.front(), {refinement_nodes.back()});
 
       performLocalSearch(refiner, refinement_nodes, current_metrics, changes);
       changes.representative[0] = 0;

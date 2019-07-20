@@ -24,7 +24,7 @@
 #include <string>
 #include <vector>
 
-#include "kahypar/dag/topological_ordering.h"
+
 #include "kahypar/definitions.h"
 #include "kahypar/macros.h"
 #include "kahypar/partition/coarsening/policies/fixed_vertex_acceptance_policy.h"
@@ -37,15 +37,15 @@
 #include "kahypar/partition/coarsening/vertex_pair_rater.h"
 
 namespace kahypar {
-template<class ScorePolicy = HeavyEdgeScore,
-         class HeavyNodePenaltyPolicy = NoWeightPenalty,
-         class CommunityPolicy = UseCommunityStructure,
-         class RatingPartitionPolicy = NormalPartitionPolicy,
-         class AcceptancePolicy = BestRatingPreferringUnmatched<>,
-         class FixedVertexPolicy = AllowFreeOnFixedFreeOnFreeFixedOnFixed,
-         typename RatingType = RatingType>
+template <class ScorePolicy = HeavyEdgeScore,
+          class HeavyNodePenaltyPolicy = NoWeightPenalty,
+          class CommunityPolicy = UseCommunityStructure,
+          class RatingPartitionPolicy = NormalPartitionPolicy,
+          class AcceptancePolicy = BestRatingPreferringUnmatched<>,
+          class FixedVertexPolicy = AllowFreeOnFixedFreeOnFreeFixedOnFixed,
+          typename RatingType = RatingType>
 class MLCoarsener final : public ICoarsener,
-                          private VertexPairCoarsenerBase<> {
+                          private VertexPairCoarsenerBase<>{
  private:
   static constexpr bool debug = false;
 
@@ -65,21 +65,19 @@ class MLCoarsener final : public ICoarsener,
   MLCoarsener(Hypergraph& hypergraph, const Context& context,
               const HypernodeWeight weight_of_heaviest_node) :
     Base(hypergraph, context, weight_of_heaviest_node),
-    _rater(_hg, _context) {}
+    _rater(_hg, _context) { }
 
   ~MLCoarsener() override = default;
 
   MLCoarsener(const MLCoarsener&) = delete;
-  MLCoarsener& operator=(const MLCoarsener&) = delete;
+  MLCoarsener& operator= (const MLCoarsener&) = delete;
 
   MLCoarsener(MLCoarsener&&) = delete;
-  MLCoarsener& operator=(MLCoarsener&&) = delete;
+  MLCoarsener& operator= (MLCoarsener&&) = delete;
 
  private:
   void coarsenImpl(const HypernodeID limit) override final {
     int pass_nr = 0;
-    const auto top = dag::calculateWeakTopologicalOrdering(_hg);
-
     std::vector<HypernodeID> current_hns;
     while (_hg.currentNumNodes() > limit) {
       DBG << V(pass_nr);
@@ -98,100 +96,24 @@ class MLCoarsener final : public ICoarsener,
       //             return _hg.nodeDegree(l) < _hg.nodeDegree(r);
       //           });
 
-      // TODO move these modifications this to own coarsening algorithm
-      std::vector<bool> marked(_hg.initialNumNodes(), false);
+      for (const HypernodeID& hn : current_hns) {
+        if (_hg.nodeIsEnabled(hn)) {
+          const Rating rating = _rater.rate(hn);
 
-      for (const HypernodeID& u : current_hns) {
-        if (marked[u] || !_hg.nodeIsEnabled(u)) {
-          continue;
-        }
+          if (rating.target != kInvalidTarget) {
+            _rater.markAsMatched(hn);
+            _rater.markAsMatched(rating.target);
+            // if (_hg.nodeDegree(hn) > _hg.nodeDegree(rating.target)) {
 
-        const Rating rating = _rater.rate(u);
-        const HypernodeID v = rating.target;
-        if (v == kInvalidTarget || marked[v]) {
-          continue;
-        }
-
-        bool accept = top[u] + 1 == top[v]; // v --> u
-        if (!accept) {
-          bool v_is_succ = false;
-          bool other_node_is_succ = false;
-          for (const HyperedgeID& he : _hg.incidentTailEdges(u)) {
-            for (const HypernodeID& head : _hg.heads(he)) {
-              if (v == head) {
-                v_is_succ = true;
-              } else {
-                other_node_is_succ = true;
-              }
-            }
+            performContraction(hn, rating.target);
+            // } else {
+            //   contract(rating.target, hn);
+            // }
           }
-          accept = v_is_succ && !other_node_is_succ;
-        }
-        if (!accept) {
-          bool u_is_pred = false;
-          bool other_node_is_pred = false;
-          for (const HyperedgeID& he : _hg.incidentHeadEdges(v)) {
-            for (const HypernodeID& tail : _hg.tails(he)) {
-              if (u == tail) {
-                u_is_pred = true;
-              } else {
-                other_node_is_pred = true;
-              }
-            }
-          }
-          accept = u_is_pred && !other_node_is_pred;
-        }
 
-        if (!accept) {
-          continue;
-        }
-
-        bool v_is_pred = false;
-        for (const HyperedgeID& he : _hg.incidentHeadEdges(u)) {
-          for (const HypernodeID& tail : _hg.tails(he)) {
-            if (tail == v) {
-              v_is_pred = true;
-              break;
-            }
-          }
-          if (v_is_pred) {
+          if (_hg.currentNumNodes() <= limit) {
             break;
           }
-        }
-
-        _rater.markAsMatched(u);
-        _rater.markAsMatched(rating.target);
-        LOG << "Contracting" << V(u) << V(v);
-
-        if (v_is_pred) {
-          performContraction(v, u);
-          if (!dag::isAcyclic(_hg)) { LOG << "Error:" << V(u) << V(v); std::exit(1); }
-
-          for (const HyperedgeID& he : _hg.incidentTailEdges(v)) {
-            for (const HypernodeID& head : _hg.heads(he)) {
-              if (top[v] == top[head] - 1) {
-                marked[head] = false;
-              }
-            }
-          }
-        } else {
-          performContraction(u, v);
-          if (!dag::isAcyclic(_hg)) { LOG << "Error:" << V(u) << V(v); std::exit(1); }
-
-          for (const HyperedgeID& he : _hg.incidentTailEdges(u)) {
-            for (const HypernodeID& head : _hg.heads(he)) {
-              if (top[u] == top[head] - 1) {
-                marked[head] = false;
-              }
-            }
-          }
-        }
-
-        marked[u] = true;
-        marked[v] = true;
-
-        if (_hg.currentNumNodes() <= limit) {
-          break;
         }
       }
 

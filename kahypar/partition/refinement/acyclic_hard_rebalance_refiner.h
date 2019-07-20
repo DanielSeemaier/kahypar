@@ -98,6 +98,7 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
     LOG << "Zero gain moves:" << _num_zero_gain_moves;
     LOG << "Negative gain moves:" << _num_negative_gain_moves;
     LOG << "Improved imbalance by:" << _improved_imbalance;
+    LOG << "Improved KM1 by:" << _improved_km1;
   }
 
  private:
@@ -117,6 +118,7 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
     _num_negative_gain_moves = 0;
     _num_zero_gain_moves = 0;
     _improved_imbalance = 0.0;
+    _improved_km1 = 0;
   }
 
   void performMovesAndUpdateCacheImpl(const std::vector<Move>& moves,
@@ -157,6 +159,7 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
                   const UncontractionGainChanges&,
                   Metrics& best_metrics) final {
     ASSERT(best_metrics.imbalance == metrics::imbalance(_hg, _context));
+    ASSERT(best_metrics.km1 == metrics::km1(_hg));
     _hg.resetHypernodeState();
     _moves.clear();
 
@@ -169,6 +172,7 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
     }
 
     const double initial_imbalance = best_metrics.imbalance;
+    const HyperedgeWeight initial_km1 = best_metrics.km1;
 
     ASSERT([&]() {
       ASSERT_THAT_FIXTURES_ARE_CORRECT();
@@ -181,9 +185,14 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
     while (best_metrics.imbalance > _context.partition.epsilon) {
       logPQStats();
       const auto& path = selectPath();
+      if (path.first == Hypergraph::kInvalidPartition || path.second == Hypergraph::kInvalidPartition) {
+        LOG << "No path found -- break";
+        break;
+      }
       const PartitionID& start = path.first;
       const PartitionID& end = path.second;
       const std::size_t direction = ordering[start] > ordering[end] ? PREV : NEXT;
+      HyperedgeWeight km1_change = 0;
 
       for (PartitionID part = start; part != end; part = adjacentPart(part, direction)) {
         const PartitionID to_part = part;
@@ -207,6 +216,7 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
         } else {
           ++_num_zero_gain_moves;
         }
+        km1_change -= max_gain;
 
         DBG << "Move HN" << max_gain_hn << "from" << from_part << "to" << to_part;
 
@@ -237,6 +247,8 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
 
       const double new_imbalance = metrics::imbalance(_hg, _context);
       best_metrics.imbalance = new_imbalance;
+      best_metrics.km1 += km1_change;
+      ASSERT(best_metrics.km1 == metrics::km1(_hg));
       _gain_manager.resetDelta();
     }
 
@@ -251,9 +263,10 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
     logPQStats();
 
     DBG << "Imbalance after hard rebalance refiner:" << best_metrics.imbalance;
-    best_metrics.km1 = metrics::km1(_hg);
-    best_metrics.cut = metrics::hyperedgeCut(_hg);
+    ASSERT(best_metrics.km1 == metrics::km1(_hg));
+    ASSERT(best_metrics.imbalance == metrics::imbalance(_hg, _context));
     _improved_imbalance += initial_imbalance - best_metrics.imbalance;
+    _improved_km1 += initial_km1 - best_metrics.km1;
 
     return false;
   }
@@ -315,6 +328,16 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
         end = part;
       }
     }
+
+    const std::size_t direction = ordering[start] > ordering[end] ? PREV : NEXT;
+    HyperedgeWeight km1_change = 0;
+
+    for (PartitionID part = start; part != end; part = adjacentPart(part, direction)) {
+      if (_pq[direction].empty(adjacentPart(part, direction))) {
+        return {Hypergraph::kInvalidPartition, Hypergraph::kInvalidPartition};
+      }
+    }
+
     ASSERT(start != end, V(start));
     DBG << V(start) << "-->" << V(end);
     return {end, start};
@@ -710,6 +733,7 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
   std::size_t _num_positive_gain_moves{0};
   std::size_t _num_negative_gain_moves{0};
   std::size_t _num_zero_gain_moves{0};
+  HyperedgeWeight _improved_km1{0};
   double _improved_imbalance{0.0};
 };
 
