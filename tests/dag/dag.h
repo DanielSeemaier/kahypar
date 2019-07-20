@@ -7,6 +7,7 @@
 #include "kahypar/io/hypergraph_io.h"
 #include "kahypar/partition/context.h"
 #include "kahypar/utils/randomize.h"
+#include "kahypar/dag/quotient_graph.h"
 
 namespace kahypar {
 namespace dag {
@@ -47,6 +48,7 @@ class BaseDAGTest {
     context.partition.k = k;
     context.partition.epsilon = 0.03;
     context.setupPartWeights(hg.totalWeight());
+    hg.initializeNumCutHyperedges();
   }
 
   void partitionUsingTopologicalOrdering(const PartitionID k) {
@@ -66,6 +68,36 @@ class BaseDAGTest {
         nodes_in_cur_part = 0;
       }
     }
+    hg.initializeNumCutHyperedges();
+  }
+
+  // assigns the first num_blocks blocks fraction*\V| nodes
+  void applyImbalancedPartition(const PartitionID num_blocks, const double fraction) {
+    const auto& ordering = calculateTopologicalOrdering(hg);
+    hg.resetPartitioning();
+
+    const HypernodeID size_overloaded_block = fraction * hg.initialNumNodes() / num_blocks;
+    const HypernodeID size_underloaded_block = (1.0 - fraction) * hg.initialNumNodes() / (context.partition.k - num_blocks);
+
+    PartitionID cur_part = 0;
+    HypernodeID cur_size = 0;
+    HypernodeID cur_hn = 0;
+    while (cur_hn < hg.initialNumNodes()) {
+      hg.setNodePart(ordering[cur_hn], cur_part);
+      ++cur_size;
+      ++cur_hn;
+
+      if (cur_part < num_blocks && cur_size >= size_overloaded_block && cur_part < context.partition.k - 1) {
+        cur_size = 0;
+        ++cur_part;
+      } else if (cur_part >= num_blocks && cur_size >= size_underloaded_block && cur_part < context.partition.k - 1) {
+        cur_size = 0;
+        ++cur_part;
+      }
+    }
+
+    ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hg, context).isAcyclic());
+    hg.initializeNumCutHyperedges();
   }
 
   std::vector<Hypergraph::Memento> contractArbitrarily(const std::size_t iterations_limit,
@@ -92,7 +124,16 @@ class BaseDAGTest {
               matched[hn] = true;
               matched[pin] = true;
               contractions.push_back(hg.contract(hn, pin));
-              break;
+
+              if (keep_acyclic && !isAcyclic(hg)) {
+                matched[hn] = false;
+                matched[pin] = false;
+                hg.initializeNumCutHyperedges();
+                hg.uncontract(contractions.back());
+                contractions.pop_back();
+              } else {
+                break;
+              }
             }
           }
           if (matched[hn]) {

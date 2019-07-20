@@ -26,42 +26,14 @@ class HardRebalanceTest : public BaseDAGTest, public TestWithParam<const char*> 
     refiner = std::make_unique<AcyclicHardRebalanceRefiner>(hg, context, *qg, *gain_manager);
   }
 
-  // assigns the first num_blocks blocks fraction*\V| nodes
-  void applyImbalancedPartition(const PartitionID num_blocks, const double fraction) {
-    const auto& ordering = calculateTopologicalOrdering(hg);
-    hg.resetPartitioning();
-
-    const HypernodeID size_overloaded_block = fraction * hg.initialNumNodes() / num_blocks;
-    const HypernodeID size_underloaded_block = (1.0 - fraction) * hg.initialNumNodes() / (context.partition.k - num_blocks);
-
-    PartitionID cur_part = 0;
-    HypernodeID cur_size = 0;
-    HypernodeID cur_hn = 0;
-    while (cur_hn < hg.initialNumNodes()) {
-      hg.setNodePart(ordering[cur_hn], cur_part);
-      ++cur_size;
-      ++cur_hn;
-
-      if (cur_part < num_blocks && cur_size >= size_overloaded_block && cur_part < context.partition.k - 1) {
-        cur_size = 0;
-        ++cur_part;
-      } else if (cur_part >= num_blocks && cur_size >= size_underloaded_block && cur_part < context.partition.k - 1) {
-        cur_size = 0;
-        ++cur_part;
-      }
-    }
-
-    qg->rebuild();
-    gain_manager->initialize();
-    ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hg, context).isAcyclic());
-  }
-
   void runRefiner(const double target_epsilon) {
     context.partition.epsilon = target_epsilon;
     context.setupPartWeights(hg.totalWeight());
     std::vector<HypernodeID> refinement_nodes{};
     Metrics metrics{metrics::hyperedgeCut(hg), metrics::km1(hg), metrics::imbalance(hg, context)};
     refiner->refine(refinement_nodes, {0, 0}, {}, metrics);
+
+    ASSERT_FALSE(gain_manager->hasDelta());
   }
 
  private:
@@ -81,6 +53,8 @@ class HardRebalanceTest : public BaseDAGTest, public TestWithParam<const char*> 
 
 TEST_P(HardRebalanceTest, CanRebalanceWithoutCrash) {
   applyImbalancedPartition(std::max(context.partition.k / 4, 1), 0.75);
+  qg->rebuild();
+  gain_manager->initialize();
   refiner->initialize(0);
   runRefiner(0.03);
   ASSERT_THAT(metrics::imbalance(hg, context), Le(0.03));

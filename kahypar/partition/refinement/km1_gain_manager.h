@@ -144,10 +144,10 @@ class KMinusOneGainManager {
     }
 
     if (moved_hn_internal_before && moved_hn_remains_connected_to_from_part) {
-      DBGC(moved_hn == hn_to_debug)
-      << "Moved HN" << moved_hn << "was previously internal, but after moving it from" << from_part << "to" << to_part
-      << "remains connected to" << from_part << "and is thus inserted into the adjacent gain cache";
-
+      DBGC(moved_hn == hn_to_debug) << "Moved HN" << moved_hn
+                                    << "was previously internal, but after moving it from" << from_part
+                                    << "to" << to_part << "remains connected to" << from_part
+                                    << "and is thus inserted into the adjacent gain cache";
 
       _adjacent_gain_cache.addEntryDueToConnectivityIncrease(moved_hn, from_part, -old_nonadjacent_gain);
     } else {
@@ -207,6 +207,10 @@ class KMinusOneGainManager {
       _nonadjacent_gain_cache[rit->hn] -= rit->delta;
     }
     _nonadjacent_gain_cache_deltas.clear();
+  }
+
+  bool hasDelta() const {
+    return !_adjacent_gain_cache.deltas().empty() || !_nonadjacent_gain_cache_deltas.empty();
   }
 
  private:
