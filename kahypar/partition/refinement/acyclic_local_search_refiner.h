@@ -25,7 +25,7 @@ class AcyclicLocalSearchRefiner final : public IRefiner {
  private:
   using KWayRefinementPQ = ds::KWayPriorityQueue<HypernodeID, Gain, std::numeric_limits<Gain>>;
 
-  static constexpr bool debug = true;
+  static constexpr bool debug = false;
   static constexpr HypernodeID hn_to_debug = 0;
 
   static constexpr HypernodeID kInvalidHN = std::numeric_limits<HypernodeID>::max();
@@ -287,8 +287,6 @@ class AcyclicLocalSearchRefiner final : public IRefiner {
       ASSERT(part != _hg.partID(hn));
       ASSERT(_gain_manager.adjacentGain(hn, part) == gainInducedByHypergraph(hn, part));
       ASSERT(isConnectedTo(hn, part));
-
-      DBG << "Insert HN" << hn << "into" << part;
 
       _pq.insert(hn, part, _gain_manager.adjacentGain(hn, part));
       if (_hg.partWeight(part) < _context.partition.max_part_weights[0]) {

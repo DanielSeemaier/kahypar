@@ -48,6 +48,7 @@ class BaseDAGTest {
     context.partition.k = k;
     context.partition.epsilon = 0.03;
     context.setupPartWeights(hg.totalWeight());
+    context.local_search.fm.max_number_of_fruitless_moves = 350;
     hg.initializeNumCutHyperedges();
   }
 
@@ -157,6 +158,24 @@ class BaseDAGTest {
 
     hg.initializeNumCutHyperedges();
     return contractions;
+  }
+
+  std::vector<HypernodeID> borderNodes() const {
+    std::vector<HypernodeID> nodes;
+    for (const HypernodeID& hn : hg.nodes()) {
+      if (hg.isBorderNode(hn)) {
+        nodes.push_back(hn);
+      }
+    }
+    return nodes;
+  }
+
+  std::vector<HypernodeID> allNodes() const {
+    std::vector<HypernodeID> nodes;
+    for (const HypernodeID& hn : hg.nodes()) {
+      nodes.push_back(hn);
+    }
+    return nodes;
   }
 
   Hypergraph hg;

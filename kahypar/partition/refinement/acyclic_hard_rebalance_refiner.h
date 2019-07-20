@@ -64,15 +64,18 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
   }
 
   void preUncontraction(const HypernodeID representant) override {
+    if (_qg_changed) { // will refresh fixtures anyways
+      return;
+    }
+
     removeFixturesForHypernode(representant);
-//    for (const std::size_t direction : kDirections) {
-//      if (_pq[direction].contains(representant, _hg.partID(representant))) {
-//        _pq[direction].remove(representant, _hg.partID(representant));
-//      }
-//    }
   }
 
   void postUncontraction(const HypernodeID representant, const std::vector<HypernodeID>&& partners) override {
+    if (_qg_changed) { // will refresh fixtures anyways
+      return;
+    }
+
     ASSERT(partners.size() == 1, "Currently only supports pair contractions.");
     const HypernodeID partner = partners.front();
 
@@ -102,7 +105,8 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
                                       std::vector<HypernodeID>& refinement_nodes,
                                       const UncontractionGainChanges& changes) final {
     const auto& ordering = _qg.topologicalOrdering();
-    if (_qg.changed()) { // cached topological ordering changed, must reset PQs anyways
+    if (_qg.changed() || _qg_changed) { // cached topological ordering changed, must reset PQs anyways
+      _qg_changed = true;
       return;
     }
 
@@ -139,7 +143,7 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
     _moves.clear();
 
     const auto& ordering = _qg.topologicalOrdering();
-    if (_qg.changed()) {
+    if (_qg_changed || _qg.changed()) {
       refreshTopologicalOrdering();
     }
 
@@ -547,11 +551,12 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
     ++_fixtures[direction][hn];
   }
 
-  void decrementFixtures(const HypernodeID hn, const std::size_t direction) {
+  void decrementFixtures(const HypernodeID hn, const std::size_t direction, const std::size_t by = 1) {
     if (_fixtures[direction][hn] == 1) {
       _state_changes[direction].set(hn, ACTIVATE);
     }
-    --_fixtures[direction][hn];
+    ASSERT(_fixtures[direction][hn] >= by);
+    _fixtures[direction][hn] -= by;
   }
 
   PartitionID adjacentPart(const PartitionID part, const std::size_t direction) const {
@@ -584,6 +589,7 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
     return false;
   }
 
+#ifdef KAHYPAR_USE_ASSERTIONS
   void ASSERT_THAT_FIXTURES_ARE_CORRECT() const {
     std::array<std::vector<HypernodeID>, 2> fixtures{std::vector<HypernodeID>(_hg.initialNumNodes()),
                                                      std::vector<HypernodeID>(_hg.initialNumNodes())};
@@ -637,7 +643,6 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
     }
   }
 
-#ifdef KAHYPAR_USE_ASSERTIONS
   Gain gainInducedByHypergraph(const HypernodeID hn, const PartitionID target_part) const {
     Gain gain = 0;
     for (const HyperedgeID& he : _hg.incidentEdges(hn)) {
@@ -668,7 +673,8 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
   ds::FastResetArray<bool> _updated_neighbors;
   KMinusOneGainManager& _gain_manager;
 
-  double _improved_imbalance = 0.0;
+  double _improved_imbalance{0.0};
+  bool _qg_changed{false};
 };
 
 constexpr std::array<std::size_t, 2> AcyclicHardRebalanceRefiner::kDirections;

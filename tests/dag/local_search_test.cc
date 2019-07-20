@@ -30,24 +30,6 @@ class LocalSearchTest : public BaseDAGTest, public TestWithParam<const char*> {
     refiner = std::make_unique<LocalSearchRefiner>(hg, context, *qg, *gain_manager);
   }
 
-  std::vector<HypernodeID> borderNodes() const {
-    std::vector<HypernodeID> nodes;
-    for (const HypernodeID& hn : hg.nodes()) {
-      if (hg.isBorderNode(hn)) {
-        nodes.push_back(hn);
-      }
-    }
-    return nodes;
-  }
-
-  std::vector<HypernodeID> allNodes() const {
-    std::vector<HypernodeID> nodes;
-    for (const HypernodeID& hn : hg.nodes()) {
-      nodes.push_back(hn);
-    }
-    return nodes;
-  }
-
   void runRefiner(const double target_epsilon, std::vector<HypernodeID> refinement_nodes = {}) {
     context.partition.epsilon = target_epsilon;
     context.setupPartWeights(hg.totalWeight());
