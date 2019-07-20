@@ -12,7 +12,7 @@
 namespace kahypar {
 class AcyclicKMinusOneRefiner final : public IRefiner {
  private:
-  constexpr static bool debug = true;
+  constexpr static bool debug = false;
 
  public:
   AcyclicKMinusOneRefiner(Hypergraph& hypergraph, const Context& context) :
@@ -46,7 +46,11 @@ class AcyclicKMinusOneRefiner final : public IRefiner {
     _hard_rebalance_refiner.postUncontraction(representant, std::forward<const std::vector<HypernodeID>>(partners));
   }
 
-  void printSummarization() const override {
+  void printSummary() const override {
+    LOG << "Hard Rebalance Refiner:";
+    _hard_rebalance_refiner.printSummary();
+    LOG << "Local Search Refiner:";
+    _local_search_refiner.printSummary();
   }
 
  private:
@@ -91,7 +95,7 @@ class AcyclicKMinusOneRefiner final : public IRefiner {
     updateEpsilon();
     const double current_imbalance = best_metrics.imbalance;
     DBG << "Imbalance:" << current_imbalance << "(current) -->" << _context.partition.epsilon << "(goal) with"
-        << _hg.currentNumNodes() << "nodes";
+        << _hg.currentNumNodes() << "/" << _hg.initialNumNodes() << "nodes";
 
     if (best_metrics.imbalance > _context.partition.epsilon) {
       //DBG << "Running soft rebalance because" << best_metrics.imbalance << ">" << _context.partition.epsilon;
@@ -106,6 +110,7 @@ class AcyclicKMinusOneRefiner final : public IRefiner {
       const auto moves = _hard_rebalance_refiner.moves();
       _local_search_refiner.performMovesAndUpdateCache(moves, refinement_nodes, uncontraction_changes);
       // _soft_rebalance_refiner.performMovesAndUpdateCache(moves, refinement_nodes, uncontraction_changes);.
+      DBG << "-->" << best_metrics.imbalance;
     }
 
     const bool stop = _local_search_refiner.refine(refinement_nodes, max_allowed_part_weights, uncontraction_changes, best_metrics);

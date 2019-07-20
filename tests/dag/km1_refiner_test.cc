@@ -91,6 +91,9 @@ TEST_P(KMinusOneRefinerTest, CanRefineBalancedPartitionDuringUncoarsening) {
     refiner->postUncontraction(rit->u, {rit->v});
     std::vector<HypernodeID> refinement_nodes{rit->u, rit->v};
     refiner->refine(refinement_nodes, {0, 0}, {}, metrics);
+
+    ASSERT_THAT(metrics::km1(hg), Eq(metrics.km1));
+    ASSERT_TRUE(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hg, context).isAcyclic());
   }
 
   ASSERT_THAT(metrics::imbalance(hg, context), Le(FINAL_EPSILON));
@@ -113,8 +116,12 @@ TEST_P(KMinusOneRefinerTest, CanRefineImbalancedPartitionDuringUncoarsening) {
     refiner->postUncontraction(rit->u, {rit->v});
     std::vector<HypernodeID> refinement_nodes{rit->u, rit->v};
     refiner->refine(refinement_nodes, {0, 0}, {}, metrics);
+
+    ASSERT_THAT(metrics::km1(hg), Eq(metrics.km1));
+    ASSERT_TRUE(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hg, context).isAcyclic());
   }
 
+  refiner->printSummary();
   ASSERT_THAT(metrics::imbalance(hg, context), Le(FINAL_EPSILON));
 }
 
@@ -123,9 +130,17 @@ INSTANTIATE_TEST_CASE_P(GRAPH_C17_K_2, KMinusOneRefinerTest, Values("test_instan
 INSTANTIATE_TEST_CASE_P(GRAPH_C17_K_4, KMinusOneRefinerTest, Values("test_instances/c17.hgr 4"));
 
 INSTANTIATE_TEST_CASE_P(GRAPH_C3540_K_2, KMinusOneRefinerTest, Values("test_instances/c3540.hgr 2"));
-//
-//INSTANTIATE_TEST_CASE_P(GRAPH_C3540_K_4, KMinusOneRefinerTest, Values("test_instances/c3540.hgr 4"));
-//
-//INSTANTIATE_TEST_CASE_P(GRAPH_C3540_K_64, KMinusOneRefinerTest, Values("test_instances/c3540.hgr 64"));
+
+INSTANTIATE_TEST_CASE_P(GRAPH_C3540_K_4, KMinusOneRefinerTest, Values("test_instances/c3540.hgr 4"));
+
+INSTANTIATE_TEST_CASE_P(GRAPH_C3540_K_64, KMinusOneRefinerTest, Values("test_instances/c3540.hgr 64"));
+
+INSTANTIATE_TEST_CASE_P(GRAPH_C7552_K_2, KMinusOneRefinerTest, Values("test_instances/c7552.hgr 2"));
+
+INSTANTIATE_TEST_CASE_P(GRAPH_C7552_K_4, KMinusOneRefinerTest, Values("test_instances/c7552.hgr 4"));
+
+INSTANTIATE_TEST_CASE_P(GRAPH_C7552_K_8, KMinusOneRefinerTest, Values("test_instances/c7552.hgr 8"));
+
+INSTANTIATE_TEST_CASE_P(GRAPH_C7552_K_64, KMinusOneRefinerTest, Values("test_instances/c7552.hgr 64"));
 } // namespace dag
 } // namespace kahypar

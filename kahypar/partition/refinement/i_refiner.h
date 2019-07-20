@@ -70,7 +70,7 @@ class IRefiner {
 
   virtual void postUncontraction(const HypernodeID representant, const std::vector<HypernodeID>&& partners) {}
 
-  virtual void printSummarization() const {}
+  virtual void printSummary() const {}
 
  protected:
   IRefiner() = default;

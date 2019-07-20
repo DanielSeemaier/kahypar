@@ -90,6 +90,16 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
     }());
   }
 
+  void printSummary() const override {
+    LOG << "Iterations with refresh:" << _num_refreshes;
+    LOG << "Iterations without refresh:" << _num_no_refreshes;
+    LOG << "Number of moves:" << _num_moves;
+    LOG << "Positive gain moves:" << _num_positive_gain_moves;
+    LOG << "Zero gain moves:" << _num_zero_gain_moves;
+    LOG << "Negative gain moves:" << _num_negative_gain_moves;
+    LOG << "Improved imbalance by:" << _improved_imbalance;
+  }
+
  private:
   void initializeImpl(const HyperedgeWeight max_gain) final {
     if (!_is_initialized) {
@@ -99,6 +109,14 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
     }
     _hg.resetHypernodeState();
     refreshTopologicalOrdering();
+
+    _num_refreshes = 0;
+    _num_no_refreshes = 0;
+    _num_moves = 0;
+    _num_positive_gain_moves = 0;
+    _num_negative_gain_moves = 0;
+    _num_zero_gain_moves = 0;
+    _improved_imbalance = 0.0;
   }
 
   void performMovesAndUpdateCacheImpl(const std::vector<Move>& moves,
@@ -145,6 +163,9 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
     const auto& ordering = _qg.topologicalOrdering();
     if (_qg_changed || _qg.changed()) {
       refreshTopologicalOrdering();
+      ++_num_refreshes;
+    } else {
+      ++_num_no_refreshes;
     }
 
     const double initial_imbalance = best_metrics.imbalance;
@@ -157,10 +178,7 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
     ASSERT(_qg.isAcyclic());
     ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(_hg, _context).isAcyclic());
 
-    DBG << "beforeWhile(" << V(best_metrics.imbalance) << V(_context.partition.epsilon) << ")";
-
     while (best_metrics.imbalance > _context.partition.epsilon) {
-      DBG << "while(" << V(best_metrics.imbalance) << V(_context.partition.epsilon) << ")";
       logPQStats();
       const auto& path = selectPath();
       const PartitionID& start = path.first;
@@ -180,6 +198,15 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
           _pq[direction].remove(max_gain_hn, from_part);
         }
         ASSERT(_hg.partID(max_gain_hn) == from_part, V(max_gain_hn) << V(_hg.partID(max_gain_hn)) << V(from_part));
+
+        ++_num_moves;
+        if (max_gain > 0) {
+          ++_num_positive_gain_moves;
+        } else if (max_gain < 0) {
+          ++_num_negative_gain_moves;
+        } else {
+          ++_num_zero_gain_moves;
+        }
 
         DBG << "Move HN" << max_gain_hn << "from" << from_part << "to" << to_part;
 
@@ -244,7 +271,7 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
    * SCHEDULING METHODS
    *********************************************************************************/
   void refreshTopologicalOrdering() {
-    LOG << "Re-initialize PQs in AcyclicHardRebalanceRefiner";
+    DBG << "Re-initialize PQs in AcyclicHardRebalanceRefiner";
     _fixtures[PREV].clear();
     _fixtures[NEXT].clear();
     _fixtures[PREV].resize(_hg.initialNumNodes());
@@ -263,6 +290,8 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
       ASSERT_THAT_HYPERNODES_CONTAINED_IN_PQS_ARE_CORRECT();
       return true;
     }());
+
+    _qg_changed = false;
   }
 
   std::size_t reverse(const std::size_t direction) const {
@@ -673,8 +702,15 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
   ds::FastResetArray<bool> _updated_neighbors;
   KMinusOneGainManager& _gain_manager;
 
-  double _improved_imbalance{0.0};
   bool _qg_changed{false};
+
+  std::size_t _num_refreshes{0};
+  std::size_t _num_no_refreshes{0};
+  std::size_t _num_moves{0};
+  std::size_t _num_positive_gain_moves{0};
+  std::size_t _num_negative_gain_moves{0};
+  std::size_t _num_zero_gain_moves{0};
+  double _improved_imbalance{0.0};
 };
 
 constexpr std::array<std::size_t, 2> AcyclicHardRebalanceRefiner::kDirections;
