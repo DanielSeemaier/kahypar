@@ -35,8 +35,8 @@ struct Move {
     from(from),
     to(to) { }
 
-  Move(const Move&) = delete;
-  Move& operator= (const Move&) = delete;
+  Move(const Move&) = default;
+  Move& operator= (const Move&) = default;
 
   Move(Move&&) = default;
   Move& operator= (Move&&) = default;

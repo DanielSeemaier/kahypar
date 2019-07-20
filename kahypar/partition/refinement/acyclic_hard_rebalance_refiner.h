@@ -329,11 +329,11 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
       }
     }
 
-    const std::size_t direction = ordering[start] > ordering[end] ? PREV : NEXT;
+    const std::size_t direction = ordering[end] > ordering[start] ? PREV : NEXT;
     HyperedgeWeight km1_change = 0;
 
-    for (PartitionID part = start; part != end; part = adjacentPart(part, direction)) {
-      if (_pq[direction].empty(adjacentPart(part, direction))) {
+    for (PartitionID part = end; part != start; part = adjacentPart(part, direction)) {
+      if (_pq[reverse(direction)].empty(adjacentPart(part, direction))) {
         return {Hypergraph::kInvalidPartition, Hypergraph::kInvalidPartition};
       }
     }

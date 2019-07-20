@@ -115,6 +115,8 @@ static inline void performInitialPartitioning(Hypergraph& hypergraph, const Cont
 }
 
 static inline void partition(Hypergraph& hypergraph, const Context& context) {
+  ASSERT(hypergraph.isDirected());
+
   std::unique_ptr<ICoarsener> coarsener(
     CoarsenerFactory::getInstance().createObject(
       context.coarsening.algorithm, hypergraph, context,
