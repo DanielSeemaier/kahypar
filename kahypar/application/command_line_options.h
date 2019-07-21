@@ -73,6 +73,9 @@ po::options_description createGeneralOptionsDescription(Context& context, const 
     ("final-epsilon",
     po::value<double>(&context.partition.final_epsilon)->value_name("<double>"),
     "Epsilon on coarsest level")
+    ("refine-ip",
+    po::value<bool>(&context.partition.refine_initial_partition)->value_name("<bool>"),
+    "Refine initial partition")
     ("graph-partition-filename",
     po::value<std::string>(&context.partition.graph_partition_filename)->value_name("<string>"),
     "Output partition filename")

@@ -304,6 +304,7 @@ struct PartitioningParameters {
   Objective objective = Objective::UNDEFINED;
   double epsilon = std::numeric_limits<double>::max();
   double final_epsilon = std::numeric_limits<double>::max();
+  bool refine_initial_partition = false;
   PartitionID k = std::numeric_limits<PartitionID>::max();
   PartitionID rb_lower_k = 0;
   PartitionID rb_upper_k = 0;

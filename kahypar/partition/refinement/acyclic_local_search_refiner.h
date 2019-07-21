@@ -56,12 +56,44 @@ class AcyclicLocalSearchRefiner final : public IRefiner {
     return _moves;
   }
 
+  void printSummary() const override {
+    LOG << "[LocalSearch] Number of calls:" << _num_calls;
+    LOG << "[LocalSearch] Number of moves:" << _num_moves;
+    LOG << "[LocalSearch] Number of rollbacks:" << _num_rollbacks;
+    LOG << "[LocalSearch] Number of refinement nodes that are border nodes:" << _num_border_refinement_nodes;
+    LOG << "[LocalSearch] Number of refinement nodes that are NOT border nodes:" << _num_non_border_refinement_nodes;
+    LOG << "[LocalSearch] Number of moves in the last iteration:" << _num_moves_in_last_iteration;
+    LOG << "[LocalSearch] Number of moves denied by the acyclic constrain:" << _num_moves_denied_by_acyclic_constrain;
+    LOG << "[LocalSearch] Number of moves denied by the balance constrain:" << _num_moves_denied_by_balance_constrain;
+    LOG << "[LocalSearch] Number of moves with positive gain:" << _num_positive_gain_moves;
+    LOG << "[LocalSearch] Number of moves with zero gain:" << _num_zero_gain_moves;
+    LOG << "[LocalSearch] Number of moves with negative gain:" << _num_negative_gain_moves;
+    LOG << "[LocalSearch] Improved KM1 by:" << _improved_km1;
+    LOG << "[LocalSearch] Total size of initial PQs:" << _initial_pq_size;
+    LOG << "[LocalSearch] Number of initially enabled PQs:" << _num_initially_enabled_pqs;
+    LOG << "[LocalSearch] Max part weights:" << _context.partition.max_part_weights[0];
+  }
+
  private:
   void initializeImpl(const HyperedgeWeight max_gain) final {
     if (!_is_initialized) {
       _pq.initialize(_hg.initialNumNodes());
       _is_initialized = true;
     }
+    _num_positive_gain_moves = 0;
+    _num_zero_gain_moves = 0;
+    _num_negative_gain_moves = 0;
+    _num_moves = 0;
+    _num_rollbacks = 0;
+    _num_border_refinement_nodes = 0;
+    _num_non_border_refinement_nodes = 0;
+    _num_moves_denied_by_acyclic_constrain = 0;
+    _num_moves_denied_by_balance_constrain = 0;
+    _num_calls = 0;
+    _num_moves_in_last_iteration = 0;
+    _improved_km1 = 0;
+    _initial_pq_size = 0;
+    _num_initially_enabled_pqs = 0;
   }
 
   void performMovesAndUpdateCacheImpl(const std::vector<Move>& moves,
@@ -76,11 +108,19 @@ class AcyclicLocalSearchRefiner final : public IRefiner {
     ASSERT(best_metrics.km1 == metrics::km1(_hg));
     ASSERT(best_metrics.imbalance == metrics::imbalance(_hg, _context));
 
+    ++_num_calls;
+
     _hg.resetHypernodeState();
     _moves.clear();
     _pq.clear();
 
+    Randomize::instance().shuffleVector(refinement_nodes, refinement_nodes.size());
     for (const HypernodeID& hn : refinement_nodes) {
+      if (_hg.isBorderNode(hn)) {
+        ++_num_border_refinement_nodes;
+      } else {
+        ++_num_non_border_refinement_nodes;
+      }
       activate(hn);
     }
 
@@ -97,6 +137,9 @@ class AcyclicLocalSearchRefiner final : public IRefiner {
     int min_cut_index = -1;
     int touched_hns_since_last_improvement = 0;
     _stopping_policy.resetStatistics();
+
+    _initial_pq_size += _pq.size();
+    _num_initially_enabled_pqs += _pq.numEnabledParts();
 
     const double beta = std::log(_hg.currentNumNodes());
     while (!_pq.empty() && !_stopping_policy.searchShouldStop(touched_hns_since_last_improvement,
@@ -136,6 +179,10 @@ class AcyclicLocalSearchRefiner final : public IRefiner {
       bool move_ok = ((_hg.partWeight(to_part) + _hg.nodeWeight(max_gain_node))
                       <= _context.partition.max_part_weights[to_part]) // to_part does not become overloaded
                      && (_hg.partSize(from_part) > 1); // from_part does not become empty
+      if (!move_ok) {
+        ++_num_moves_denied_by_balance_constrain;
+      }
+
       const bool weights_ok = move_ok;
 
       // quotient graph remains acyclic
@@ -145,6 +192,10 @@ class AcyclicLocalSearchRefiner final : public IRefiner {
         HighResClockTimepoint end = std::chrono::high_resolution_clock::now();
         Timer::instance().add(_context, Timepoint::cycle_detector,
                               std::chrono::duration<double>(end - start).count());
+
+        if (!move_ok) {
+          ++_num_moves_denied_by_acyclic_constrain;
+        }
       }
 
       DBG << "Move[" << move_ok << "]" << max_gain_node << "/" << from_part << "-->" << to_part << "/"
@@ -152,6 +203,18 @@ class AcyclicLocalSearchRefiner final : public IRefiner {
 
       // Step 4: perform movement
       if (move_ok) {
+        ++_num_moves;
+        if (_hg.currentNumNodes() == _hg.initialNumNodes()) {
+          ++_num_moves_in_last_iteration;
+        }
+        if (max_gain > 0) {
+          ++_num_positive_gain_moves;
+        } else if (max_gain < 0) {
+          ++_num_negative_gain_moves;
+        } else {
+          ++_num_zero_gain_moves;
+        }
+
         _hg.changeNodePart(max_gain_node, from_part, to_part);
 
         // enable / disable underloaded / overloaded blocks
@@ -238,6 +301,15 @@ class AcyclicLocalSearchRefiner final : public IRefiner {
           return true;
         }());
       }
+
+      // Step 5: activate neighbors
+      for (const HyperedgeID& he : _hg.incidentEdges(max_gain_node)) {
+        for (const HypernodeID& pin : _hg.pins(he)) {
+          if (!_hg.marked(pin) && !_hg.active(pin) && _hg.isBorderNode(pin)) {
+            activate(pin);
+          }
+        }
+      }
     }
 
     // finally, rollback to the best last accepted state
@@ -254,6 +326,12 @@ class AcyclicLocalSearchRefiner final : public IRefiner {
 
       _moves.pop_back();
       --last_index;
+
+      --_num_moves;
+      if (_hg.currentNumNodes() == _hg.initialNumNodes()) {
+        --_num_moves_in_last_iteration;
+      }
+      ++_num_rollbacks;
     }
     _gain_manager.rollbackDelta();
 
@@ -263,6 +341,7 @@ class AcyclicLocalSearchRefiner final : public IRefiner {
     best_metrics.imbalance = metrics::imbalance(_hg, _context);
 
     DBG << "Improved KM1:" << initial_km1 << "-->" << best_metrics.km1;
+    _improved_km1 += initial_km1 - best_metrics.km1;
     DBG << "Changed imbalance:" << initial_imbalance << "-->" << best_metrics.imbalance;
 
     return FMImprovementPolicy::improvementFound(best_metrics.km1, initial_km1,
@@ -361,5 +440,20 @@ class AcyclicLocalSearchRefiner final : public IRefiner {
   KMinusOneGainManager& _gain_manager;
   StoppingPolicy _stopping_policy;
   std::vector<HypernodeID> _hns_to_activate;
+
+  std::size_t _num_positive_gain_moves{0};
+  std::size_t _num_zero_gain_moves{0};
+  std::size_t _num_negative_gain_moves{0};
+  std::size_t _num_moves{0};
+  std::size_t _num_moves_denied_by_acyclic_constrain{0};
+  std::size_t _num_moves_denied_by_balance_constrain{0};
+  std::size_t _num_calls{0};
+  std::size_t _num_moves_in_last_iteration{0};
+  std::size_t _num_rollbacks{0};
+  std::size_t _num_border_refinement_nodes{0};
+  std::size_t _num_non_border_refinement_nodes{0};
+  std::size_t _initial_pq_size{0};
+  std::size_t _num_initially_enabled_pqs{0};
+  HyperedgeWeight _improved_km1{0};
 };
 } // namespace kahypar

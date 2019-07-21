@@ -91,14 +91,18 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
   }
 
   void printSummary() const override {
-    LOG << "Iterations with refresh:" << _num_refreshes;
-    LOG << "Iterations without refresh:" << _num_no_refreshes;
-    LOG << "Number of moves:" << _num_moves;
-    LOG << "Positive gain moves:" << _num_positive_gain_moves;
-    LOG << "Zero gain moves:" << _num_zero_gain_moves;
-    LOG << "Negative gain moves:" << _num_negative_gain_moves;
-    LOG << "Improved imbalance by:" << _improved_imbalance;
-    LOG << "Improved KM1 by:" << _improved_km1;
+    LOG << "[HardRebalance] Iterations with refresh:" << _num_refreshes;
+    LOG << "[HardRebalance] Iterations without refresh:" << _num_no_refreshes;
+    LOG << "[HardRebalance] Number of moves:" << _num_moves;
+    LOG << "[HardRebalance] Number of moves in the last iteration:" << _num_moves_in_last_iteration;
+    LOG << "[HardRebalance] Positive gain moves:" << _num_positive_gain_moves;
+    LOG << "[HardRebalance] Zero gain moves:" << _num_zero_gain_moves;
+    LOG << "[HardRebalance] Negative gain moves:" << _num_negative_gain_moves;
+    LOG << "[HardRebalance] Improved imbalance by:" << _improved_imbalance;
+    LOG << "[HardRebalance] Improved KM1 by:" << _improved_km1;
+    LOG << "[HardRebalance] Number of times no path was found:" << _num_no_path;
+    LOG << "[HardRebalance] Number of times a path was found:" << _num_found_path;
+    LOG << "[HardRebalance] Number of times rebalance was successful:" << _num_success;
   }
 
  private:
@@ -114,11 +118,15 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
     _num_refreshes = 0;
     _num_no_refreshes = 0;
     _num_moves = 0;
+    _num_moves_in_last_iteration = 0;
     _num_positive_gain_moves = 0;
     _num_negative_gain_moves = 0;
     _num_zero_gain_moves = 0;
     _improved_imbalance = 0.0;
     _improved_km1 = 0;
+    _num_no_path = 0;
+    _num_found_path = 0;
+    _num_success = 0;
   }
 
   void performMovesAndUpdateCacheImpl(const std::vector<Move>& moves,
@@ -186,9 +194,12 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
       logPQStats();
       const auto& path = selectPath();
       if (path.first == Hypergraph::kInvalidPartition || path.second == Hypergraph::kInvalidPartition) {
-        LOG << "No path found -- break";
+        ++_num_no_path;
         break;
+      } else {
+        ++_num_found_path;
       }
+
       const PartitionID& start = path.first;
       const PartitionID& end = path.second;
       const std::size_t direction = ordering[start] > ordering[end] ? PREV : NEXT;
@@ -209,6 +220,9 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
         ASSERT(_hg.partID(max_gain_hn) == from_part, V(max_gain_hn) << V(_hg.partID(max_gain_hn)) << V(from_part));
 
         ++_num_moves;
+        if (_hg.initialNumNodes() == _hg.currentNumNodes()) {
+          ++_num_moves_in_last_iteration;
+        }
         if (max_gain > 0) {
           ++_num_positive_gain_moves;
         } else if (max_gain < 0) {
@@ -267,6 +281,10 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
     ASSERT(best_metrics.imbalance == metrics::imbalance(_hg, _context));
     _improved_imbalance += initial_imbalance - best_metrics.imbalance;
     _improved_km1 += initial_km1 - best_metrics.km1;
+
+    if (best_metrics.imbalance <= _context.partition.epsilon) {
+      ++_num_success;
+    }
 
     return false;
   }
@@ -733,6 +751,10 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
   std::size_t _num_positive_gain_moves{0};
   std::size_t _num_negative_gain_moves{0};
   std::size_t _num_zero_gain_moves{0};
+  std::size_t _num_found_path{0};
+  std::size_t _num_no_path{0};
+  std::size_t _num_success{0};
+  std::size_t _num_moves_in_last_iteration{0};
   HyperedgeWeight _improved_km1{0};
   double _improved_imbalance{0.0};
 };

@@ -103,29 +103,8 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
   AcyclicKWayKMinusOneRefiner(AcyclicKWayKMinusOneRefiner&&) = delete;
   AcyclicKWayKMinusOneRefiner& operator=(AcyclicKWayKMinusOneRefiner&&) = delete;
 
-  void changeEpsilon(const double epsilon) {
-    _context.partition.epsilon = epsilon;
-    _context.setupPartWeights(_hg.totalWeight());
-  }
-
   const std::vector<Move>& moves() const {
     return _moves;
-  }
-
-  std::size_t numMoves() const {
-    return _num_moves;
-  }
-
-  std::size_t numPosGains() const {
-    return _num_pos_gains;
-  }
-
-  std::size_t numNegGains() const {
-    return _num_neg_gains;
-  }
-
-  std::size_t numZeroGains() const {
-    return _num_zero_gains;
   }
 
   void preUncontraction(const HypernodeID u) override {
@@ -149,8 +128,22 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
                           std::chrono::duration<double>(end - start).count());
   }
 
-  AdjacencyMatrixQuotientGraph<DFSCycleDetector>& qg() {
-    return _qg;
+  void printSummary() const override {
+    LOG << "[KaHyParLocalSearch] Number of calls:" << _num_calls;
+    LOG << "[KaHyParLocalSearch] Number of moves:" << _num_moves;
+    LOG << "[KaHyParLocalSearch] Number of rollbacks:" << _num_rollbacks;
+    LOG << "[KaHyParLocalSearch] Number of refinement nodes that are border nodes:" << _num_border_refinement_nodes;
+    LOG << "[KaHyParLocalSearch] Number of refinement nodes that are NOT border nodes:" << _num_non_border_refinement_nodes;
+    LOG << "[KaHyParLocalSearch] Number of moves in the last iteration:" << _num_moves_in_last_iteration;
+    LOG << "[KaHyParLocalSearch] Number of moves denied by the acyclic constrain:" << _num_moves_denied_by_acyclic_constrain;
+    LOG << "[KaHyParLocalSearch] Number of moves denied by the balance constrain:" << _num_moves_denied_by_balance_constrain;
+    LOG << "[KaHyParLocalSearch] Number of moves with positive gain:" << _num_positive_gain_moves;
+    LOG << "[KaHyParLocalSearch] Number of moves with zero gain:" << _num_zero_gain_moves;
+    LOG << "[KaHyParLocalSearch] Number of moves with negative gain:" << _num_negative_gain_moves;
+    LOG << "[KaHyParLocalSearch] Improved KM1 by:" << _improved_km1;
+    LOG << "[KaHyParLocalSearch] Total size of initial PQs:" << _initial_pq_size;
+    LOG << "[KaHyParLocalSearch] Number of initially enabled PQs:" << _num_initially_enabled_pqs;
+    LOG << "[KaHyParLocalSearch] Max part weights:" << _context.partition.max_part_weights[0];
   }
 
  private:
@@ -171,6 +164,21 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
     HighResClockTimepoint end = std::chrono::high_resolution_clock::now();
     Timer::instance().add(_context, Timepoint::cycle_detector,
                           std::chrono::duration<double>(end - start).count());
+
+    _num_positive_gain_moves = 0;
+    _num_zero_gain_moves = 0;
+    _num_negative_gain_moves = 0;
+    _num_moves = 0;
+    _num_rollbacks = 0;
+    _num_moves_denied_by_acyclic_constrain = 0;
+    _num_moves_denied_by_balance_constrain = 0;
+    _num_calls = 0;
+    _num_moves_in_last_iteration = 0;
+    _improved_km1 = 0;
+    _num_border_refinement_nodes = 0;
+    _num_non_border_refinement_nodes = 0;
+    _initial_pq_size = 0;
+    _num_initially_enabled_pqs = 0;
   }
 
   void performMovesAndUpdateCacheImpl(const std::vector<Move>& moves,
@@ -190,12 +198,19 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
       FloatingPoint<double>(metrics::imbalance(_hg, _context))),
            V(best_metrics.imbalance) << V(metrics::imbalance(_hg, _context)));
 
+    ++_num_calls;
+
     Base::reset();
     _moves.clear();
     _unremovable_he_parts.reset();
 
     Randomize::instance().shuffleVector(refinement_nodes, refinement_nodes.size());
     for (const HypernodeID& hn : refinement_nodes) {
+      if (_hg.isBorderNode(hn)) {
+        ++_num_border_refinement_nodes;
+      } else {
+        ++_num_non_border_refinement_nodes;
+      }
       activate<true>(hn);
     }
 
@@ -212,6 +227,9 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
     int touched_hns_since_last_improvement = 0;
     _stopping_policy.resetStatistics();
 
+    _initial_pq_size += _pq.size();
+    _num_initially_enabled_pqs += _pq.numEnabledParts();
+
     const double beta = log(_hg.currentNumNodes());
     while (!_pq.empty() && !_stopping_policy.searchShouldStop(touched_hns_since_last_improvement,
                                                               _context, beta, best_metrics.km1,
@@ -221,13 +239,6 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
       PartitionID to_part = Hypergraph::kInvalidPartition;
       _pq.deleteMax(max_gain_node, max_gain, to_part);
       const PartitionID from_part = _hg.partID(max_gain_node);
-      if (max_gain > 0) {
-        ++_num_pos_gains;
-      } else if (max_gain < 0) {
-        ++_num_neg_gains;
-      } else {
-        ++_num_zero_gains;
-      }
 
       DBG << V(current_km1) << V(max_gain_node) << V(max_gain)
           << V(_hg.partID(max_gain_node)) << V(to_part);
@@ -260,19 +271,35 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
 
       _hg.mark(max_gain_node);
       ++touched_hns_since_last_improvement;
-      ++_num_touched_hns;
 
       bool do_move = Base::moveIsFeasible(max_gain_node, from_part, to_part);
+      if (!do_move) {
+        ++_num_moves_denied_by_balance_constrain;
+      }
       if (do_move) {
         HighResClockTimepoint start = std::chrono::high_resolution_clock::now();
         do_move = do_move && _qg.testAndUpdateBeforeMovement(max_gain_node, from_part, to_part);
         HighResClockTimepoint end = std::chrono::high_resolution_clock::now();
         Timer::instance().add(_context, Timepoint::cycle_detector,
                               std::chrono::duration<double>(end - start).count());
+
+        if (!do_move) {
+          ++_num_moves_denied_by_acyclic_constrain;
+        }
       }
 
       if (do_move) {
         ++_num_moves;
+        if (_hg.currentNumNodes() == _hg.initialNumNodes()) {
+          ++_num_moves_in_last_iteration;
+        }
+        if (max_gain > 0) {
+          ++_num_positive_gain_moves;
+        } else if (max_gain < 0) {
+          ++_num_negative_gain_moves;
+        } else {
+          ++_num_zero_gain_moves;
+        }
 
         // LOG << "performed MOVE:" << V(max_gain_node) << V(from_part) << V(to_part);
         Base::moveHypernode(max_gain_node, from_part, to_part);
@@ -361,7 +388,12 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
       _hg.changeNodePart(hn, from_part, to_part);
       _moves.pop_back();
       --last_index;
+
       --_num_moves;
+      if (_hg.currentNumNodes() == _hg.initialNumNodes()) {
+        --_num_moves_in_last_iteration;
+      }
+      ++_num_rollbacks;
     }
 
     _gain_cache.rollbackDelta();
@@ -372,6 +404,7 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
            "Rollback produced a cyclic quotient graph not detected by the QG!");
 
     ASSERT(best_metrics.km1 == metrics::km1(_hg));
+    _improved_km1 += initial_km1 - best_metrics.km1;
     best_metrics.imbalance = metrics::imbalance(_hg, _context);
     //ASSERT(best_metrics.km1 <= initial_km1, V(initial_km1) << V(best_metrics.km1));
     //LOG << V(_num_moves) << V(_num_touched_hns);
@@ -1088,11 +1121,19 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
 
   AdjacencyMatrixQuotientGraph<DFSCycleDetector> _qg;
 
-  std::size_t _num_moves = 0;
-  std::size_t _num_touched_hns = 0;
-
-  std::size_t _num_pos_gains = 0;
-  std::size_t _num_zero_gains = 0;
-  std::size_t _num_neg_gains = 0;
+  std::size_t _num_positive_gain_moves{0};
+  std::size_t _num_zero_gain_moves{0};
+  std::size_t _num_negative_gain_moves{0};
+  std::size_t _num_moves{0};
+  std::size_t _num_rollbacks{0};
+  std::size_t _num_moves_denied_by_acyclic_constrain{0};
+  std::size_t _num_moves_denied_by_balance_constrain{0};
+  std::size_t _num_calls{0};
+  std::size_t _num_moves_in_last_iteration{0};
+  std::size_t _num_border_refinement_nodes{0};
+  std::size_t _num_non_border_refinement_nodes{0};
+  std::size_t _initial_pq_size{0};
+  std::size_t _num_initially_enabled_pqs{0};
+  HyperedgeWeight _improved_km1{0};
 };
 }  // namespace kahypar

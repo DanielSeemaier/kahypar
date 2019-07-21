@@ -78,23 +78,28 @@ static inline void performInitialPartitioning(Hypergraph& hypergraph, const Cont
       << (context.partition.objective == Objective::cut
           ? metrics::hyperedgeCut(hypergraph)
           : metrics::km1(hypergraph));
-  LOG << "Performing initial refinement";
 
   hypergraph.initializeNumCutHyperedges();
-  refiner.initialize(0);
-  UncontractionGainChanges changes;
-  changes.representative.push_back(0);
-  changes.contraction_partner.push_back(0);
-  std::vector<HypernodeID> refinement_nodes;
-  for (const HypernodeID& hn : hypergraph.nodes()) {
-    refinement_nodes.push_back(hn);
-  }
-  Metrics current_metrics = {metrics::hyperedgeCut(hypergraph),
-                             metrics::km1(hypergraph),
-                             metrics::imbalance(hypergraph, context)};
 
-  refiner.refine(refinement_nodes, {0, 0}, changes, current_metrics);
-  ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hypergraph, context).isAcyclic(), "Initial partition is not acyclic!");
+  if (context.partition.refine_initial_partition) {
+    LOG << "Performing initial refinement with configured refiner";
+    refiner.initialize(0);
+    UncontractionGainChanges changes;
+    changes.representative.push_back(0);
+    changes.contraction_partner.push_back(0);
+    std::vector<HypernodeID> refinement_nodes;
+    for (const HypernodeID& hn : hypergraph.nodes()) {
+      refinement_nodes.push_back(hn);
+    }
+    Metrics current_metrics = {metrics::hyperedgeCut(hypergraph),
+                               metrics::km1(hypergraph),
+                               metrics::imbalance(hypergraph, context)};
+    refiner.refine(refinement_nodes, {0, 0}, changes, current_metrics);
+    ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hypergraph, context).isAcyclic(),
+           "Initial partition is not acyclic!");
+  } else {
+    LOG << "Initial refinement disabled";
+  }
 
   auto end = std::chrono::high_resolution_clock::now();
   Timer::instance().add(context, Timepoint::initial_partitioning,
