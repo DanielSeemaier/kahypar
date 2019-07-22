@@ -10,7 +10,7 @@ bool matchable(const HypernodeID top_u, const HypernodeID top_v) {
 }
 } // namespace internal
 
-std::vector<PartitionID> findAcyclicClustering(const Hypergraph& hg, const bool randomize = false) {
+std::vector<PartitionID> findAcyclicClustering(const Hypergraph& hg, const Context& context) {
   const auto top = calculateToplevelValues(hg);
   std::vector<PartitionID> leader(hg.initialNumNodes()); // stores the HN that leads the cluster containing the HN
   std::iota(leader.begin(), leader.end(), 0);
@@ -21,7 +21,9 @@ std::vector<PartitionID> findAcyclicClustering(const Hypergraph& hg, const bool 
   std::size_t num_unmatchable = 0;
   std::size_t num_no_neighbor = 0;
 
-  for (const HypernodeID& hn : hg.nodes()) { // TODO maybe use random ordering?
+  ds::SparseMap<HypernodeID, RatingType> _tmp_ratings(hg.initialNumNodes(), 0);
+
+  for (const HypernodeID& hn : hg.nodes()) {
     if (mark[hn] || num_bad_neighbors[hn] == 2) {
       if (num_bad_neighbors[hn] == 2) {
         ++num_unmatchable;
@@ -30,6 +32,15 @@ std::vector<PartitionID> findAcyclicClustering(const Hypergraph& hg, const bool 
     }
 
     HypernodeID best_neighbor = Hypergraph::kInvalidHypernodeID;
+    for (const HyperedgeID& he : hg.incidentEdges(hn)) {
+      const auto score = HeavyEdgeScore::score(hg, he, context);
+      for (const HypernodeID& v : hg.pins(he)) {
+        if (v != hn && NormalPartitionPolicy::accept(hg, context, hn, v)) {
+          _tmp_ratings[v] += score;
+        }
+      }
+    }
+
     for (const HyperedgeID& he : hg.incidentEdges(hn)) {
       for (const HypernodeID& neighbor : hg.pins(he)) {
         bool valid = (!mark[neighbor] && internal::matchable(top[hn], top[leader[neighbor]]))
@@ -43,14 +54,17 @@ std::vector<PartitionID> findAcyclicClustering(const Hypergraph& hg, const bool 
         }
 
         if (valid) {
-          if (best_neighbor == Hypergraph::kInvalidHypernodeID || !randomize) {
+          if (best_neighbor == Hypergraph::kInvalidHypernodeID) {
             best_neighbor = neighbor;
-          } else if (Randomize::instance().flipCoin()) {
+          } else if (_tmp_ratings[neighbor] > _tmp_ratings[best_neighbor]
+                     || (_tmp_ratings[neighbor] == _tmp_ratings[best_neighbor] && Randomize::instance().flipCoin())) {
             best_neighbor = neighbor;
           }
         }
       }
     }
+    _tmp_ratings.clear();
+
     if (best_neighbor == Hypergraph::kInvalidHypernodeID) {
       ++num_no_neighbor;
       continue;

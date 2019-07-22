@@ -81,7 +81,7 @@ class AcyclicClusterCoarseningV1 final : public ICoarsener, private VertexPairCo
     while (_hg.currentNumNodes() > limit) {
       num_contractions = 0;
 
-      const auto clustering = dag::findAcyclicClustering(_hg);
+      const auto clustering = dag::findAcyclicClustering(_hg, _context);
       for (const HypernodeID& hn : _hg.nodes()) {
         if (clustering[hn] != hn) {
           performContraction(clustering[hn], hn);
