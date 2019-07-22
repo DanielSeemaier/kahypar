@@ -60,6 +60,10 @@ using MLCoarseningDispatcher = meta::StaticMultiDispatchFactory<MLCoarsener,
                                                                 ICoarsener,
                                                                 RatingPolicies>;
 
+using AcyclicClusterCoarseningV1Dispatcher = meta::StaticMultiDispatchFactory<AcyclicClusterCoarseningV1,
+                                                                              ICoarsener,
+                                                                              RatingPolicies>;
+
 using FullCoarseningDispatcher = meta::StaticMultiDispatchFactory<FullVertexPairCoarsener,
                                                                   ICoarsener,
                                                                   RatingPolicies>;

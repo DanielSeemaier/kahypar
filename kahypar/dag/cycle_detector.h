@@ -132,6 +132,24 @@ class OutCycleDetector : CycleDetector {
   std::vector<std::vector<std::size_t>> _out;
 };
 
+class NullCycleDetector : public CycleDetector {
+ public:
+  explicit NullCycleDetector(const PartitionID) {}
+
+  void bulkConnect(const Edgelist& edges) override {
+  }
+
+  bool connect(std::size_t s, std::size_t t) override {
+    return true;
+  }
+
+  void disconnect(std::size_t s, std::size_t t) override {
+  }
+
+  void reset() override {
+  }
+};
+
 /**!
  * Variant that stores a topological ordering of the graph. When inserting an edge that violates the topological
  * ordering, the algorithm tests whether a new topological ordering can be obtained with the edge inserted.
@@ -483,6 +501,7 @@ using cycledetector::CycleDetector;
 using cycledetector::KahnCycleDetector;
 using cycledetector::DFSCycleDetector;
 using cycledetector::PseudoTopologicalOrderingCycleDetector;
+using cycledetector::NullCycleDetector;
 
 using CycleDetectors = meta::Typelist<KahnCycleDetector, DFSCycleDetector, PseudoTopologicalOrderingCycleDetector>;
 } // namespace kahypar

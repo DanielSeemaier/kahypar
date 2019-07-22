@@ -83,6 +83,7 @@ enum class CoarseningAlgorithm : uint8_t {
   heavy_full,
   heavy_lazy,
   ml_style,
+  acyclic_cluster_coarsening_v1,
   do_nothing,
   UNDEFINED
 };
@@ -118,6 +119,7 @@ enum class InitialPartitionerAlgorithm : uint8_t {
   lp,
   pool,
   topological_ordering,
+  kahypar,
   UNDEFINED
 };
 
@@ -357,6 +359,7 @@ std::ostream& operator<< (std::ostream& os, const CoarseningAlgorithm& algo) {
     case CoarseningAlgorithm::heavy_full: return os << "heavy_full";
     case CoarseningAlgorithm::heavy_lazy: return os << "heavy_lazy";
     case CoarseningAlgorithm::ml_style: return os << "ml_style";
+    case CoarseningAlgorithm::acyclic_cluster_coarsening_v1: return os << "acyclic_cluster_coarsening_v1";
     case CoarseningAlgorithm::do_nothing: return os << "do_nothing";
     case CoarseningAlgorithm::UNDEFINED: return os << "UNDEFINED";
       // omit default case to trigger compiler warning for missing cases
@@ -400,6 +403,7 @@ std::ostream& operator<< (std::ostream& os, const InitialPartitionerAlgorithm& a
     case InitialPartitionerAlgorithm::lp: return os << "lp";
     case InitialPartitionerAlgorithm::pool: return os << "pool";
     case InitialPartitionerAlgorithm::topological_ordering: return os << "topological_ordering";
+    case InitialPartitionerAlgorithm::kahypar: return os << "kahypar";
     case InitialPartitionerAlgorithm::UNDEFINED: return os << "UNDEFINED";
       // omit default case to trigger compiler warning for missing cases
   }
@@ -585,6 +589,8 @@ static CoarseningAlgorithm coarseningAlgorithmFromString(const std::string& type
     return CoarseningAlgorithm::heavy_lazy;
   } else if (type == "ml_style") {
     return CoarseningAlgorithm::ml_style;
+  } else if (type == "acyclic_cluster_coarsening_v1") {
+    return CoarseningAlgorithm::acyclic_cluster_coarsening_v1;
   } else if (type == "do_nothing") {
     return CoarseningAlgorithm::do_nothing;
   }
@@ -653,6 +659,8 @@ static InitialPartitionerAlgorithm initialPartitioningAlgorithmFromString(const 
     return InitialPartitionerAlgorithm::pool;
   } else if (mode == "topological_ordering") {
     return InitialPartitionerAlgorithm::topological_ordering;
+  } else if (mode == "kahypar") {
+    return InitialPartitionerAlgorithm::kahypar;
   }
   LOG << "Illegal option:" << mode;
   exit(0);

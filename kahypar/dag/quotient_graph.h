@@ -397,6 +397,7 @@ class AdjacencyMatrixQuotientGraph : public QuotientGraph {
 
   bool testAndUpdateBeforeMovement(const HypernodeID hn, const PartitionID from_part, const PartitionID to_part) override {
     ASSERT(_hg.partID(hn) == from_part, "You must call this method before moving the hypernode!");
+    ASSERT(from_part != to_part);
 
     resetDeltaMatrix();
 
@@ -758,4 +759,5 @@ class AdjacencyMatrixQuotientGraph : public QuotientGraph {
 
 using ds::QuotientGraph;
 using ds::AdjacencyMatrixQuotientGraph;
+using CyclicQuotientGraph = AdjacencyMatrixQuotientGraph<NullCycleDetector>;
 } // namespace kahypar

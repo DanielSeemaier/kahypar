@@ -18,6 +18,8 @@ class DirectedContractionTest : public Test {
  protected:
   void SetUp() override {
     hg = loadHypergraph("test_instances/c17.hgr");
+    hg.printDirectedHypergraphNode();
+
     placeAllHypernodesInPartition(hg, 0);
     assertGraphRestored();
   }
@@ -360,40 +362,6 @@ TEST_F(DirectedContractionTest, Regression_C7552_InconsistendUncontraction) {
       }
     }
   }
-}
-
-TEST_F(DirectedContractionTest, Regression_Add32) {
-  hg = loadHypergraph("test_instances/add32.hgr");
-  placeAllHypernodesInPartition(hg, 0);
-
-  auto top = dag::calculateWeakTopologicalOrdering(hg);
-  LOG << V(top[100]) << V(top[155]) << V(top[124]);
-  auto& _hg = hg;
-
-  _hg.printDirectedHypergraphNode(124);
-  _hg.printDirectedHypergraphNode(100);
-  _hg.printDirectedHypergraphNode(155);
-
-  std::vector<Hypergraph::Memento> mems;
-  mems.push_back(hg.contract(124, 100));
-  mems.push_back(hg.contract( 155 , 124 ));
-
-  _hg.printDirectedHypergraphNode(0);
-  _hg.printDirectedHypergraphNode(31);
-  _hg.printDirectedHypergraphNode(32);
-  _hg.printDirectedHypergraphNode(34);
-  _hg.printDirectedHypergraphNode(38);
-  _hg.printDirectedHypergraphNode(39);
-  _hg.printDirectedHypergraphNode(62);
-  _hg.printDirectedHypergraphNode(93);
-  _hg.printDirectedHypergraphNode(94);
-  _hg.printDirectedHypergraphNode(96);
-  _hg.printDirectedHypergraphNode(101);
-  _hg.printDirectedHypergraphNode(155);
-
-
-
-  ASSERT_TRUE(dag::isAcyclic(hg));
 }
 } // namespace dag
 } // namespace kahypar

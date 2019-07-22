@@ -205,30 +205,30 @@ static inline void writeHypernodeWeights(std::ofstream& out_stream, const Hyperg
   }
 }
 
-static inline void writeHGRHeader(std::ofstream& out_stream, const Hypergraph& hypergraph) {
+static inline void writeHGRHeader(std::ofstream& out_stream, const Hypergraph& hypergraph, const bool respect_directed = true) {
   out_stream << hypergraph.initialNumEdges() << " " << hypergraph.initialNumNodes() << " ";
   if (hypergraph.type() != HypergraphType::Unweighted) {
     out_stream << static_cast<int>(hypergraph.type());
   }
-  if (hypergraph.isDirected()) {
+  if (respect_directed && hypergraph.isDirected()) {
     out_stream << " 1";
   }
   out_stream << std::endl;
 }
 
-static inline void writeHypergraphFile(const Hypergraph& hypergraph, const std::string& filename) {
+static inline void writeHypergraphFile(const Hypergraph& hypergraph, const std::string& filename, const bool respect_directed = true) {
   ASSERT(!filename.empty(), "No filename for hypergraph file specified");
   ALWAYS_ASSERT(!hypergraph.isModified(), "Hypergraph is modified. Reindexing HNs/HEs necessary.");
 
   std::ofstream out_stream(filename.c_str());
-  writeHGRHeader(out_stream, hypergraph);
+  writeHGRHeader(out_stream, hypergraph, respect_directed);
 
   for (const HyperedgeID& he : hypergraph.edges()) {
     if (hypergraph.type() == HypergraphType::EdgeWeights ||
         hypergraph.type() == HypergraphType::EdgeAndNodeWeights) {
       out_stream << hypergraph.edgeWeight(he) << " ";
     }
-    if (hypergraph.isDirected()) {
+    if (respect_directed && hypergraph.isDirected()) {
       out_stream << hypergraph.edgeNumHeads(he) << " ";
     }
     for (const HypernodeID& pin : hypergraph.pins(he)) {

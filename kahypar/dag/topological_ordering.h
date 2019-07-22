@@ -2,11 +2,11 @@
 
 #include <vector>
 #include <exception>
-#include <kahypar/utils/randomize.h>
 
 #include "kahypar/definitions.h"
 #include "kahypar/datastructure/hypergraph.h"
 #include "kahypar/dag/cycle_detector.h"
+#include "kahypar/utils/randomize.h"
 
 namespace kahypar {
 namespace dag {
@@ -17,10 +17,13 @@ struct CyclicGraphException : public std::exception {
 };
 
 std::vector<HypernodeID> calculateWeakTopologicalOrdering(const Hypergraph& hg) {
+  std::size_t total_deg = 0;
+
   std::vector<HypernodeID> rank(hg.initialNumNodes());
   for (const HyperedgeID& he : hg.edges()) {
     for (const HypernodeID& hh : hg.heads(he)) {
       rank[hh] += hg.edgeNumTails(he);
+      total_deg += hg.edgeNumTails(he);
     }
   }
 
@@ -42,7 +45,9 @@ std::vector<HypernodeID> calculateWeakTopologicalOrdering(const Hypergraph& hg) 
         if (hg.isTail(u, he)) {
           for (const HypernodeID& hh : hg.heads(he)) {
             ASSERT(rank[hh] > 0);
+            ASSERT(total_deg > 0);
             --rank[hh];
+            --total_deg;
             if (rank[hh] == 0) {
               next_todo.push_back(hh);
             }
@@ -55,7 +60,7 @@ std::vector<HypernodeID> calculateWeakTopologicalOrdering(const Hypergraph& hg) 
     todo = next_todo;
   }
 
-  if (topological_ordering.size() != hg.currentNumNodes()) {
+  if (total_deg > 0) {
     throw CyclicGraphException{};
   }
   return topological_ordering;
@@ -114,6 +119,10 @@ bool isAcyclic(const Hypergraph& hg) {
   } catch (const CyclicGraphException& e) {
     return false;
   }
+}
+
+std::vector<HypernodeID> calculateToplevelValues(const Hypergraph& hg) {
+  return calculateWeakTopologicalOrdering(hg);
 }
 } // namespace dag
 } // namespace kahypar

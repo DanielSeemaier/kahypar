@@ -536,7 +536,8 @@ class GenericHypergraph {
 
   // ! An invalid block has id kInvalidPartition
   enum {
-    kInvalidPartition = -1
+    kInvalidPartition = -1,
+    kInvalidHypernodeID = std::numeric_limits<HypernodeID>::max()
   };
 
   /*!
@@ -753,6 +754,12 @@ class GenericHypergraph {
   GenericHypergraph& operator=(const GenericHypergraph&) = delete;
 
   ~GenericHypergraph() = default;
+
+  void printDirectedHypergraphNode() const {
+    for (const HypernodeID& hn : nodes()) {
+      printDirectedHypergraphNode(hn);
+    }
+  }
 
   void printDirectedHypergraphNode(const HypernodeID hn) const {
     std::cout << "HN " << hn << "(" << partID(hn) << ")\n";
@@ -2852,8 +2859,12 @@ reindex(const Hypergraph& hypergraph) {
 
   for (const HyperedgeID& he : reindexed_hypergraph->edges()) {
     for (const HypernodeID& pin : reindexed_hypergraph->pins(he)) {
-      reindexed_hypergraph->_incidence_array[
-        reindexed_hypergraph->hypernode(pin).firstInvalidEntry()] = he;
+      const bool head = reindexed_hypergraph->isHead(pin, he);
+      reindexed_hypergraph->_incidence_array[reindexed_hypergraph->hypernode(pin).firstInvalidEntry()] = he;
+      if (head && reindexed_hypergraph->hypernode(pin).size() > 0) {
+        std::swap(reindexed_hypergraph->_incidence_array[reindexed_hypergraph->hypernode(pin).firstTailEntry()],
+                  reindexed_hypergraph->_incidence_array[reindexed_hypergraph->hypernode(pin).firstInvalidEntry()]);
+      }
       reindexed_hypergraph->hypernode(pin).incrementSize();
     }
   }
@@ -2866,6 +2877,16 @@ reindex(const Hypergraph& hypergraph) {
       reindexed_hypergraph->setFixedVertex(hn, hypergraph.fixedVertexPartID(original_hn));
     }
   }
+
+//  LOG << "REINDEX";
+//  LOG << "INCIDENCE HG";
+//  hypergraph.printIncidenceArray();
+//  LOG << "INCIDENCE RE";
+//  reindexed_hypergraph->printIncidenceArray();
+//  LOG << "GRAPH HG";
+//  hypergraph.printDirectedHypergraphNode();
+//  LOG << "GRAPH RE";
+//  reindexed_hypergraph->printDirectedHypergraphNode();
 
   return std::make_pair(std::move(reindexed_hypergraph), reindexed_to_original);
 }

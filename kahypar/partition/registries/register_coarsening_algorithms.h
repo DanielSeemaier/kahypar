@@ -25,6 +25,7 @@
 #include "kahypar/partition/coarsening/full_vertex_pair_coarsener.h"
 #include "kahypar/partition/coarsening/lazy_vertex_pair_coarsener.h"
 #include "kahypar/partition/coarsening/ml_coarsener.h"
+#include "kahypar/partition/coarsening/acyclic_cluster_coarsening_v1.h"
 #include "kahypar/partition/coarsening/policies/rating_acceptance_policy.h"
 #include "kahypar/partition/coarsening/policies/rating_community_policy.h"
 #include "kahypar/partition/coarsening/policies/rating_heavy_node_penalty_policy.h"
@@ -87,6 +88,21 @@ REGISTER_DISPATCHED_COARSENER(CoarseningAlgorithm::heavy_full,
 
 REGISTER_DISPATCHED_COARSENER(CoarseningAlgorithm::ml_style,
                               MLCoarseningDispatcher,
+                              meta::PolicyRegistry<RatingFunction>::getInstance().getPolicy(
+                                context.coarsening.rating.rating_function),
+                              meta::PolicyRegistry<HeavyNodePenaltyPolicy>::getInstance().getPolicy(
+                                context.coarsening.rating.heavy_node_penalty_policy),
+                              meta::PolicyRegistry<CommunityPolicy>::getInstance().getPolicy(
+                                context.coarsening.rating.community_policy),
+                              meta::PolicyRegistry<RatingPartitionPolicy>::getInstance().getPolicy(
+                                context.coarsening.rating.partition_policy),
+                              meta::PolicyRegistry<AcceptancePolicy>::getInstance().getPolicy(
+                                context.coarsening.rating.acceptance_policy),
+                              meta::PolicyRegistry<FixVertexContractionAcceptancePolicy>::getInstance().getPolicy(
+                                context.coarsening.rating.fixed_vertex_acceptance_policy));
+
+REGISTER_DISPATCHED_COARSENER(CoarseningAlgorithm::acyclic_cluster_coarsening_v1,
+                              AcyclicClusterCoarseningV1Dispatcher,
                               meta::PolicyRegistry<RatingFunction>::getInstance().getPolicy(
                                 context.coarsening.rating.rating_function),
                               meta::PolicyRegistry<HeavyNodePenaltyPolicy>::getInstance().getPolicy(

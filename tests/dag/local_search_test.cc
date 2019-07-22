@@ -1,9 +1,9 @@
-#include <kahypar/partition/refinement/policies/fm_stop_policy.h>
 #include "gmock/gmock.h"
 
 #include "dag.h"
 
 #include "kahypar/partition/refinement/acyclic_local_search_refiner.h"
+#include "kahypar/partition/refinement/policies/fm_stop_policy.h"
 
 using ::testing::TestWithParam;
 using ::testing::Values;

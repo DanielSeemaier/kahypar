@@ -96,4 +96,5 @@ REGISTER_INITIAL_PARTITIONER(InitialPartitionerAlgorithm::greedy_round_maxnet,
                              GHGInitialPartitionerBFS_MAXN_RND);
 REGISTER_INITIAL_PARTITIONER(InitialPartitionerAlgorithm::pool, PoolInitialPartitioner);
 REGISTER_INITIAL_PARTITIONER(InitialPartitionerAlgorithm::topological_ordering, TopologicalOrderingInitialPartitioner);
+REGISTER_INITIAL_PARTITIONER(InitialPartitionerAlgorithm::kahypar, KaHyParInitialPartitioner);
 }  // namespace kahypar
