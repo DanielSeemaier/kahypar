@@ -76,6 +76,12 @@ po::options_description createGeneralOptionsDescription(Context& context, const 
     ("refine-ip",
     po::value<bool>(&context.partition.refine_initial_partition)->value_name("<bool>"),
     "Refine initial partition")
+    ("r-soft-rebalance",
+     po::value<bool>(&context.enable_soft_rebalance)->value_name("<bool>"),
+     "Use soft rebalance")
+    ("r-refine-rebalance-moves",
+     po::value<bool>(&context.refine_rebalance_moves)->value_name("<bool>"),
+     "Run local search on hypernodes moved during soft and hard rebalance")
     ("graph-partition-filename",
     po::value<std::string>(&context.partition.graph_partition_filename)->value_name("<string>"),
     "Output partition filename")
@@ -375,11 +381,7 @@ po::options_description createRefinementOptionsDescription(Context& context,
     ((initial_partitioning ? "i-r-fm-stop-alpha" : "r-fm-stop-alpha"),
     po::value<double>((initial_partitioning ? &context.initial_partitioning.local_search.fm.adaptive_stopping_alpha : &context.local_search.fm.adaptive_stopping_alpha))->value_name("<double>"),
     "Parameter alpha for adaptive stopping rule \n"
-    "(infinity: -1)")
-    ((initial_partitioning ? "i-r-soft-rebalancing" : "r-soft-rebalancing"),
-    po::value<bool>(&context.enable_soft_rebalance)->value_name("<bool>"),
-    "Use soft rebalance");
-  options.add(createFlowRefinementOptionsDescription(context, num_columns, initial_partitioning));
+    "(infinity: -1)");
   return options;
 }
 

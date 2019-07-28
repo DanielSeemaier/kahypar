@@ -421,7 +421,8 @@ class Context {
   bool partition_evolutionary = false;
   bool imbalanced_intermediate_step = false;
   bool reduce_balance_during_uncoarsening = false;
-  bool enable_soft_rebalance = true;
+  bool enable_soft_rebalance = false;
+  bool refine_rebalance_moves = true;
 
   Context() :
     stats(*this) { }
@@ -437,7 +438,9 @@ class Context {
     stats(*this, &other.stats.topLevel()),
     partition_evolutionary(other.partition_evolutionary),
     imbalanced_intermediate_step(other.imbalanced_intermediate_step),
-    reduce_balance_during_uncoarsening(other.reduce_balance_during_uncoarsening) { }
+    reduce_balance_during_uncoarsening(other.reduce_balance_during_uncoarsening),
+    enable_soft_rebalance(other.enable_soft_rebalance),
+    refine_rebalance_moves(other.refine_rebalance_moves) { }
 
   Context& operator= (const Context&) = delete;
 

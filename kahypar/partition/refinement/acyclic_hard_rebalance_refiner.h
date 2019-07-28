@@ -191,7 +191,6 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
     ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(_hg, _context).isAcyclic());
 
     while (best_metrics.imbalance > _context.partition.epsilon) {
-      logPQStats();
       const auto& path = selectPath();
       if (path.first == Hypergraph::kInvalidPartition || path.second == Hypergraph::kInvalidPartition) {
         ++_num_no_path;
@@ -274,7 +273,6 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
     ASSERT(_qg.isAcyclic());
     ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(_hg, _context).isAcyclic());
     ASSERT(best_metrics.imbalance <= _context.partition.epsilon);
-    logPQStats();
 
     DBG << "Imbalance after hard rebalance refiner:" << best_metrics.imbalance;
     ASSERT(best_metrics.km1 == metrics::km1(_hg));
@@ -289,7 +287,7 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
     return false;
   }
 
-  void logPQStats() {
+  void logPQStats() const {
     DBG << "Topological ordering:" << _qg.topologicalOrdering();
     DBG << "Inverse topological ordering:" << _qg.inverseTopologicalOrdering();
     for (const auto& part : _qg.inverseTopologicalOrdering()) {
@@ -329,36 +327,101 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
     return 1 - direction;
   }
 
+  bool isOverloaded(const PartitionID part) const {
+    return _hg.partWeight(part) > _context.partition.max_part_weights[part];
+  }
+
+  bool isUnderloaded(const PartitionID part) const {
+    //return _hg.partWeight(part) < (1.0 - _context.partition.epsilon) * _context.partition.perfect_balance_part_weights[part];
+    return _hg.partWeight(part) < _context.partition.perfect_balance_part_weights[part];
+  }
+
   std::pair<PartitionID, PartitionID> selectPath() const {
     const auto& ordering = _qg.topologicalOrdering();
+    const auto& inverse_ordering = _qg.inverseTopologicalOrdering();
 
-    PartitionID start = 0;
-    PartitionID end = 0;
-    for (PartitionID part = 0; part < _context.partition.k; ++part) {
-      if (_hg.partWeight(part) > _hg.partWeight(start)) {
-        start = part;
+    Gain current_gain = 0;
+    Gain best_gain = std::numeric_limits<Gain>::min();
+    PartitionID best_start = Hypergraph::kInvalidPartition;
+    PartitionID best_end = Hypergraph::kInvalidPartition;
+    std::size_t best_direction = 0;
+
+    for (PartitionID from_id = 0; from_id < _context.partition.k; ++from_id) {
+      const PartitionID from_part = inverse_ordering[from_id];
+      if (!isOverloaded(from_part)) {
+        continue;
+      }
+
+      current_gain = 0;
+
+      for (PartitionID to_id_prime = from_id; to_id_prime > 0; --to_id_prime) {
+        const PartitionID to_id = to_id_prime - 1;
+        ASSERT(from_id != to_id);
+        const PartitionID to_part = inverse_ordering[to_id];
+        ASSERT(from_part != to_part);
+        const PartitionID prev_part = inverse_ordering[to_id_prime];
+
+        if (_pq[PREV].empty(prev_part)) { // path not feasible
+          break;
+        }
+        const Gain gain = _pq[PREV].maxKey(prev_part);
+        current_gain += gain;
+
+        if (current_gain > best_gain && isUnderloaded(to_part)) {
+          best_gain = current_gain;
+          best_start = from_part;
+          best_end = to_part;
+          best_direction = PREV;
+        }
+      }
+
+      current_gain = 0;
+
+      for (PartitionID to_id_prime = from_id; to_id_prime + 1 < _context.partition.k; ++to_id_prime) {
+        const PartitionID to_id = to_id_prime + 1;
+        ASSERT(to_id != from_id);
+        const PartitionID to_part = inverse_ordering[to_id];
+        ASSERT(to_part != from_part);
+        const PartitionID prev_part = inverse_ordering[to_id_prime];
+        ASSERT(adjacentPart(prev_part, NEXT) == to_part);
+        DBG << V(from_part) << V(to_part) << V(prev_part) << V(current_gain) << V(_pq[NEXT].size(prev_part));
+        if (_pq[NEXT].empty(prev_part)) { // path not feasible
+          break;
+        }
+        const Gain gain = _pq[NEXT].maxKey(prev_part);
+        current_gain += gain;
+
+        if (current_gain > best_gain && isUnderloaded(to_part)) {
+          best_gain = current_gain;
+          best_start = from_part;
+          best_end = to_part;
+          best_direction = NEXT;
+        }
       }
     }
-    for (PartitionID part = 0; part < _context.partition.k; ++part) {
-      if (ordering[part] < ordering[start] && _hg.partWeight(part) <= _hg.partWeight(end)) {
-        end = part;
-      } else if (_hg.partWeight(part) < _hg.partWeight(end)) {
-        end = part;
+
+    DBG << "Path:" << best_start << "-->" << best_end << "/" << best_direction << "/" << best_gain;
+
+    ASSERT([&]() {
+      if (best_start != Hypergraph::kInvalidPartition || best_end != Hypergraph::kInvalidPartition) {
+        ASSERT(best_start >= 0 && best_start < _context.partition.k);
+        ASSERT(best_end >= 0 && best_end < _context.partition.k);
+        ASSERT(best_start != best_end);
+        if (best_direction == PREV) {
+          ASSERT(ordering[best_start] > ordering[best_end]);
+        } else {
+          ASSERT(ordering[best_end] > ordering[best_start]);
+        }
+
+        const std::size_t end_to_start = reverse(best_direction);
+        for (PartitionID part = best_end; part != best_start; part = adjacentPart(part, end_to_start)) {
+          DBG << V(part) << V(best_end) << V(best_start) << V(best_direction) << V(adjacentPart(part, end_to_start)) << V(end_to_start);
+          ASSERT(!_pq[best_direction].empty(adjacentPart(part, end_to_start)));
+        }
       }
-    }
-
-    const std::size_t direction = ordering[end] > ordering[start] ? PREV : NEXT;
-    HyperedgeWeight km1_change = 0;
-
-    for (PartitionID part = end; part != start; part = adjacentPart(part, direction)) {
-      if (_pq[reverse(direction)].empty(adjacentPart(part, direction))) {
-        return {Hypergraph::kInvalidPartition, Hypergraph::kInvalidPartition};
-      }
-    }
-
-    ASSERT(start != end, V(start));
-    DBG << V(start) << "-->" << V(end);
-    return {end, start};
+      return true;
+    }());
+    return {best_end, best_start};
   }
 
   /*********************************************************************************

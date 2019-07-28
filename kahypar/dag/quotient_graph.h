@@ -401,10 +401,10 @@ class AdjacencyMatrixQuotientGraph : public QuotientGraph {
 
     resetDeltaMatrix();
 
-    ASSERT([&]() {
-      ASSERT_THAT_ADJACENCY_MATRIX_IS_CORRECT();
-      return true;
-    }());
+//    ASSERT([&]() {
+//      ASSERT_THAT_ADJACENCY_MATRIX_IS_CORRECT();
+//      return true;
+//    }());
 
     // note: during graph construction, edges are counted twice, thus we increment / decrement the delta matrix by 2
 
@@ -454,12 +454,12 @@ class AdjacencyMatrixQuotientGraph : public QuotientGraph {
     }
 
     commitDeltaMatrix();
-    ASSERT([&]() {
-      const_cast<Hypergraph*>(&_hg)->changeNodePart(hn, from_part, to_part);
-      ASSERT_THAT_ADJACENCY_MATRIX_IS_CORRECT();
-      const_cast<Hypergraph*>(&_hg)->changeNodePart(hn, to_part, from_part);
-      return true;
-    }());
+//    ASSERT([&]() {
+//      const_cast<Hypergraph*>(&_hg)->changeNodePart(hn, from_part, to_part);
+//      ASSERT_THAT_ADJACENCY_MATRIX_IS_CORRECT();
+//      const_cast<Hypergraph*>(&_hg)->changeNodePart(hn, to_part, from_part);
+//      return true;
+//    }());
 
      if (!todo_insert.empty()) {
        notifyGraphChanged();
