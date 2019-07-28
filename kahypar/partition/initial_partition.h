@@ -159,6 +159,9 @@ static inline void partition(Hypergraph& hg, const Context& context) {
   auto extracted_init_hypergraph = ds::reindex(hg);
   std::vector<HypernodeID> mapping(std::move(extracted_init_hypergraph.second));
   double init_alpha = context.initial_partitioning.init_alpha;
+  if (context.initial_partitioning.algo == InitialPartitionerAlgorithm::kahypar) {
+    init_alpha = 0;
+  }
   double best_imbalance = std::numeric_limits<double>::max();
   std::vector<PartitionID> best_balanced_partition(
     extracted_init_hypergraph.first->initialNumNodes(), 0);

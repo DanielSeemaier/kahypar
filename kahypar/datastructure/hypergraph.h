@@ -2669,7 +2669,7 @@ class GenericHypergraph {
 
   template<typename Hypergraph>
   friend std::pair<std::unique_ptr<Hypergraph>,
-                   std::vector<typename Hypergraph::HypernodeID> > reindex(const Hypergraph& hypergraph);
+                   std::vector<typename Hypergraph::HypernodeID> > reindex(const Hypergraph& hypergraph, const bool respect_directed);
 
   template<typename Hypergraph>
   friend std::pair<std::unique_ptr<Hypergraph>,
@@ -2778,7 +2778,7 @@ bool verifyEquivalenceWithPartitionInfo(const Hypergraph& expected, const Hyperg
 template<typename Hypergraph>
 std::pair<std::unique_ptr<Hypergraph>,
           std::vector<typename Hypergraph::HypernodeID> >
-reindex(const Hypergraph& hypergraph) {
+reindex(const Hypergraph& hypergraph, const bool respect_directed = true) {
   using HypernodeID = typename Hypergraph::HypernodeID;
   using HyperedgeID = typename Hypergraph::HyperedgeID;
 
@@ -2787,7 +2787,7 @@ reindex(const Hypergraph& hypergraph) {
   std::unique_ptr<Hypergraph> reindexed_hypergraph(new Hypergraph());
 
   reindexed_hypergraph->_k = hypergraph._k;
-  reindexed_hypergraph->_directed = hypergraph._directed;
+  reindexed_hypergraph->_directed = respect_directed && hypergraph._directed;
 
   HypernodeID num_hypernodes = 0;
   for (const HypernodeID& hn : hypergraph.nodes()) {
@@ -2825,7 +2825,9 @@ reindex(const Hypergraph& hypergraph) {
       reindexed_hypergraph->hypernode(original_to_reindexed[pin]).incrementSize();
       ++pin_index;
     }
-    reindexed_hypergraph->hyperedge(num_hyperedges).setHeadCounter(hypergraph.hyperedge(he).numHeads());
+    if (reindexed_hypergraph->isDirected()) {
+      reindexed_hypergraph->hyperedge(num_hyperedges).setHeadCounter(hypergraph.hyperedge(he).numHeads());
+    }
     ++num_hyperedges;
   }
 
@@ -2859,7 +2861,7 @@ reindex(const Hypergraph& hypergraph) {
 
   for (const HyperedgeID& he : reindexed_hypergraph->edges()) {
     for (const HypernodeID& pin : reindexed_hypergraph->pins(he)) {
-      const bool head = reindexed_hypergraph->isHead(pin, he);
+      const bool head = reindexed_hypergraph->isDirected() && reindexed_hypergraph->isHead(pin, he);
       reindexed_hypergraph->_incidence_array[reindexed_hypergraph->hypernode(pin).firstInvalidEntry()] = he;
       if (head && reindexed_hypergraph->hypernode(pin).size() > 0) {
         std::swap(reindexed_hypergraph->_incidence_array[reindexed_hypergraph->hypernode(pin).firstTailEntry()],
@@ -2872,7 +2874,9 @@ reindex(const Hypergraph& hypergraph) {
   reindexed_hypergraph->_part_info.resize(reindexed_hypergraph->_k);
   for (const HypernodeID& hn : reindexed_hypergraph->nodes()) {
     HypernodeID original_hn = reindexed_to_original[hn];
-    reindexed_hypergraph->hypernode(hn).setHeadCounter(hypergraph.hypernode(original_hn).numHeads());
+    if (reindexed_hypergraph->isDirected()) {
+      reindexed_hypergraph->hypernode(hn).setHeadCounter(hypergraph.hypernode(original_hn).numHeads());
+    }
     if (hypergraph.isFixedVertex(original_hn)) {
       reindexed_hypergraph->setFixedVertex(hn, hypergraph.fixedVertexPartID(original_hn));
     }

@@ -229,7 +229,11 @@ inline void printPartitioningResults(const Hypergraph& hypergraph,
 
     const auto& timings = Timer::instance().result();
 
-    LOG << "\nAcyclic =" << AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hypergraph, context).isAcyclic();
+    if (hypergraph.isDirected()) {
+      LOG << "\nAcyclic =" << AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hypergraph, context).isAcyclic();
+    } else {
+      LOG << "\nAcyclic = <undirected>";
+    }
 
     LOG << "\nTimings:";
     LOG << "Cycle Detector                     =" << timings.total_cycle_detector << "s";

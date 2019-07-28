@@ -35,7 +35,7 @@
 #include "kahypar/utils/stats.h"
 #include "kahypar/utils/timer.h"
 
-static constexpr bool debug = false;
+static constexpr bool debug = true;
 
 namespace kahypar {
 template <class QualityMeasure = Mandatory,

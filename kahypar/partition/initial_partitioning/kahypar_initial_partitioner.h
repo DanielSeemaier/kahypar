@@ -34,44 +34,18 @@ class KaHyParInitialPartitioner : public IInitialPartitioner, private InitialPar
 
   void initialPartition() {
     Context ip_context = createContext();
-    Hypergraph& hg_copy = _hg;
-
-    const std::string hgr_filename = std::tmpnam(nullptr);
-    const std::string part_filename = hgr_filename + ".part" + std::to_string(_context.partition.k) + ".epsilon0.03.seed0.KaHyPar";
-
-    LOG << "Location:" << hgr_filename << part_filename;
-    kahypar::io::writeHypergraphFile(hg_copy, hgr_filename, false);
-
-    std::string command = "/Users/danielseemaier/Projects/untouched/kahypar/build/kahypar/application/KaHyPar -h "
-      + hgr_filename
-      + " -k " + std::to_string(_context.partition.k)
-      + " -e 0.03"
-      + " -m direct"
-      + " -o km1"
-      + " -p /Users/danielseemaier/Projects/untouched/kahypar/config/km1_direct_kway_sea17.ini"
-      + " --seed 0"
-      + " -v true";
-    LOG << command;
-    std::system(command.c_str());
-
-    std::vector<PartitionID> partition;
-    kahypar::io::readPartitionFile(part_filename, partition);
-    ASSERT(partition.size() == _hg.initialNumNodes());
-
-//    const auto& map = copy.second;
-//    kahypar::PartitionerFacade().partition(hg_copy, ip_context);
-
-//    kahypar::Hypergraph hg_copy(
-//      kahypar::io::createHypergraphFromFile("/Users/danielseemaier/Hypergraphs/HGR/ISCAS85/c7552.hgr",
-//                                            4));
-//    kahypar::PartitionerFacade().partition(hg_copy, ip_context);
-
 
     _hg.resetPartitioning();
     _hg.changeK(_context.partition.k);
-    for (const HypernodeID& hn : hg_copy.nodes()) {
-      //_hg.setNodePart(map[hn], hg_copy.partID(hn));
-      _hg.setNodePart(hn, partition[hn]);
+
+    const auto m = reindex(_hg, false); // obtain undirected copy of _hg
+    const auto& hg_ptr = m.first;
+    const auto& map = m.second;
+    hg_ptr->resetPartitioning();
+    kahypar::PartitionerFacade().partition(*hg_ptr, ip_context);
+
+    for (const HypernodeID& hn : hg_ptr->nodes()) {
+      _hg.setNodePart(map[hn], hg_ptr->partID(hn));
     }
 
     dag::fixAcyclicity(_hg, _context);
@@ -81,24 +55,24 @@ class KaHyParInitialPartitioner : public IInitialPartitioner, private InitialPar
   Context createContext() const {
     Context ip_context;
     ip_context.partition.current_v_cycle = 0;
-    ip_context.partition.graph_partition_filename = "t.part";
+    ip_context.partition.graph_partition_filename = "";
     ip_context.partition.quiet_mode = false;
     ip_context.partition.verbose_output = true;
     ip_context.partition.k = _context.partition.k;
-    ip_context.partition.epsilon = _context.partition.epsilon;
+    ip_context.partition.epsilon = _context.partition.final_epsilon;
     ip_context.partition.mode = Mode::direct_kway;
     ip_context.partition.objective = Objective::km1;
     ip_context.partition.seed = -1;
     ip_context.partition.hyperedge_size_threshold = 1000;
     ip_context.partition.global_search_iterations = 0;
-    ip_context.preprocessing.enable_min_hash_sparsifier = true;
+    ip_context.preprocessing.enable_min_hash_sparsifier = false;
     ip_context.preprocessing.min_hash_sparsifier.min_median_he_size = 28;
     ip_context.preprocessing.min_hash_sparsifier.max_hyperedge_size = 1200;
     ip_context.preprocessing.min_hash_sparsifier.max_cluster_size = 10;
     ip_context.preprocessing.min_hash_sparsifier.min_cluster_size = 2;
     ip_context.preprocessing.min_hash_sparsifier.num_hash_functions = 5;
     ip_context.preprocessing.min_hash_sparsifier.combined_num_hash_functions = 100;
-    ip_context.preprocessing.enable_community_detection = true;
+    ip_context.preprocessing.enable_community_detection = false;
     ip_context.preprocessing.community_detection.enable_in_initial_partitioning = true;
     ip_context.preprocessing.community_detection.reuse_communities = false;
     ip_context.preprocessing.community_detection.max_pass_iterations = 100;
