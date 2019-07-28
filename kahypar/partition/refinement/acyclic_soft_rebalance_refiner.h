@@ -363,11 +363,43 @@ class AcyclicSoftRebalanceRefiner final : public IRefiner {
     ASSERT(_hg.marked(moved_hn));
     ASSERT(_hg.partID(moved_hn) == to_part);
 
+    _updated_neighbors.resetUsedEntries();
     updateMinMaxNeighborsAfterMove(moved_hn, from_part, to_part);
+
+    updateHypernodeGains(moved_hn);
+    _updated_neighbors.set(moved_hn, true);
+
+    for (const HyperedgeID& he : _hg.incidentEdges(moved_hn)) {
+      for (const HypernodeID& pin : _hg.pins(he)) {
+        if (!_updated_neighbors.get(pin)) {
+          updateHypernodeGains(pin);
+          _updated_neighbors.set(pin, true);
+        }
+      }
+    }
+
     ASSERT([&]() {
       ASSERT_THAT_PQS_CONTAIN_CORRECT_HYPERNODES();
       return true;
     }());
+  }
+
+  void updateHypernodeGains(const HypernodeID hn) {
+    if (_hg.marked(hn)) {
+      return;
+    }
+    ASSERT(_hg.active(hn));
+
+    const auto& ordering = _qg.topologicalOrdering();
+    const auto& inverse_ordering = _qg.inverseTopologicalOrdering();
+
+    for (PartitionID part_id = ordering[_max_predecessor_part[hn]]; part_id <= ordering[_min_successor_part[hn]]; ++part_id) {
+      const PartitionID part = inverse_ordering[part_id];
+      if (part != _hg.partID(hn)) {
+
+      }
+
+    }
   }
 
   bool isMovableTo(const HypernodeID hn, const PartitionID part) const {

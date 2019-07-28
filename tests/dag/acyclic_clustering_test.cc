@@ -28,6 +28,14 @@ class AcyclicClusteringTest : public BaseDAGTest, public TestWithParam<const cha
     }
   }
 
+  void contractClustering(const std::vector<PartitionID>& clustering) {
+    for (const HypernodeID& hn : hg.nodes()) {
+      if (clustering[hn] != hn) {
+        hg.contract(clustering[hn], hn);
+      }
+    }
+  }
+
   void ASSERT_THAT_CLUSTERING_IS_CONTRACTIBLE(const std::vector<PartitionID>& clustering) {
     std::vector<Hypergraph::Memento> contractions;
 
@@ -44,19 +52,34 @@ class AcyclicClusteringTest : public BaseDAGTest, public TestWithParam<const cha
   }
 };
 
-TEST_P(AcyclicClusteringTest, FindClustering) {
-  LOG << "Number of HNs:" << hg.initialNumNodes();
-
-  const auto top = calculateToplevelValues(hg);
-  LOG << "Toplevel:" << top;
-
-  const auto clustering = findAcyclicClustering(hg, false);
-  printClusterStats(clustering);
-
+TEST_P(AcyclicClusteringTest, SingleIterationOfClusteringIsContractible) {
+  const auto clustering = findAcyclicClustering(hg, context, 1.0);
   ASSERT_THAT_CLUSTERING_IS_CONTRACTIBLE(clustering);
 }
 
-INSTANTIATE_TEST_CASE_P(GRAPH_STAR, AcyclicClusteringTest, Values("test_instances/star.hgr"));
+TEST_P(AcyclicClusteringTest, TwoIterationsOfClusteringAreContractible) {
+  const auto clustering_iter1 = findAcyclicClustering(hg, context, 1.0);
+  contractClustering(clustering_iter1);
+  const auto clustering_iter2 = findAcyclicClustering(hg, context, 1.0);
+  ASSERT_THAT_CLUSTERING_IS_CONTRACTIBLE(clustering_iter2);
+}
+
+TEST_P(AcyclicClusteringTest, MaxClusterWeightIsRespected) {
+  const double max_weight_fraction = 0.01;
+  const auto max_weight = static_cast<HypernodeWeight>(max_weight_fraction * hg.totalWeight()) + 1;
+  HypernodeID last_num_nodes = 0;
+  do {
+    last_num_nodes = hg.currentNumNodes();
+    const auto clustering = findAcyclicClustering(hg, context, max_weight_fraction);
+    contractClustering(clustering);
+  } while (last_num_nodes > hg.currentNumNodes());
+
+  for (const HypernodeID& hn : hg.nodes()) {
+    ASSERT_THAT(hg.nodeWeight(hn), Le(max_weight));
+  }
+}
+
+//INSTANTIATE_TEST_CASE_P(GRAPH_STAR, AcyclicClusteringTest, Values("test_instances/star.hgr"));
 
 INSTANTIATE_TEST_CASE_P(GRAPH_C17, AcyclicClusteringTest, Values("test_instances/c17.hgr"));
 
@@ -64,8 +87,8 @@ INSTANTIATE_TEST_CASE_P(GRAPH_C880, AcyclicClusteringTest, Values("test_instance
 
 INSTANTIATE_TEST_CASE_P(GRAPH_C7552, AcyclicClusteringTest, Values("test_instances/c7552.hgr"));
 
-INSTANTIATE_TEST_CASE_P(GRAPH_VIBROBOX, AcyclicClusteringTest, Values("test_instances/vibrobox.hgr"));
+//INSTANTIATE_TEST_CASE_P(GRAPH_VIBROBOX, AcyclicClusteringTest, Values("test_instances/vibrobox.hgr"));
 
-INSTANTIATE_TEST_CASE_P(GRAPH_2MM, AcyclicClusteringTest, Values("test_instances/2mm.hgr"));
+//INSTANTIATE_TEST_CASE_P(GRAPH_2MM, AcyclicClusteringTest, Values("test_instances/2mm.hgr"));
 } // namespace dag
 } // namespace kahypar

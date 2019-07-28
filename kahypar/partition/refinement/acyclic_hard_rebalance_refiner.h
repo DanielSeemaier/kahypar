@@ -332,8 +332,7 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
   }
 
   bool isUnderloaded(const PartitionID part) const {
-    //return _hg.partWeight(part) < (1.0 - _context.partition.epsilon) * _context.partition.perfect_balance_part_weights[part];
-    return _hg.partWeight(part) < _context.partition.perfect_balance_part_weights[part];
+    return _hg.partWeight(part) < (1.0 - _context.partition.epsilon) * _context.partition.perfect_balance_part_weights[part];
   }
 
   std::pair<PartitionID, PartitionID> selectPath() const {
