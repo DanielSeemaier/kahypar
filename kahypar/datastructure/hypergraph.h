@@ -2669,7 +2669,7 @@ class GenericHypergraph {
 
   template<typename Hypergraph>
   friend std::pair<std::unique_ptr<Hypergraph>,
-                   std::vector<typename Hypergraph::HypernodeID> > reindex(const Hypergraph& hypergraph, const bool respect_directed);
+                   std::vector<typename Hypergraph::HypernodeID> > reindex(const Hypergraph& hypergraph, bool respect_directed);
 
   template<typename Hypergraph>
   friend std::pair<std::unique_ptr<Hypergraph>,
@@ -2907,6 +2907,7 @@ extractPartAsUnpartitionedHypergraphForBisection(const Hypergraph& hypergraph,
   std::unordered_map<HypernodeID, HypernodeID> hypergraph_to_subhypergraph;
   std::vector<HypernodeID> subhypergraph_to_hypergraph;
   std::unique_ptr<Hypergraph> subhypergraph(new Hypergraph());
+  subhypergraph->_directed = false;
 
   HypernodeID num_hypernodes = 0;
   for (const HypernodeID& hn : hypergraph.nodes()) {

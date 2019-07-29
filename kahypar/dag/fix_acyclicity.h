@@ -110,13 +110,13 @@ std::pair<QNodeID, QNodeID> pickEdge(const CyclicQuotientGraph& cqg) {
   return lightest_edge;
 }
 
-void moveSuccessors(Hypergraph& hg, CyclicQuotientGraph& cqg, const HypernodeID hn, const PartitionID part) { // TODO can we improve on this?
-  for (const HyperedgeID& he : hg.incidentEdges(hn)) {
-    for (const HypernodeID& head : hg.pins(he)) {
-      if (hg.partID(head) != part) {
-        cqg.testAndUpdateBeforeMovement(head, hg.partID(head), part);
-        hg.changeNodePart(head, hg.partID(head), part);
-        moveSuccessors(hg, cqg, head, part);
+void moveSuccessors(Hypergraph& hg, CyclicQuotientGraph& cqg, const HypernodeID hn, const PartitionID from_part, const PartitionID to_part) { // TODO can we improve on this?
+  for (const HyperedgeID& he : hg.incidentTailEdges(hn)) {
+    for (const HypernodeID& head : hg.heads(he)) {
+      if (hg.partID(head) == to_part) {
+        cqg.testAndUpdateBeforeMovement(head, to_part, from_part);
+        hg.changeNodePart(head, to_part, from_part);
+        moveSuccessors(hg, cqg, head, from_part, to_part);
       }
     }
   }
@@ -137,7 +137,7 @@ void breakEdge(Hypergraph& hg, CyclicQuotientGraph& cqg, const PartitionID from_
         if (hg.partID(head) == to_part) {
           cqg.testAndUpdateBeforeMovement(head, to_part, from_part);
           hg.changeNodePart(head, to_part, from_part);
-          moveSuccessors(hg, cqg, head, from_part);
+          moveSuccessors(hg, cqg, head, from_part, to_part);
         }
       }
     }
@@ -145,13 +145,28 @@ void breakEdge(Hypergraph& hg, CyclicQuotientGraph& cqg, const PartitionID from_
 }
 } // namespace internal
 
-void fixAcyclicity(Hypergraph& hg, const Context& context) {
+//void fixAcyclicity(Hypergraph& hg, const Context& context) {
+//  CyclicQuotientGraph cqg(hg, context);
+//
+//  while (!cqg.isAcyclic()) {
+//    const auto edge = internal::pickEdge(cqg);
+//    internal::breakEdge(hg, cqg, edge.first, edge.second);
+//  }
+//
+//  ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hg, context).isAcyclic());
+//}
+
+void fixBipartitionAcyclicity(Hypergraph& hg, const Context& context, const PartitionID part0, const PartitionID part1) {
   CyclicQuotientGraph cqg(hg, context);
 
-  while (!cqg.isAcyclic()) {
-    const auto edge = internal::pickEdge(cqg);
-    internal::breakEdge(hg, cqg, edge.first, edge.second);
-  }
+//  while (!cqg.isAcyclic()) {
+//    const auto edge = internal::pickEdge(cqg);
+//    ASSERT(edge.first == part0 || edge.first == part1);
+//    ASSERT(edge.second == part0 || edge.second == part1);
+//    internal::breakEdge(hg, cqg, edge.first, edge.second);
+//  }
+
+  internal::breakEdge(hg, cqg, part0, part1);
 
   ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hg, context).isAcyclic());
 }

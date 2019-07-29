@@ -117,7 +117,7 @@ class VertexPairRater {
       DBG << "r(" << u << "," << tmp_target << ")=" << tmp_rating;
       // TODO cache here, move to appropriate place
       bool allow_contraction = true;
-      if (!_context.coarsening.allow_mixed_contraction) {
+      if (_hg.isDirected() && !_context.coarsening.allow_mixed_contraction) {
         for (const HyperedgeID& he : _hg.incidentHeadEdges(u)) {
           if (_hg.isTail(target, he)) {
             allow_contraction = false;

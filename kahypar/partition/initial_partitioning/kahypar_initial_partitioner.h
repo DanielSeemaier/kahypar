@@ -33,33 +33,93 @@ class KaHyParInitialPartitioner : public IInitialPartitioner, private InitialPar
   }
 
   void initialPartition() {
-    Context ip_context = createContext();
-
     _hg.resetPartitioning();
     _hg.changeK(_context.partition.k);
-
-    const auto m = reindex(_hg, false); // obtain undirected copy of _hg
-    const auto& hg_ptr = m.first;
-    const auto& map = m.second;
-    hg_ptr->resetPartitioning();
-    kahypar::PartitionerFacade().partition(*hg_ptr, ip_context);
-
-    for (const HypernodeID& hn : hg_ptr->nodes()) {
-      _hg.setNodePart(map[hn], hg_ptr->partID(hn));
+    for (const HypernodeID& hn : _hg.nodes()) {
+      _hg.setNodePart(hn, 0);
     }
 
-    dag::fixAcyclicity(_hg, _context);
-    _context.partition.epsilon = metrics::imbalance(_hg, _context);
+    performPartition(0, _context.partition.k);
   }
 
-  Context createContext() const {
+  void performPartition(const PartitionID part, const PartitionID k) {
+    if (k < 2) {
+      return;
+    }
+
+    const auto pair = extractPartAsUnpartitionedHypergraphForBisection(_hg, part, Objective::km1);
+    const auto& hg_ptr = pair.first;
+    const auto& map = pair.second;
+    hg_ptr->resetPartitioning();
+    Context ctx = createContext(2, 0.03);
+    kahypar::PartitionerFacade().partition(*hg_ptr, ctx);
+
+
+    PartitionID pre_num_part_0 = 0;
+    PartitionID pre_num_part_1 = 0;
+    for (const HypernodeID& hn : hg_ptr->nodes()) {
+      if (hg_ptr->partID(hn) == 0) {
+        ++pre_num_part_0;
+      } else {
+        ++pre_num_part_1;
+      }
+    }
+
+
+    for (const HypernodeID& hn : hg_ptr->nodes()) {
+      if (hg_ptr->partID(hn) == 1) {
+        _hg.changeNodePart(map[hn], part, part + 1);
+      }
+    }
+
+    dag::fixBipartitionAcyclicity(_hg, _context, part, part + 1);
+
+    PartitionID num_part_0 = 0;
+    PartitionID num_part_1 = 0;
+    for (const HypernodeID& hn : _hg.nodes()) {
+      if (_hg.partID(hn) == part) {
+        ++num_part_0;
+      } else if (_hg.partID(hn) == part + 1) {
+        ++num_part_1;
+      }
+    }
+
+    PartitionID k_part_0 = std::ceil(k * (static_cast<double>(num_part_0) / hg_ptr->initialNumNodes()));
+    PartitionID k_part_1 = std::floor(k * (static_cast<double>(num_part_1) / hg_ptr->initialNumNodes()));
+
+    k_part_0 = std::max<PartitionID>(1, k_part_0);
+    k_part_0 = std::min<PartitionID>(k - 1, k_part_0);
+    k_part_1 = std::max<PartitionID>(1, k_part_1);
+    k_part_1 = std::min<PartitionID>(k - 1, k_part_1);
+    ASSERT(k_part_0 + k_part_1 == k);
+    ASSERT(k_part_0 < k); // termination check
+    ASSERT(k_part_1 < k); // termination check
+
+    if (k_part_0 >= 2) {
+      for (const HypernodeID& hn : _hg.nodes()) {
+        if (_hg.partID(hn) == part + 1) {
+          _hg.changeNodePart(hn, part + 1, part + k_part_0);
+        }
+      }
+    }
+
+    LOG << "Split" << hg_ptr->initialNumNodes() << "from" << part << "into" << pre_num_part_0 << "and" << pre_num_part_1 << "blocks";
+    LOG << "\t\tAfter acyclic fix:" << num_part_0 << "and" << num_part_1 << "blocks";
+    LOG << "\tFirst block:" << part << "second block:" << part + k_part_0;
+    LOG << "\tContinue with k:" << k_part_0 << "and" << k_part_1;
+
+    performPartition(part, k_part_0);
+    performPartition(part + k_part_0, k_part_1);
+  }
+
+  Context createContext(const PartitionID k, const double epsilon) const {
     Context ip_context;
     ip_context.partition.current_v_cycle = 0;
     ip_context.partition.graph_partition_filename = "";
-    ip_context.partition.quiet_mode = false;
-    ip_context.partition.verbose_output = true;
-    ip_context.partition.k = _context.partition.k;
-    ip_context.partition.epsilon = _context.partition.final_epsilon;
+    ip_context.partition.quiet_mode = true;
+    ip_context.partition.verbose_output = false;
+    ip_context.partition.k = k;
+    ip_context.partition.epsilon = epsilon;
     ip_context.partition.mode = Mode::direct_kway;
     ip_context.partition.objective = Objective::km1;
     ip_context.partition.seed = -1;

@@ -272,7 +272,7 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
     }());
     ASSERT(_qg.isAcyclic());
     ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(_hg, _context).isAcyclic());
-    ASSERT(best_metrics.imbalance <= _context.partition.epsilon);
+    // ASSERT(best_metrics.imbalance <= _context.partition.epsilon); -- might fail if the graph is cyclic
 
     DBG << "Imbalance after hard rebalance refiner:" << best_metrics.imbalance;
     ASSERT(best_metrics.km1 == metrics::km1(_hg));

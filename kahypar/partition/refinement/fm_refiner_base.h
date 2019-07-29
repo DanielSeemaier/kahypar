@@ -155,11 +155,6 @@ class FMRefinerBase {
   void performMovesAndUpdateCache(const std::vector<Move>& moves,
                                   std::vector<HypernodeID>& refinement_nodes,
                                   const UncontractionGainChanges&) {
-    for (std::size_t i = moves.size(); i > 0; --i) {
-      const Move& move = moves[i - 1];
-      _hg.changeNodePart(move.hn, move.to, move.from);
-    }
-
     reset();
     Derived* derived = static_cast<Derived*>(this);
     for (const HypernodeID& hn : refinement_nodes) {
@@ -175,16 +170,14 @@ class FMRefinerBase {
                                                                               move.to));
       }
       _hg.changeNodePart(move.hn, move.from, move.to);
-      ASSERT(!_hg.marked(move.hn));
-      if (!_hg.active(move.hn)) {
-        _hg.activate(move.hn);
-      }
+      _hg.activate(move.hn);
       _hg.mark(move.hn);
       derived->updateNeighboursGainCacheOnly(move.hn, move.from, move.to);
     }
     derived->_gain_cache.resetDelta();
     derived->ASSERT_THAT_GAIN_CACHE_IS_VALID();
   }
+
 
   template <typename GainCache>
   void removeHypernodeMovementsFromPQ(const HypernodeID hn, const GainCache& gain_cache) {
@@ -195,13 +188,13 @@ class FMRefinerBase {
         _pq.remove(hn, part);
       }
       ASSERT([&]() {
-          for (PartitionID part = 0; part < _context.partition.k; ++part) {
-            if (_pq.contains(hn, part)) {
-              return false;
-            }
+        for (PartitionID part = 0; part < _context.partition.k; ++part) {
+          if (_pq.contains(hn, part)) {
+            return false;
           }
-          return true;
-        } (), V(hn));
+        }
+        return true;
+      } (), V(hn));
     }
   }
 
@@ -224,7 +217,7 @@ class FMRefinerBase {
   }
 
   Hypergraph& _hg;
-  Context _context;
+  const Context& _context;
   KWayRefinementPQ _pq;
   std::vector<RollbackElement> _performed_moves;
   std::vector<HypernodeID> _hns_to_activate;

@@ -75,6 +75,10 @@ class AcyclicKMinusOneRefiner final : public IRefiner {
     }
     _least_num_nodes = _hg.currentNumNodes();
     _is_initialized = true;
+
+    // relax balance constrain until initial partition is initially within the bound
+    _context.partition.epsilon = std::max(metrics::imbalance(_hg, _context), _context.partition.epsilon);
+    _context.setupPartWeights(_hg.totalWeight());
   }
 
   void performMovesAndUpdateCacheImpl(const std::vector<Move>& moves,
