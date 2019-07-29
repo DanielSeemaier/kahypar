@@ -65,7 +65,7 @@ class KaHyParInitialPartitioner : public IInitialPartitioner, private InitialPar
       }
     }
 
-
+    // keep HNs in hg_ptr->partID(hn) == 0 in block `part`
     for (const HypernodeID& hn : hg_ptr->nodes()) {
       if (hg_ptr->partID(hn) == 1) {
         _hg.changeNodePart(map[hn], part, part + 1);
@@ -95,12 +95,15 @@ class KaHyParInitialPartitioner : public IInitialPartitioner, private InitialPar
     ASSERT(k_part_0 < k); // termination check
     ASSERT(k_part_1 < k); // termination check
 
+    // give up part+1 in favor of further subdivisions of block `part`
     if (k_part_0 >= 2) {
       for (const HypernodeID& hn : _hg.nodes()) {
         if (_hg.partID(hn) == part + 1) {
           _hg.changeNodePart(hn, part + 1, part + k_part_0);
         }
       }
+    } else {
+      ASSERT(k_part_0 == 1);
     }
 
     LOG << "Split" << hg_ptr->initialNumNodes() << "from" << part << "into" << pre_num_part_0 << "and" << pre_num_part_1 << "blocks";
