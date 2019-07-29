@@ -21,7 +21,7 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
  private:
   using KWayRefinementPQ = ds::KWayPriorityQueue<HypernodeID, Gain, std::numeric_limits<Gain>>;
 
-  static constexpr bool debug = false;
+  static constexpr bool debug = true;
   static constexpr HypernodeID hn_to_debug = 0;
 
   static constexpr std::size_t PREV = 0;
@@ -45,7 +45,8 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
     _state_changes{ds::FastResetArray<std::size_t>(hypergraph.initialNumNodes(), 0),
                    ds::FastResetArray<std::size_t>(hypergraph.initialNumNodes(), 0)},
     _updated_neighbors(_hg.initialNumNodes(), false),
-    _gain_manager(gain_manager) {}
+    _gain_manager(gain_manager),
+    _moved_from(_hg.initialNumNodes(), Hypergraph::kInvalidPartition) {}
 
   ~AcyclicHardRebalanceRefiner() override = default;
 
@@ -190,7 +191,9 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
     ASSERT(_qg.isAcyclic());
     ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(_hg, _context).isAcyclic());
 
-    while (best_metrics.imbalance > _context.partition.epsilon) {
+    bool stop_after_iteration = false;
+
+    while (!stop_after_iteration && best_metrics.imbalance > _context.partition.epsilon) {
       const auto& path = selectPath();
       if (path.first == Hypergraph::kInvalidPartition || path.second == Hypergraph::kInvalidPartition) {
         ++_num_no_path;
@@ -217,6 +220,10 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
           _pq[direction].remove(max_gain_hn, from_part);
         }
         ASSERT(_hg.partID(max_gain_hn) == from_part, V(max_gain_hn) << V(_hg.partID(max_gain_hn)) << V(from_part));
+
+        if (_moved_from.get(max_gain_hn) == to_part) {
+          stop_after_iteration = true;
+        }
 
         ++_num_moves;
         if (_hg.initialNumNodes() == _hg.currentNumNodes()) {
@@ -283,6 +290,8 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
     if (best_metrics.imbalance <= _context.partition.epsilon) {
       ++_num_success;
     }
+
+    _moved_from.resetUsedEntries();
 
     return false;
   }
@@ -383,7 +392,6 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
         ASSERT(to_part != from_part);
         const PartitionID prev_part = inverse_ordering[to_id_prime];
         ASSERT(adjacentPart(prev_part, NEXT) == to_part);
-        DBG << V(from_part) << V(to_part) << V(prev_part) << V(current_gain) << V(_pq[NEXT].size(prev_part));
         if (_pq[NEXT].empty(prev_part)) { // path not feasible
           break;
         }
@@ -427,6 +435,10 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
    * GAIN UPDATE METHODS
    *********************************************************************************/
   void move(const HypernodeID moved_hn, const PartitionID from_part, const PartitionID to_part) {
+    if (_moved_from.get(moved_hn) == Hypergraph::kInvalidPartition) {
+      _moved_from.set(moved_hn, from_part);
+    }
+
     updateFixtures(moved_hn, from_part, to_part);
     processFixtureStateChanges();
 
@@ -804,6 +816,7 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
   std::vector<HypernodeID> _moved_hns;
   ds::FastResetArray<bool> _updated_neighbors;
   KMinusOneGainManager& _gain_manager;
+  ds::FastResetArray<PartitionID> _moved_from;
 
   bool _qg_changed{false};
 
