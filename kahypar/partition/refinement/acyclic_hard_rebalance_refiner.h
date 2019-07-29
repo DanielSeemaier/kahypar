@@ -46,7 +46,7 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
                    ds::FastResetArray<std::size_t>(hypergraph.initialNumNodes(), 0)},
     _updated_neighbors(_hg.initialNumNodes(), false),
     _gain_manager(gain_manager),
-    _moved_from(_hg.initialNumNodes(), Hypergraph::kInvalidPartition) {}
+    _moved_from(_hg.initialNumNodes(), std::vector<bool>(context.partition.k)) {}
 
   ~AcyclicHardRebalanceRefiner() override = default;
 
@@ -221,7 +221,7 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
         }
         ASSERT(_hg.partID(max_gain_hn) == from_part, V(max_gain_hn) << V(_hg.partID(max_gain_hn)) << V(from_part));
 
-        if (_moved_from.get(max_gain_hn) == to_part) {
+        if (_moved_from[max_gain_hn][to_part]) {
           stop_after_iteration = true;
         }
 
@@ -291,7 +291,10 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
       ++_num_success;
     }
 
-    _moved_from.resetUsedEntries();
+    for (const auto& entry : _moved_from_entries) {
+      _moved_from[entry.first][entry.second] = false;
+    }
+    _moved_from_entries.clear();
 
     return false;
   }
@@ -435,8 +438,9 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
    * GAIN UPDATE METHODS
    *********************************************************************************/
   void move(const HypernodeID moved_hn, const PartitionID from_part, const PartitionID to_part) {
-    if (_moved_from.get(moved_hn) == Hypergraph::kInvalidPartition) {
-      _moved_from.set(moved_hn, from_part);
+    if (!_moved_from[moved_hn][to_part]) {
+      _moved_from[moved_hn][to_part] = true;
+      _moved_from_entries.emplace_back(moved_hn, to_part);
     }
 
     updateFixtures(moved_hn, from_part, to_part);
@@ -816,7 +820,8 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
   std::vector<HypernodeID> _moved_hns;
   ds::FastResetArray<bool> _updated_neighbors;
   KMinusOneGainManager& _gain_manager;
-  ds::FastResetArray<PartitionID> _moved_from;
+  std::vector<std::vector<bool>> _moved_from;
+  std::vector<std::pair<HypernodeID, PartitionID>> _moved_from_entries;
 
   bool _qg_changed{false};
 
