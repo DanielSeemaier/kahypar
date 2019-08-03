@@ -40,6 +40,30 @@ class KaHyParInitialPartitioner : public IInitialPartitioner, private InitialPar
     }
 
     performPartition(0, _context.partition.k);
+
+    const double imbalance = metrics::imbalance(_hg, _context);
+    if (_context.partition.balance_initial_partition && (imbalance > _context.partition.final_epsilon || imbalance > _context.partition.epsilon)) {
+      LOG << "Running hard rebalance to improve IP imbalance from" << imbalance << "to min{"
+          << _context.partition.final_epsilon << "," << _context.partition.epsilon << "}";
+
+      Context balanced_context = _context;
+      balanced_context.partition.epsilon = _context.partition.final_epsilon;
+      balanced_context.setupPartWeights(_hg.totalWeight());
+
+      AdjacencyMatrixQuotientGraph<DFSCycleDetector> qg(_hg, balanced_context);
+      KMinusOneGainManager gain_manager(_hg, balanced_context);
+      gain_manager.initialize();
+      AcyclicHardRebalanceRefiner hard_balance_refiner(_hg, balanced_context, qg, gain_manager);
+      hard_balance_refiner.initialize(0);
+      Metrics current_metrics = {metrics::hyperedgeCut(_hg),
+                                 metrics::km1(_hg),
+                                 metrics::imbalance(_hg, _context)};
+      UncontractionGainChanges changes{};
+      std::vector<HypernodeID> refinement_nodes{};
+      hard_balance_refiner.refine(refinement_nodes, {0, 0}, changes, current_metrics);
+
+      hard_balance_refiner.printSummary();
+    }
   }
 
   void performPartition(const PartitionID part, const PartitionID k) {

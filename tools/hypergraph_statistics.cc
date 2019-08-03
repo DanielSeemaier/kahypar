@@ -54,11 +54,13 @@ int main(int argc, char* argv[]) {
   kahypar::io::readHypergraphFile(graph_filename, num_hypernodes, num_hyperedges,
                                   index_vector, edge_vector, is_directed, num_heads,
                                   &hyperedge_weights, &hypernode_weights);
-  Hypergraph hypergraph(num_hypernodes, num_hyperedges, index_vector, edge_vector, is_directed, num_heads, 2, nullptr, nullptr);
+  Hypergraph hypergraph(num_hypernodes, num_hyperedges, index_vector, edge_vector, is_directed, num_heads, 2, &hyperedge_weights, &hypernode_weights);
 
   HyperedgeID max_hn_degree = 0;
   HyperedgeID min_hn_degree = std::numeric_limits<HyperedgeID>::max();
   double avg_hn_degree = kahypar::metrics::avgHypernodeDegree(hypergraph);
+  HypernodeWeight max_hn_weight = 0;
+  HypernodeWeight min_hn_weight = std::numeric_limits<HypernodeWeight>::max();
   double sd_hn_degree = 0.0;
   std::vector<HyperedgeID> hn_degrees;
   hn_degrees.reserve(hypergraph.currentNumNodes());
@@ -66,6 +68,8 @@ int main(int argc, char* argv[]) {
     hn_degrees.push_back(hypergraph.nodeDegree(hn));
     max_hn_degree = std::max(max_hn_degree, hypergraph.nodeDegree(hn));
     min_hn_degree = std::min(min_hn_degree, hypergraph.nodeDegree(hn));
+    max_hn_weight = std::max(max_hn_weight, hypergraph.nodeWeight(hn));
+    min_hn_weight = std::min(min_hn_weight, hypergraph.nodeWeight(hn));
     sd_hn_degree += std::pow(hypergraph.nodeDegree(hn), 2);
   }
 
@@ -122,6 +126,11 @@ int main(int argc, char* argv[]) {
              << " Q3HNdegree=" << hn_deg_quartiles.second
              << " density=" << static_cast<double>(num_hyperedges) / num_hypernodes
              << " acyclic=" << dag::isAcyclic(hypergraph)
+             << " minHNweight=" << min_hn_weight
+             << " maxHNweight=" << max_hn_weight
+             << " maxHNweight%=" << 100.0 * max_hn_weight / hypergraph.totalWeight()
+             << " avgHNweight=" << hypergraph.totalWeight() / hypergraph.initialNumNodes()
+             << " totalWeight=" << hypergraph.totalWeight()
              << std::endl;
   out_stream.flush();
 

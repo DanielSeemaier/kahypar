@@ -21,7 +21,7 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
  private:
   using KWayRefinementPQ = ds::KWayPriorityQueue<HypernodeID, Gain, std::numeric_limits<Gain>>;
 
-  static constexpr bool debug = true;
+  static constexpr bool debug = false;
   static constexpr HypernodeID hn_to_debug = 0;
 
   static constexpr std::size_t PREV = 0;
@@ -46,7 +46,7 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
                    ds::FastResetArray<std::size_t>(hypergraph.initialNumNodes(), 0)},
     _updated_neighbors(_hg.initialNumNodes(), false),
     _gain_manager(gain_manager),
-    _moved_from(_hg.initialNumNodes(), std::vector<bool>(context.partition.k)) {}
+    _moved_from(_hg.initialNumNodes()) {}
 
   ~AcyclicHardRebalanceRefiner() override = default;
 
@@ -221,7 +221,7 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
         }
         ASSERT(_hg.partID(max_gain_hn) == from_part, V(max_gain_hn) << V(_hg.partID(max_gain_hn)) << V(from_part));
 
-        if (_moved_from[max_gain_hn][to_part]) {
+        if (_moved_from[max_gain_hn] > _hg.initialNumNodes()) {
           stop_after_iteration = true;
         }
 
@@ -291,8 +291,8 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
       ++_num_success;
     }
 
-    for (const auto& entry : _moved_from_entries) {
-      _moved_from[entry.first][entry.second] = false;
+    for (const auto& hn : _moved_from_entries) {
+      _moved_from[hn] = 0;
     }
     _moved_from_entries.clear();
 
@@ -438,10 +438,10 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
    * GAIN UPDATE METHODS
    *********************************************************************************/
   void move(const HypernodeID moved_hn, const PartitionID from_part, const PartitionID to_part) {
-    if (!_moved_from[moved_hn][to_part]) {
-      _moved_from[moved_hn][to_part] = true;
-      _moved_from_entries.emplace_back(moved_hn, to_part);
+    if (_moved_from[moved_hn] == 0) {
+      _moved_from_entries.emplace_back(moved_hn);
     }
+    _moved_from[moved_hn]++;
 
     updateFixtures(moved_hn, from_part, to_part);
     processFixtureStateChanges();
@@ -820,8 +820,8 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
   std::vector<HypernodeID> _moved_hns;
   ds::FastResetArray<bool> _updated_neighbors;
   KMinusOneGainManager& _gain_manager;
-  std::vector<std::vector<bool>> _moved_from;
-  std::vector<std::pair<HypernodeID, PartitionID>> _moved_from_entries;
+  std::vector<std::size_t> _moved_from;
+  std::vector<HypernodeID> _moved_from_entries{};
 
   bool _qg_changed{false};
 

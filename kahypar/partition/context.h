@@ -305,6 +305,7 @@ struct PartitioningParameters {
   double epsilon = std::numeric_limits<double>::max();
   double final_epsilon = std::numeric_limits<double>::max();
   bool refine_initial_partition = false;
+  bool balance_initial_partition = false;
   PartitionID k = std::numeric_limits<PartitionID>::max();
   PartitionID rb_lower_k = 0;
   PartitionID rb_upper_k = 0;
@@ -345,6 +346,7 @@ inline std::ostream& operator<< (std::ostream& str, const PartitioningParameters
   str << "  k:                                  " << params.k << std::endl;
   str << "  epsilon:                            " << params.epsilon << std::endl;
   str << "  final epsilon:                      " << params.final_epsilon << std::endl;
+  str << "  balance initial partition:          " << params.balance_initial_partition << std::endl;
   str << "  seed:                               " << params.seed << std::endl;
   str << "  # V-cycles:                         " << params.global_search_iterations << std::endl;
   str << "  time limit:                         " << params.time_limit << "s" << std::endl;

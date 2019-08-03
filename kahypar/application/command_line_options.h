@@ -76,6 +76,9 @@ po::options_description createGeneralOptionsDescription(Context& context, const 
     ("refine-ip",
     po::value<bool>(&context.partition.refine_initial_partition)->value_name("<bool>"),
     "Refine initial partition")
+    ("balance-ip",
+     po::value<bool>(&context.partition.balance_initial_partition)->value_name("<bool>"),
+     "Balance initial partition")
     ("r-soft-rebalance",
      po::value<bool>(&context.enable_soft_rebalance)->value_name("<bool>"),
      "Use soft rebalance")
