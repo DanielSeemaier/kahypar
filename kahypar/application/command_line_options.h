@@ -340,6 +340,24 @@ po::options_description createRefinementOptionsDescription(Context& context,
     " - kway_fm_km1      : k-way FM algorithm        (direct k-way       : km1)\n"
     " - kway_fm_flow_km1 : k-way FM + Flow algorithm (direct k-way       : km1)\n"
     " - kway_flow        : k-way Flow algorithm      (direct k-way       : cut & km1)")
+    ((initial_partitioning ? "i-r-type-second" : "r-type-second"),
+     po::value<std::string>()->value_name("<string>")->notifier(
+       [&context, initial_partitioning](const std::string& rtype) {
+         if (initial_partitioning) {
+           context.initial_partitioning.local_search.algorithm_second = kahypar::refinementAlgorithmFromString(rtype);
+         } else {
+           context.local_search.algorithm_second = kahypar::refinementAlgorithmFromString(rtype);
+         }
+       }),
+     "Local Search Algorithm:\n"
+     " - twoway_fm        : 2-way FM algorithm        (recursive bisection: cut & km1)\n"
+     " - twoway_flow      : 2-way Flow algorithm      (recursive bisection: cut & km1)\n"
+     " - twoway_fm_flow   : 2-way FM + Flow algorithm (recursive bisection: cut & km1)\n"
+     " - kway_fm          : k-way FM algorithm        (direct k-way       : cut)\n"
+     " - kway_fm_flow     : k-way FM + Flow algorithm (direct k-way       : cut)\n"
+     " - kway_fm_km1      : k-way FM algorithm        (direct k-way       : km1)\n"
+     " - kway_fm_flow_km1 : k-way FM + Flow algorithm (direct k-way       : km1)\n"
+     " - kway_flow        : k-way Flow algorithm      (direct k-way       : cut & km1)")
     ((initial_partitioning ? "i-r-cycle-detector" : "r-cycle-detector"),
     po::value<std::string>()->value_name("<string>")->notifier(
       [&context, initial_partitioning](const std::string& detector) { // TODO

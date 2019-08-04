@@ -69,7 +69,7 @@ static inline bool partitionVCycle(Hypergraph& hypergraph, ICoarsener& coarsener
   return improved_quality;
 }
 
-static inline void performInitialPartitioning(Hypergraph& hypergraph, const Context& context, IRefiner& refiner) {
+static inline void performInitialPartitioning(Hypergraph& hypergraph, const Context& context) {
   io::printInitialPartitioningBanner(context);
 
   auto start = std::chrono::high_resolution_clock::now();
@@ -81,9 +81,18 @@ static inline void performInitialPartitioning(Hypergraph& hypergraph, const Cont
 
   hypergraph.initializeNumCutHyperedges();
 
+  Context ctx_copy = context;
+  std::unique_ptr<IRefiner> ip_refiner(
+    RefinerFactory::getInstance().createObject(
+      context.initial_partitioning.local_search.algorithm, hypergraph, ctx_copy));
+  if (metrics::imbalance(hypergraph, context) > context.partition.epsilon) {
+    ctx_copy.partition.epsilon = metrics::imbalance(hypergraph, context);
+  }
+  ctx_copy.setupPartWeights(hypergraph.totalWeight());
+
   if (context.partition.refine_initial_partition) {
     LOG << "Performing initial refinement with configured refiner";
-    refiner.initialize(0);
+    ip_refiner->initialize(0);
     UncontractionGainChanges changes;
     changes.representative.push_back(0);
     changes.contraction_partner.push_back(0);
@@ -94,7 +103,7 @@ static inline void performInitialPartitioning(Hypergraph& hypergraph, const Cont
     Metrics current_metrics = {metrics::hyperedgeCut(hypergraph),
                                metrics::km1(hypergraph),
                                metrics::imbalance(hypergraph, context)};
-    refiner.refine(refinement_nodes, {0, 0}, changes, current_metrics);
+    ip_refiner->refine(refinement_nodes, {0, 0}, changes, current_metrics);
     ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hypergraph, context).isAcyclic(),
            "Initial partition is not acyclic!");
   } else {
@@ -122,20 +131,28 @@ static inline void performInitialPartitioning(Hypergraph& hypergraph, const Cont
 static inline void partition(Hypergraph& hypergraph, const Context& context) {
   ASSERT(hypergraph.isDirected());
 
+  Context ctx_copy = context;
+
   std::unique_ptr<ICoarsener> coarsener(
     CoarsenerFactory::getInstance().createObject(
       context.coarsening.algorithm, hypergraph, context,
       hypergraph.weightOfHeaviestNode()));
   std::unique_ptr<IRefiner> km1_refiner(
     RefinerFactory::getInstance().createObject(
-      context.local_search.algorithm, hypergraph, context));
-  std::unique_ptr<IRefiner> ip_refiner(
+      context.local_search.algorithm, hypergraph, ctx_copy));
+  std::unique_ptr<IRefiner> km1_refiner_second(
     RefinerFactory::getInstance().createObject(
-      context.initial_partitioning.local_search.algorithm, hypergraph, context));
+      context.local_search.algorithm_second, hypergraph, ctx_copy));
 
   if (!context.partition.vcycle_refinement_for_input_partition) {
-    performInitialPartitioning(hypergraph, context, *ip_refiner);
+    performInitialPartitioning(hypergraph, context);
   }
+
+  if (metrics::imbalance(hypergraph, context) > context.partition.epsilon) {
+    ctx_copy.partition.epsilon = metrics::imbalance(hypergraph, context);
+    LOG << "Relaxed epsilon' from" << context.partition.epsilon << "to" << ctx_copy.partition.epsilon;
+  }
+  ctx_copy.setupPartWeights(hypergraph.totalWeight());
 
   LOG << "Initial" << context.partition.objective << " before first Vcycle ="
       << (context.partition.objective == Objective::cut
@@ -144,13 +161,20 @@ static inline void partition(Hypergraph& hypergraph, const Context& context) {
 
   for (uint32_t vcycle = 1; vcycle <= context.partition.global_search_iterations; ++vcycle) {
     context.partition.current_v_cycle = vcycle;
-    const bool improved_quality = partitionVCycle(hypergraph, *coarsener, *km1_refiner, context);
-    ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hypergraph, context).isAcyclic(),
-           "Vcycle" << vcycle << "produced a cyclic partition");
+    if (vcycle == 1) {
+      LOG << "Using Refiner:" << context.local_search.algorithm;
+      partitionVCycle(hypergraph, *coarsener, *km1_refiner, ctx_copy);
+      ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hypergraph, context).isAcyclic(),
+             "Vcycle" << vcycle << "produced a cyclic partition");
+    } else {
+      LOG << "Using Refiner:" << context.local_search.algorithm_second;
+      ctx_copy.partition.epsilon = context.partition.epsilon;
+      ctx_copy.setupPartWeights(hypergraph.totalWeight());
+      LOG << "Reset epsilon' to" << context.partition.epsilon << "for" << vcycle << "-nd/th vcycle";
 
-    if (!improved_quality) {
-      LOG << "No improvement in V-cycle" << vcycle << ". Stopping global search.";
-      break;
+      partitionVCycle(hypergraph, *coarsener, *km1_refiner_second, context);
+      ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hypergraph, context).isAcyclic(),
+             "Vcycle" << vcycle << "produced a cyclic partition");
     }
   }
 

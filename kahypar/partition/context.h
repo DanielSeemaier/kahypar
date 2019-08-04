@@ -203,6 +203,7 @@ struct LocalSearchParameters {
   FM fm { };
   Flow flow { };
   RefinementAlgorithm algorithm = RefinementAlgorithm::UNDEFINED;
+  RefinementAlgorithm algorithm_second = RefinementAlgorithm::UNDEFINED;
   int iterations_per_level = std::numeric_limits<int>::max();
   CycleDetectorType cycle_detector_type;
 };
