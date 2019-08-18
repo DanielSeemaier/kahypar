@@ -222,7 +222,7 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
         ASSERT(_hg.partID(max_gain_hn) == from_part, V(max_gain_hn) << V(_hg.partID(max_gain_hn)) << V(from_part));
 
         if (_moved_from[max_gain_hn] > _hg.initialNumNodes()) {
-          stop_after_iteration = true;
+          //stop_after_iteration = true;
         }
 
         ++_num_moves;

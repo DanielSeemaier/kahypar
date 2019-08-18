@@ -16,36 +16,50 @@ int main(int argc, char* argv[]) {
   in >> ignored >> num_pins >> num_nets >> num_modules >> pad_offset;
 
   std::unordered_map<std::string, std::vector<std::string>> map;
+  std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>> graph;
   std::string current_head;
   for (std::size_t pin = 0; pin < num_pins; ++pin) {
     std::string module, type, direction;
     in >> module >> type >> direction;
+    ASSERT(type == "s" || type == "l");
+    ASSERT(module[0] == 'a' || module[0] == 'p');
+    ASSERT(direction == "B" || direction == "I" || direction == "O");
+
     if (type == "s") {
-      current_head = module;
-    } else {
-      ASSERT(type == "l", V(pin) << V(module) << V(type) << V(direction));
-      ASSERT(!current_head.empty(), V(pin) << V(module) << V(type) << V(direction));
-      auto& tails = map[current_head];
-      if (std::find(tails.begin(), tails.end(), module) == tails.end()) {
-        tails.push_back(module);
+      if (!graph.empty()) {
+        if (graph.back().first.size() + graph.back().second.size() <= 1) {
+          graph.pop_back();
+        }
       }
+      graph.emplace_back();
+    }
+
+    ASSERT(!graph.empty());
+
+    // skip pads and bidirectional signals
+    if (module[0] == 'p' || direction[0] == 'B') {
+      continue;
+    }
+
+    if (direction == "I") {
+      graph.back().first.push_back(module);
+    } else {
+      ASSERT(direction == "O");
+      graph.back().second.push_back(module);
     }
   }
   in.close();
 
-  for (const auto& entry : map) {
-    LOG << entry.first << " -- " << entry.second;
-  }
-
   std::unordered_map<std::string, std::size_t> name_to_id;
   std::size_t next_id = 1;
-  for (const auto& entry : map) {
-    const std::string& name = entry.first;
-    if (name_to_id[name] == 0) {
-      LOG << name << "->" << next_id;
-      name_to_id[name] = next_id++;
+  for (const auto& edge : graph) {
+    for (const auto& head : edge.first) {
+      if (name_to_id[head] == 0) {
+        LOG << head << "->" << next_id;
+        name_to_id[head] = next_id++;
+      }
     }
-    for (const std::string& tail : entry.second) {
+    for (const auto& tail : edge.second) {
       if (name_to_id[tail] == 0) {
         LOG << tail << "->" << next_id;
         name_to_id[tail] = next_id++;
@@ -53,16 +67,22 @@ int main(int argc, char* argv[]) {
     }
   }
 
+  auto name_to_id_f = [](const std::string &name) {
+    return std::strtol(name.data() + 1, nullptr, 10) + 1;
+  };
+
   std::ofstream out(hgr_filename);
-  const std::size_t num_hyperedges = map.size();
-  const std::size_t num_hypernodes = next_id;
+  const std::size_t num_hyperedges = graph.size();
+  const std::size_t num_hypernodes = next_id - 1;
   out << num_hyperedges << " " << num_hypernodes << " 11 1\n";
-  for (const auto& entry : map) {
-    const std::string& head = entry.first;
-    const std::vector<std::string>& tails = entry.second;
-    out << "1 1 " << name_to_id[head] << " ";
-    for (const std::string& tail : tails) {
-      out << name_to_id[tail] << " ";
+  for (const auto& edge : graph) {
+    out << "1 "; // hyperedge weight
+    out << edge.first.size() << " "; // num heads
+    for (const auto& head : edge.first) {
+      out << name_to_id_f(head) << " ";
+    }
+    for (const auto& tail : edge.second) {
+      out << name_to_id_f(tail) << " ";
     }
     out << "\n";
   }

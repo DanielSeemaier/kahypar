@@ -62,6 +62,9 @@ set_property(TARGET GraphToHyperDag PROPERTY CXX_STANDARD_REQUIRED ON)
 add_executable(IspdToHgr ispd_to_hgr_converter.cc)
 set_property(TARGET IspdToHgr PROPERTY CXX_STANDARD 14)
 set_property(TARGET IspdToHgr PROPERTY CXX_STANDARD_REQUIRED ON)
+add_executable(DacToHgr dac_to_hgr_converter.cc)
+set_property(TARGET DacToHgr PROPERTY CXX_STANDARD 14)
+set_property(TARGET DacToHgr PROPERTY CXX_STANDARD_REQUIRED ON)
 
 # This test needs test instance files, so we copy them to the corresponding build dir
 file(COPY test_instances DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
