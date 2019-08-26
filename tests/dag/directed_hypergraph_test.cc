@@ -34,6 +34,24 @@ TEST(DirectedHypergraphTest, UndirectedHypergraphIsUndirected) {
   auto hgr = loadHypergraph("test_instances/undirected.hgr");
   ASSERT_THAT(hgr.isDirected(), Eq(false));
 }
+
+TEST(DirectedHypergraphTest, DirectedGraphTest) {
+  auto hgr = loadHypergraph("test_instances/2mm_graph.hgr");
+  hgr.printDirectedHypergraphNode(2189);
+  hgr.printDirectedHyperedge(20486);
+  hgr.printDirectedHyperedge(20488);
+  auto reindexed = reindex(hgr, true);
+  LOG << "Reindexed:";
+  reindexed.first->printDirectedHypergraphNode(2189);
+  reindexed.first->printDirectedHyperedge(20486);
+  reindexed.first->printDirectedHyperedge(20488);
+
+  LOG << "21454 --> " << reindexed.second[21454];
+  LOG << "21495 --> " << reindexed.second[21495];
+  LOG << "2189 --> " << reindexed.second[2189];
+
+  ASSERT_THAT(hgr.isDirected(), Eq(true));
+}
 } // namespace dag
 } // namespace kahypar
 

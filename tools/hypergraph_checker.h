@@ -119,7 +119,7 @@ void validateHypergraphFile(const std::string& filename) {
       if (is_directed) {
         HypernodeID num_heads;
         if (!(line_stream >> num_heads)) {
-          throw BadHyperedgeException("hyperedge does specify its number of heads", i);
+          throw BadHyperedgeException("hyperedge does not specify its number of heads", i);
         }
       }
       HypernodeID pin;

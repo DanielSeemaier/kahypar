@@ -83,8 +83,23 @@ int main(int argc, char* argv[]) {
   std::cout << "imbalance=" << imb(hypergraph, context.partition.k) << std::endl;
   if (hypergraph.isDirected()) {
     std::cout << "acyclic=" << AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hypergraph, context).isAcyclic() << std::endl;
+
+    HyperedgeWeight edge_cut = 0;
+    for (const HyperedgeID& he : hypergraph.edges()) {
+      for (const HypernodeID& head : hypergraph.heads(he)) {
+        for (const HypernodeID& tail : hypergraph.tails(he)) {
+          if (hypergraph.partID(head) != hypergraph.partID(tail)) {
+            ++edge_cut;
+          }
+        }
+      }
+    }
+
+    std::cout << "edge_cut=" << edge_cut << std::endl;
   } else {
     std::cout << "acyclic=0" << std::endl;
   }
+
+
   return 0;
 }

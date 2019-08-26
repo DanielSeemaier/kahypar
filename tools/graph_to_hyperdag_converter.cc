@@ -35,32 +35,33 @@ int main(int argc, char* argv[]) {
   }
 
   std::ofstream out(hgr_filename);
-  out << num_hyperedges << " " << node_weights.size() << " 11 1\n";
+  out << edge_weights.size() << " " << node_weights.size() << " 11 1\n";
 
   current_head = 0;
   num_pins = 0;
   bool first_pin = true;
   for (const auto& edge : edges) {
-    if (edge.first != current_head) {
-      if (num_pins > 0) {
-        out << "\n";
-      }
-      current_head = edge.first;
-      num_pins = 0;
-      first_pin = true;
-    }
-    if (edge.first < edge.second) {
-      if (first_pin) {
-        out << "1 1 " << edge.first + 1 << " ";
-        first_pin = false;
-      }
-      out << edge.second + 1 << " ";
-      ++num_pins;
-    }
+    out << "1 1 " << edge.first + 1 << " " << edge.second + 1 << "\n";
+//    if (edge.first != current_head) {
+//      if (num_pins > 0) {
+//        out << "\n";
+//      }
+//      current_head = edge.first;
+//      num_pins = 0;
+//      first_pin = true;
+//    }
+//    if (edge.first < edge.second) {
+//      if (first_pin) {
+//        out << "1 1 " << edge.first + 1 << " ";
+//        first_pin = false;
+//      }
+//      out << edge.second + 1 << " ";
+//      ++num_pins;
+//    }
   }
-  if (num_pins > 0) {
-    out << "\n";
-  }
+//  if (num_pins > 0) {
+//    out << "\n";
+//  }
 
   for (std::size_t i = 0; i < node_weights.size(); ++i) {
     out << "1\n";

@@ -794,6 +794,18 @@ class GenericHypergraph {
     }
   }
 
+  void printDirectedHyperedge(const HyperedgeID he) const {
+    std::cout << "HE" << he << " Heads[";
+    for (const HypernodeID& head : heads(he)) {
+      std::cout << head << ", ";
+    }
+    std::cout << "\b\b] Tails[";
+    for (const HypernodeID& tail : tails(he)) {
+      std::cout << tail << ", ";
+    }
+    std::cout << "\b\b]\n";
+  }
+
   /*!
    * Debug information:
    * Print hypernodes and hyperedges with information for directed hypergraphs to stdout.
@@ -2865,9 +2877,12 @@ reindex(const Hypergraph& hypergraph, const bool respect_directed = true) {
       reindexed_hypergraph->_incidence_array[reindexed_hypergraph->hypernode(pin).firstInvalidEntry()] = he;
       if (head && reindexed_hypergraph->hypernode(pin).size() > 0) {
         std::swap(reindexed_hypergraph->_incidence_array[reindexed_hypergraph->hypernode(pin).firstTailEntry()],
-                  reindexed_hypergraph->_incidence_array[reindexed_hypergraph->hypernode(pin).firstInvalidEntry()]);
+                  reindexed_hypergraph->_incidence_array[reindexed_hypergraph->hypernode(pin).firstInvalidEntry()]); // current edge that is head
       }
       reindexed_hypergraph->hypernode(pin).incrementSize();
+      if (head) {
+        reindexed_hypergraph->hypernode(pin).incrementHeadCounter();
+      }
     }
   }
 
@@ -2875,7 +2890,8 @@ reindex(const Hypergraph& hypergraph, const bool respect_directed = true) {
   for (const HypernodeID& hn : reindexed_hypergraph->nodes()) {
     HypernodeID original_hn = reindexed_to_original[hn];
     if (reindexed_hypergraph->isDirected()) {
-      reindexed_hypergraph->hypernode(hn).setHeadCounter(hypergraph.hypernode(original_hn).numHeads());
+      //reindexed_hypergraph->hypernode(hn).setHeadCounter(hypergraph.hypernode(original_hn).numHeads());
+      ASSERT(reindexed_hypergraph->hypernode(hn).numHeads() == hypergraph.hypernode(original_hn).numHeads());
     }
     if (hypergraph.isFixedVertex(original_hn)) {
       reindexed_hypergraph->setFixedVertex(hn, hypergraph.fixedVertexPartID(original_hn));

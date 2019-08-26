@@ -33,6 +33,10 @@ class KaHyParInitialPartitioner : public IInitialPartitioner, private InitialPar
   }
 
   void initialPartition() {
+    LOG << "initialPartition()";
+
+    _hg.printDirectedHypergraphNode(2189);
+
     _hg.resetPartitioning();
     _hg.changeK(_context.partition.k);
     for (const HypernodeID& hn : _hg.nodes()) {
@@ -40,6 +44,14 @@ class KaHyParInitialPartitioner : public IInitialPartitioner, private InitialPar
     }
 
     performPartition(0, _context.partition.k);
+
+    const bool acyclic = AdjacencyMatrixQuotientGraph<DFSCycleDetector>(_hg, _context).isAcyclic();
+    if (!acyclic) {
+      LOG << "Error, obtained cyclic IP!";
+      std::exit(1);
+    } else {
+      LOG << "IP is acyclic, nice!";
+    }
 
     const double imbalance = metrics::imbalance(_hg, _context);
     if (_context.partition.balance_initial_partition && (imbalance > _context.partition.final_epsilon || imbalance > _context.partition.epsilon)) {
@@ -128,6 +140,14 @@ class KaHyParInitialPartitioner : public IInitialPartitioner, private InitialPar
       }
     } else {
       ASSERT(k_part_0 == 1);
+    }
+
+    const bool acyclic = AdjacencyMatrixQuotientGraph<DFSCycleDetector>(_hg, _context).isAcyclic();
+    if (!acyclic) {
+      LOG << "Error, obtained cyclic IP!";
+      std::exit(1);
+    } else {
+      LOG << "IP is acyclic, nice!";
     }
 
     LOG << "Split" << hg_ptr->initialNumNodes() << "from" << part << "into" << pre_num_part_0 << "and" << pre_num_part_1 << "blocks";
