@@ -35,8 +35,6 @@ class KaHyParInitialPartitioner : public IInitialPartitioner, private InitialPar
   void initialPartition() {
     LOG << "initialPartition()";
 
-    _hg.printDirectedHypergraphNode(2189);
-
     _hg.resetPartitioning();
     _hg.changeK(_context.partition.k);
     for (const HypernodeID& hn : _hg.nodes()) {
