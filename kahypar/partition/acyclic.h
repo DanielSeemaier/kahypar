@@ -21,6 +21,7 @@
 #pragma once
 
 #include <limits>
+#include <vector>
 
 #include "kahypar/definitions.h"
 #include "kahypar/partition/coarsening/hypergraph_pruner.h"
@@ -128,10 +129,19 @@ static inline void performInitialPartitioning(Hypergraph& hypergraph, const Cont
   }
 }
 
+static inline std::vector<PartitionID> createPartitionSnapshot(const Hypergraph& hg) {
+  std::vector<PartitionID> partition(hg.initialNumNodes());
+  for (const HypernodeID& hn : hg.nodes()) {
+    partition[hn] = hg.partID(hn);
+  }
+  return partition;
+}
+
 static inline void partition(Hypergraph& hypergraph, const Context& context) {
   ASSERT(hypergraph.isDirected());
 
   Context ctx_copy = context;
+  ctx_copy.enable_hard_rebalance = context.enable_hard_rebalance;
 
   std::unique_ptr<ICoarsener> coarsener(
     CoarsenerFactory::getInstance().createObject(
@@ -159,6 +169,10 @@ static inline void partition(Hypergraph& hypergraph, const Context& context) {
           ? metrics::hyperedgeCut(hypergraph)
           : metrics::km1(hypergraph));
 
+  bool achieved_imbalance = metrics::imbalance(hypergraph, ctx_copy) < context.partition.final_epsilon;
+  HyperedgeWeight best_km1 = metrics::km1(hypergraph);
+  std::vector<PartitionID> best_partition = createPartitionSnapshot(hypergraph);
+
   for (uint32_t vcycle = 1; vcycle <= context.partition.global_search_iterations; ++vcycle) {
     context.partition.current_v_cycle = vcycle;
     if (vcycle == 1) {
@@ -176,7 +190,22 @@ static inline void partition(Hypergraph& hypergraph, const Context& context) {
       ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hypergraph, context).isAcyclic(),
              "Vcycle" << vcycle << "produced a cyclic partition");
     }
+
+    const HyperedgeWeight current_km1 = metrics::km1(hypergraph);
+    const bool current_achieved_imbalance = metrics::imbalance(hypergraph, ctx_copy) < context.partition.final_epsilon;
+    if (current_km1 < best_km1 && (!achieved_imbalance || current_achieved_imbalance)) {
+      LOG << "V-Cycle" << vcycle << "improved KM1 from" << best_km1 << "to" << current_km1;
+      best_km1 = current_km1;
+      best_partition = createPartitionSnapshot(hypergraph);
+      achieved_imbalance = current_achieved_imbalance;
+    } else {
+      LOG << "V-Cycle" << vcycle << "did not improve KM1:" << best_km1 << "is better than" << current_km1 << "or imbalance constrain is violated";
+    }
   }
+
+  // rollback to best partition found so far
+  hypergraph.setPartition(best_partition);
+  hypergraph.initializeNumCutHyperedges();
 
   // rebalance edge case: graph too small for multilevel
   const double imbalance = metrics::imbalance(hypergraph, context);
