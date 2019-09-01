@@ -279,6 +279,8 @@ struct InitialPartitioningParameters {
   int lp_assign_vertex_to_part = 5;
   bool refinement = true;
   bool verbose_output = false;
+  // Force a balanced initial partition
+  bool balance_partition = false;
 };
 
 inline std::ostream& operator<< (std::ostream& str, const InitialPartitioningParameters& params) {
@@ -425,6 +427,7 @@ class Context {
   bool imbalanced_intermediate_step = false;
   bool reduce_balance_during_uncoarsening = false;
   bool enable_soft_rebalance = false;
+  bool enable_hard_rebalance = false;
   bool refine_rebalance_moves = true;
 
   Context() :
@@ -442,6 +445,7 @@ class Context {
     partition_evolutionary(other.partition_evolutionary),
     imbalanced_intermediate_step(other.imbalanced_intermediate_step),
     reduce_balance_during_uncoarsening(other.reduce_balance_during_uncoarsening),
+    enable_hard_rebalance(other.enable_hard_rebalance),
     enable_soft_rebalance(other.enable_soft_rebalance),
     refine_rebalance_moves(other.refine_rebalance_moves) { }
 

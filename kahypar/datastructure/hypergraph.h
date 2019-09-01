@@ -2694,7 +2694,8 @@ class GenericHypergraph {
                                      const typename Hypergraph::PartitionID new_k,
                                      const typename Hypergraph::HypernodeID num_hypernodes,
                                      const typename Hypergraph::HypernodeID num_pins,
-                                     const typename Hypergraph::HyperedgeID num_hyperedges);
+                                     const typename Hypergraph::HyperedgeID num_hyperedges,
+                                     const std::vector<typename Hypergraph::HyperedgeID>& edge_mapping);
 };
 
 template<typename Hypergraph>
@@ -2922,8 +2923,9 @@ extractPartAsUnpartitionedHypergraphForBisection(const Hypergraph& hypergraph,
 
   std::unordered_map<HypernodeID, HypernodeID> hypergraph_to_subhypergraph;
   std::vector<HypernodeID> subhypergraph_to_hypergraph;
+  std::vector<HyperedgeID> subhyperedge_to_hyperedge;
   std::unique_ptr<Hypergraph> subhypergraph(new Hypergraph());
-  subhypergraph->_directed = false;
+  subhypergraph->_directed = hypergraph.isDirected();
 
   HypernodeID num_hypernodes = 0;
   for (const HypernodeID& hn : hypergraph.nodes()) {
@@ -2940,6 +2942,7 @@ extractPartAsUnpartitionedHypergraphForBisection(const Hypergraph& hypergraph,
 
     HyperedgeID num_hyperedges = 0;
     HypernodeID pin_index = 0;
+
     if (objective == Objective::km1) {
       // Cut-Net Splitting is used to optimize connectivity-1 metric.
       for (const HyperedgeID& he : hypergraph.edges()) {
@@ -2954,12 +2957,17 @@ extractPartAsUnpartitionedHypergraphForBisection(const Hypergraph& hypergraph,
           // (not including the part to be extracted)
           continue;
         }
+        subhyperedge_to_hyperedge.push_back(he);
         subhypergraph->_hyperedges.emplace_back(0, 0, hypergraph.edgeWeight(he));
         ++subhypergraph->_num_hyperedges;
         subhypergraph->_hyperedges[num_hyperedges].setFirstEntry(pin_index);
         for (const HypernodeID& pin : hypergraph.pins(he)) {
           if (hypergraph.partID(pin) == part) {
+            const bool head = hypergraph.isDirected() && hypergraph.isHead(pin, he); // TODO can be optimized
             subhypergraph->hyperedge(num_hyperedges).incrementSize();
+            if (head) { // assumes that all heads come before all tails
+              subhypergraph->hyperedge(num_hyperedges).incrementHeadCounter();
+            }
             subhypergraph->hyperedge(num_hyperedges).hash += math::hash(hypergraph_to_subhypergraph[pin]);
             subhypergraph->_incidence_array.push_back(hypergraph_to_subhypergraph[pin]);
             subhypergraph->hypernode(hypergraph_to_subhypergraph[pin]).incrementSize();
@@ -2970,6 +2978,8 @@ extractPartAsUnpartitionedHypergraphForBisection(const Hypergraph& hypergraph,
         ++num_hyperedges;
       }
     } else {
+      ASSERT(!hypergraph.isDirected(), "not implemented for directed hypergraphs");
+
       for (const HyperedgeID& he : hypergraph.edges()) {
         if (hypergraph.connectivity(he) > 1) {
           continue;
@@ -2995,7 +3005,8 @@ extractPartAsUnpartitionedHypergraphForBisection(const Hypergraph& hypergraph,
     }
 
     setupInternalStructure(hypergraph, subhypergraph_to_hypergraph, *subhypergraph,
-                           2, num_hypernodes, pin_index, num_hyperedges);
+                           2, num_hypernodes, pin_index, num_hyperedges,
+                           subhyperedge_to_hyperedge);
   }
   return std::make_pair(std::move(subhypergraph),
                         subhypergraph_to_hypergraph);
@@ -3008,7 +3019,8 @@ static void setupInternalStructure(const Hypergraph& reference,
                                    const typename Hypergraph::PartitionID new_k,
                                    const typename Hypergraph::HypernodeID num_hypernodes,
                                    const typename Hypergraph::HypernodeID num_pins,
-                                   const typename Hypergraph::HyperedgeID num_hyperedges) {
+                                   const typename Hypergraph::HyperedgeID num_hyperedges,
+                                   const std::vector<typename Hypergraph::HyperedgeID>& edge_mapping) {
   using HypernodeID = typename Hypergraph::HypernodeID;
   using HyperedgeID = typename Hypergraph::HyperedgeID;
 
@@ -3060,8 +3072,16 @@ static void setupInternalStructure(const Hypergraph& reference,
 
   for (const HyperedgeID& he : subhypergraph.edges()) {
     for (const HypernodeID& pin : subhypergraph.pins(he)) {
+      const bool head = reference.isDirected() && reference.isHead(mapping[pin], edge_mapping[he]); // TODO can be optimized // wrong
       subhypergraph._incidence_array[subhypergraph.hypernode(pin).firstInvalidEntry()] = he;
+      if (head && subhypergraph.hypernode(pin).size() > 0) { // move head hyperedge to the front
+        std::swap(subhypergraph._incidence_array[subhypergraph.hypernode(pin).firstTailEntry()],
+                  subhypergraph._incidence_array[subhypergraph.hypernode(pin).firstInvalidEntry()]);
+      }
       subhypergraph.hypernode(pin).incrementSize();
+      if (head) {
+        subhypergraph.hypernode(pin).incrementHeadCounter();
+      }
     }
   }
 }
@@ -3118,8 +3138,10 @@ removeFixedVertices(const Hypergraph& hypergraph) {
         ++num_hyperedges;
       }
     }
+
+    std::vector<HyperedgeID> dummy;
     setupInternalStructure(hypergraph, subhypergraph_to_hypergraph, *subhypergraph,
-                           hypergraph._k, num_hypernodes, pin_index, num_hyperedges);
+                           hypergraph._k, num_hypernodes, pin_index, num_hyperedges, dummy);
   }
   return std::make_pair(std::move(subhypergraph),
                         subhypergraph_to_hypergraph);

@@ -110,19 +110,18 @@ std::pair<QNodeID, QNodeID> pickEdge(const CyclicQuotientGraph& cqg) {
   return lightest_edge;
 }
 
-void moveSuccessors(Hypergraph& hg, CyclicQuotientGraph& cqg, const HypernodeID hn, const PartitionID from_part, const PartitionID to_part) { // TODO can we improve on this?
+void moveSuccessors(Hypergraph& hg, const HypernodeID hn, const PartitionID from_part, const PartitionID to_part) { // TODO can we improve on this?
   for (const HyperedgeID& he : hg.incidentTailEdges(hn)) {
     for (const HypernodeID& head : hg.heads(he)) {
       if (hg.partID(head) == to_part) {
-        cqg.testAndUpdateBeforeMovement(head, to_part, from_part);
         hg.changeNodePart(head, to_part, from_part);
-        moveSuccessors(hg, cqg, head, from_part, to_part);
+        moveSuccessors(hg, head, from_part, to_part);
       }
     }
   }
 }
 
-void breakEdge(Hypergraph& hg, CyclicQuotientGraph& cqg, const PartitionID from_part, const PartitionID to_part) {
+void breakEdge(Hypergraph& hg, const PartitionID from_part, const PartitionID to_part) {
   std::vector<HypernodeID> hns_in_from_part;
 
   for (const HypernodeID& hn : hg.nodes()) {
@@ -135,13 +134,36 @@ void breakEdge(Hypergraph& hg, CyclicQuotientGraph& cqg, const PartitionID from_
     for (const HyperedgeID& he : hg.incidentTailEdges(hn)) {
       for (const HypernodeID& head : hg.heads(he)) {
         if (hg.partID(head) == to_part) {
-          cqg.testAndUpdateBeforeMovement(head, to_part, from_part);
           hg.changeNodePart(head, to_part, from_part);
-          moveSuccessors(hg, cqg, head, from_part, to_part);
+          moveSuccessors(hg, head, from_part, to_part);
         }
       }
     }
   }
+
+  ///////
+  for (const HypernodeID& hn : hg.nodes()) {
+    if (hg.partID(hn) != from_part) {
+      continue;
+    }
+
+    for (const HyperedgeID& he : hg.incidentTailEdges(hn)) {
+      for (const HypernodeID& head : hg.heads(he)) {
+        if (hg.partID(head) == to_part) {
+          LOG << hn << hg.partID(hn) << "-->" << head << hg.partID(head);
+        }
+      }
+    }
+  }
+}
+
+std::vector<PartitionID> createPartitionSnapshot(const Hypergraph& hg) {
+  std::vector<PartitionID> partition;
+  partition.reserve(hg.currentNumNodes());
+  for (const HypernodeID& hn : hg.nodes()) {
+    partition.push_back(hg.partID(hn));
+  }
+  return partition;
 }
 } // namespace internal
 
@@ -157,7 +179,7 @@ void breakEdge(Hypergraph& hg, CyclicQuotientGraph& cqg, const PartitionID from_
 //}
 
 void fixBipartitionAcyclicity(Hypergraph& hg, const Context& context, const PartitionID part0, const PartitionID part1) {
-  CyclicQuotientGraph cqg(hg, context);
+//  CyclicQuotientGraph cqg(hg, context);
 
 //  while (!cqg.isAcyclic()) {
 //    const auto edge = internal::pickEdge(cqg);
@@ -166,9 +188,43 @@ void fixBipartitionAcyclicity(Hypergraph& hg, const Context& context, const Part
 //    internal::breakEdge(hg, cqg, edge.first, edge.second);
 //  }
 
-  internal::breakEdge(hg, cqg, part0, part1);
+  internal::breakEdge(hg, part0, part1);
 
   ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hg, context).isAcyclic());
+}
+
+void fixBipartitionAcyclicity(Hypergraph &hg, const Context& context) {
+  const auto original_partition = internal::createPartitionSnapshot(hg);
+
+  // move successors of nodes in part 0 in part 1 to part 0
+  internal::breakEdge(hg, 0, 1);
+  double imbalance_01 = metrics::imbalance(hg, context);
+  const auto partition_01 = internal::createPartitionSnapshot(hg);
+
+  if (!AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hg, context).isAcyclic()) {
+    LOG << "Error, imbalance 01 is cyclic!";
+    AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hg, context).log();
+    std::exit(1);
+  }
+
+  // other way around
+  hg.setPartition(original_partition);
+  internal::breakEdge(hg, 1, 0);
+  double imbalance_10 = metrics::imbalance(hg, context);
+
+  if (!AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hg, context).isAcyclic()) {
+    LOG << "Error, imbalance 10 is cyclic!";
+    std::exit(1);
+  }
+
+  // select the most balanced partition from 01 and 10, i.e. if 01 is better balanced, restore it and otherwise do
+  // nothing because we already have partition 10
+  if (imbalance_01 <= imbalance_10) {
+    LOG << "Chose 01";
+    hg.setPartition(partition_01);
+  } else {
+    LOG << "Chose 10";
+  }
 }
 } // namespace dag
 } // namespace kabypar

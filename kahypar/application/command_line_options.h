@@ -82,6 +82,9 @@ po::options_description createGeneralOptionsDescription(Context& context, const 
     ("r-soft-rebalance",
      po::value<bool>(&context.enable_soft_rebalance)->value_name("<bool>"),
      "Use soft rebalance")
+     ("r-hard-rebalance",
+     po::value<bool>(&context.enable_hard_rebalance)->value_name("<bool>"),
+     "Use soft rebalance")
     ("r-refine-rebalance-moves",
      po::value<bool>(&context.refine_rebalance_moves)->value_name("<bool>"),
      "Run local search on hypernodes moved during soft and hard rebalance")
@@ -436,7 +439,10 @@ po::options_description createInitialPartitioningOptionsDescription(Context& con
     "Algorithm used to create initial partition: pool ")
     ("i-runs",
     po::value<uint32_t>(&context.initial_partitioning.nruns)->value_name("<uint32_t>"),
-    "# initial partition trials");
+    "# initial partition trials")
+    ("i-balance-partition",
+    po::value<bool>(&context.initial_partitioning.balance_partition)->value_name("<bool>"),
+    "Perform additional rebalance operations to ensure a balanced initial partition.");
   options.add(createCoarseningOptionsDescription(context, num_columns, true));
   options.add(createRefinementOptionsDescription(context, num_columns, true));
   return options;

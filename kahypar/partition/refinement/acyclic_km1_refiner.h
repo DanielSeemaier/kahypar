@@ -36,8 +36,12 @@ class AcyclicKMinusOneRefiner final : public IRefiner {
 
   void preUncontraction(const HypernodeID representant) override {
     _local_search_refiner.preUncontraction(representant);
-    _soft_rebalance_refiner.preUncontraction(representant);
-    _hard_rebalance_refiner.preUncontraction(representant);
+    if (_context.enable_soft_rebalance) {
+      _soft_rebalance_refiner.preUncontraction(representant);
+    }
+    if (_context.enable_hard_rebalance) {
+      _hard_rebalance_refiner.preUncontraction(representant);
+    }
     _gain_manager.preUncontraction(representant);
     _qg.preUncontraction(representant);
   }
@@ -45,8 +49,12 @@ class AcyclicKMinusOneRefiner final : public IRefiner {
   void postUncontraction(const HypernodeID representant, const std::vector<HypernodeID>&& partners) override {
     _qg.postUncontraction(representant, std::forward<const std::vector<HypernodeID>>(partners));
     _gain_manager.postUncontraction(representant, std::forward<const std::vector<HypernodeID>>(partners));
-    _hard_rebalance_refiner.postUncontraction(representant, std::forward<const std::vector<HypernodeID>>(partners));
-    _soft_rebalance_refiner.postUncontraction(representant, std::forward<const std::vector<HypernodeID>>(partners));
+    if (_context.enable_hard_rebalance) {
+      _hard_rebalance_refiner.postUncontraction(representant, std::forward<const std::vector<HypernodeID>>(partners));
+    }
+    if (_context.enable_soft_rebalance) {
+      _soft_rebalance_refiner.postUncontraction(representant, std::forward<const std::vector<HypernodeID>>(partners));
+    }
     _local_search_refiner.postUncontraction(representant, std::forward<const std::vector<HypernodeID>>(partners));
   }
 
@@ -57,8 +65,12 @@ class AcyclicKMinusOneRefiner final : public IRefiner {
     } else {
       LOG << "Soft Rebalance disabled";
     }
-    LOG << "Hard Rebalance Refiner:";
-    _hard_rebalance_refiner.printSummary();
+    if (_context.enable_hard_rebalance) {
+      LOG << "Hard Rebalance Refiner:";
+      _hard_rebalance_refiner.printSummary();
+    } else {
+      LOG << "Hard Rebalance disabled";
+    }
     LOG << "Local Search Refiner:";
     _local_search_refiner.printSummary();
     LOG << "Running with extra refinement nodes:" << _context.refine_rebalance_moves;
@@ -69,7 +81,9 @@ class AcyclicKMinusOneRefiner final : public IRefiner {
     _qg.rebuild();
     _gain_manager.initialize();
     _local_search_refiner.initialize(max_gain);
-    _hard_rebalance_refiner.initialize(max_gain);
+    if (_context.enable_hard_rebalance) {
+      _hard_rebalance_refiner.initialize(max_gain);
+    }
     if (_context.enable_soft_rebalance) {
       _soft_rebalance_refiner.initialize(max_gain);
     }
@@ -136,7 +150,7 @@ class AcyclicKMinusOneRefiner final : public IRefiner {
       DBG << "-->" << best_metrics.imbalance;
     }
 
-    if (best_metrics.imbalance > _context.partition.epsilon) {
+    if (_context.enable_hard_rebalance && best_metrics.imbalance > _context.partition.epsilon) {
       DBG << "Running hard rebalance because" << best_metrics.imbalance << ">" << _context.partition.epsilon;
       _hard_rebalance_refiner.refine(refinement_nodes, max_allowed_part_weights, uncontraction_changes, best_metrics);
       ASSERT(!_gain_manager.hasDelta());
@@ -164,7 +178,9 @@ class AcyclicKMinusOneRefiner final : public IRefiner {
     if (_context.enable_soft_rebalance) {
       _soft_rebalance_refiner.performMovesAndUpdateCache(moves, refinement_nodes, uncontraction_changes);
     }
-    _hard_rebalance_refiner.performMovesAndUpdateCache(moves, refinement_nodes, uncontraction_changes);
+    if (_context.enable_hard_rebalance) {
+      _hard_rebalance_refiner.performMovesAndUpdateCache(moves, refinement_nodes, uncontraction_changes);
+    }
     _qg.resetChanged();
 
     ASSERT(best_metrics.km1 == metrics::km1(_hg));

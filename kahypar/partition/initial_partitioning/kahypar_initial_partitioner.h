@@ -51,28 +51,50 @@ class KaHyParInitialPartitioner : public IInitialPartitioner, private InitialPar
       LOG << "IP is acyclic, nice!";
     }
 
+    for (PartitionID k = 0; k < _context.partition.k; ++k) {
+      LOG << "Block" << k << ":" << _hg.partWeight(k) << _hg.partSize(k);
+    }
+
     const double imbalance = metrics::imbalance(_hg, _context);
     if (_context.partition.balance_initial_partition && (imbalance > _context.partition.final_epsilon || imbalance > _context.partition.epsilon)) {
       LOG << "Running hard rebalance to improve IP imbalance from" << imbalance << "to min{"
           << _context.partition.final_epsilon << "," << _context.partition.epsilon << "}";
+      rebalancePartition(_hg, _context);
+    }
+  }
 
-      Context balanced_context = _context;
-      balanced_context.partition.epsilon = _context.partition.final_epsilon;
-      balanced_context.setupPartWeights(_hg.totalWeight());
+  static void rebalancePartition(Hypergraph& hg, const Context& context, const bool refine_km1 = false) {
+    Context balanced_context = context;
+    balanced_context.partition.epsilon = context.partition.final_epsilon;
+    balanced_context.setupPartWeights(hg.totalWeight());
+    LOG << "Improve imbalance to:" << balanced_context.partition.epsilon;
 
-      AdjacencyMatrixQuotientGraph<DFSCycleDetector> qg(_hg, balanced_context);
-      KMinusOneGainManager gain_manager(_hg, balanced_context);
-      gain_manager.initialize();
-      AcyclicHardRebalanceRefiner hard_balance_refiner(_hg, balanced_context, qg, gain_manager);
-      hard_balance_refiner.initialize(0);
-      Metrics current_metrics = {metrics::hyperedgeCut(_hg),
-                                 metrics::km1(_hg),
-                                 metrics::imbalance(_hg, _context)};
-      UncontractionGainChanges changes{};
-      std::vector<HypernodeID> refinement_nodes{};
-      hard_balance_refiner.refine(refinement_nodes, {0, 0}, changes, current_metrics);
+    AdjacencyMatrixQuotientGraph<DFSCycleDetector> qg(hg, balanced_context);
+    KMinusOneGainManager gain_manager(hg, balanced_context);
+    gain_manager.initialize();
+    AcyclicHardRebalanceRefiner hard_balance_refiner(hg, balanced_context, qg, gain_manager);
+    hard_balance_refiner.initialize(0);
+    Metrics current_metrics = {metrics::hyperedgeCut(hg),
+                               metrics::km1(hg),
+                               metrics::imbalance(hg, context)};
+    UncontractionGainChanges changes{};
+    std::vector<HypernodeID> refinement_nodes{};
+    hard_balance_refiner.refine(refinement_nodes, {0, 0}, changes, current_metrics);
+    hard_balance_refiner.printSummary();
 
-      hard_balance_refiner.printSummary();
+    if (refine_km1) {
+      AcyclicLocalSearchRefiner<NumberOfFruitlessMovesStopsSearch> local_search_refiner(hg, context, qg, gain_manager);
+      local_search_refiner.initialize(0);
+
+      std::vector<HypernodeID> local_search_refinement_nodes;
+      for (const HypernodeID& hn : hg.nodes()) {
+        if (hg.isBorderNode(hn)) {
+          local_search_refinement_nodes.push_back(hn);
+        }
+      }
+
+      local_search_refiner.refine(local_search_refinement_nodes, {0, 0}, changes, current_metrics);
+      //local_search_refiner.printSummary();
     }
   }
 
@@ -80,6 +102,7 @@ class KaHyParInitialPartitioner : public IInitialPartitioner, private InitialPar
     if (k < 2) {
       return;
     }
+    LOG << "Subdividing part" << part << "in" << k << "blocks ...";
 
     const auto pair = extractPartAsUnpartitionedHypergraphForBisection(_hg, part, Objective::km1);
     const auto& hg_ptr = pair.first;
@@ -87,7 +110,8 @@ class KaHyParInitialPartitioner : public IInitialPartitioner, private InitialPar
     hg_ptr->resetPartitioning();
     Context ctx = createContext(2, 0.03);
     kahypar::PartitionerFacade().partition(*hg_ptr, ctx);
-
+    LOG << "Bisection KM1:" << metrics::km1(*hg_ptr);
+    LOG << "Bisection imbalance:" << metrics::imbalance(*hg_ptr, ctx);
 
     PartitionID pre_num_part_0 = 0;
     PartitionID pre_num_part_1 = 0;
@@ -99,14 +123,26 @@ class KaHyParInitialPartitioner : public IInitialPartitioner, private InitialPar
       }
     }
 
+    dag::fixBipartitionAcyclicity(*hg_ptr, ctx);
+    hg_ptr->initializeNumCutHyperedges();
+
+    LOG << "Bisection KM1 after acyclicity fix:" << metrics::km1(*hg_ptr);
+    LOG << "Bisection imbalance after acyclicity fix:" << metrics::imbalance(*hg_ptr, ctx);
+
+    if (_context.initial_partitioning.balance_partition) {
+      LOG << "Run HardRebalanceRefiner on initial partition to improve imbalance, then local search to improve KM1";
+      rebalancePartition(*hg_ptr, ctx, true);
+    }
+
+    LOG << "Bisection KM1 after rebalance + local search:" << metrics::km1(*hg_ptr);
+    LOG << "Bisection imbalance after rebalance + local search:" << metrics::imbalance(*hg_ptr, ctx);
+
     // keep HNs in hg_ptr->partID(hn) == 0 in block `part`
     for (const HypernodeID& hn : hg_ptr->nodes()) {
       if (hg_ptr->partID(hn) == 1) {
         _hg.changeNodePart(map[hn], part, part + 1);
       }
     }
-
-    dag::fixBipartitionAcyclicity(_hg, _context, part, part + 1);
 
     PartitionID num_part_0 = 0;
     PartitionID num_part_1 = 0;
@@ -118,8 +154,15 @@ class KaHyParInitialPartitioner : public IInitialPartitioner, private InitialPar
       }
     }
 
-    PartitionID k_part_0 = std::ceil(k * (static_cast<double>(num_part_0) / hg_ptr->initialNumNodes()));
-    PartitionID k_part_1 = std::floor(k * (static_cast<double>(num_part_1) / hg_ptr->initialNumNodes()));
+    PartitionID k_part_0 = 0;
+    PartitionID k_part_1 = 0;
+    if (_context.partition.balance_initial_partition) {
+      k_part_0 = k / 2;
+      k_part_1 = k / 2;
+    } else {
+      k_part_0 = std::ceil(k * (static_cast<double>(num_part_0) / hg_ptr->initialNumNodes()));
+      k_part_1 = std::floor(k * (static_cast<double>(num_part_1) / hg_ptr->initialNumNodes()));
+    }
 
     k_part_0 = std::max<PartitionID>(1, k_part_0);
     k_part_0 = std::min<PartitionID>(k - 1, k_part_0);
@@ -129,7 +172,7 @@ class KaHyParInitialPartitioner : public IInitialPartitioner, private InitialPar
     ASSERT(k_part_0 < k); // termination check
     ASSERT(k_part_1 < k); // termination check
 
-    // give up part+1 in favor of further subdivisions of block `part`
+    // give up part + 1 in favor of further subdivisions of block `part`
     if (k_part_0 >= 2) {
       for (const HypernodeID& hn : _hg.nodes()) {
         if (_hg.partID(hn) == part + 1) {
@@ -140,6 +183,10 @@ class KaHyParInitialPartitioner : public IInitialPartitioner, private InitialPar
       ASSERT(k_part_0 == 1);
     }
 
+    LOG << "Split" << hg_ptr->initialNumNodes() << "from" << part << "into" << pre_num_part_0 << "and" << pre_num_part_1 << "blocks";
+    LOG << "\t\tAfter acyclic fix:" << num_part_0 << "and" << num_part_1 << "blocks";
+    LOG << "\tFirst block:" << part << "second block:" << part + k_part_0;
+    LOG << "\tContinue with k:" << k_part_0 << "and" << k_part_1;
     const bool acyclic = AdjacencyMatrixQuotientGraph<DFSCycleDetector>(_hg, _context).isAcyclic();
     if (!acyclic) {
       LOG << "Error, obtained cyclic IP!";
@@ -147,11 +194,6 @@ class KaHyParInitialPartitioner : public IInitialPartitioner, private InitialPar
     } else {
       LOG << "IP is acyclic, nice!";
     }
-
-    LOG << "Split" << hg_ptr->initialNumNodes() << "from" << part << "into" << pre_num_part_0 << "and" << pre_num_part_1 << "blocks";
-    LOG << "\t\tAfter acyclic fix:" << num_part_0 << "and" << num_part_1 << "blocks";
-    LOG << "\tFirst block:" << part << "second block:" << part + k_part_0;
-    LOG << "\tContinue with k:" << k_part_0 << "and" << k_part_1;
 
     performPartition(part, k_part_0);
     performPartition(part + k_part_0, k_part_1);
@@ -165,9 +207,10 @@ class KaHyParInitialPartitioner : public IInitialPartitioner, private InitialPar
     ip_context.partition.verbose_output = false;
     ip_context.partition.k = k;
     ip_context.partition.epsilon = epsilon;
+    ip_context.partition.final_epsilon = epsilon;
     ip_context.partition.mode = Mode::direct_kway;
     ip_context.partition.objective = Objective::km1;
-    ip_context.partition.seed = -1;
+    ip_context.partition.seed = Randomize::instance().newRandomSeed();
     ip_context.partition.hyperedge_size_threshold = 1000;
     ip_context.partition.global_search_iterations = 0;
     ip_context.preprocessing.enable_min_hash_sparsifier = false;

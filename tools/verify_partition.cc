@@ -75,7 +75,10 @@ int main(int argc, char* argv[]) {
   Context context;
   context.partition.k = max_part + 1;
 
-  std::cout << "k=" << max_part << std::endl;
+  std::cout << "#hypernodes=" << hypergraph.initialNumNodes() << std::endl;
+  std::cout << "#hyperedges=" << hypergraph.initialNumEdges() << std::endl;
+  std::cout << "directed=" << hypergraph.isDirected() << std::endl;
+  std::cout << "k=" << max_part + 1 << std::endl;
   std::cout << "cut=" << metrics::hyperedgeCut(hypergraph) << std::endl;
   std::cout << "soed=" << metrics::soed(hypergraph) << std::endl;
   std::cout << "km1=" << metrics::km1(hypergraph) << std::endl;
