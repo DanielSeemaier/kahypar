@@ -80,7 +80,7 @@ class KaHyParInitialPartitioner : public IInitialPartitioner, private InitialPar
     UncontractionGainChanges changes{};
     std::vector<HypernodeID> refinement_nodes{};
     hard_balance_refiner.refine(refinement_nodes, {0, 0}, changes, current_metrics);
-    hard_balance_refiner.printSummary();
+    //hard_balance_refiner.printSummary();
 
     if (refine_km1) {
       AcyclicLocalSearchRefiner<NumberOfFruitlessMovesStopsSearch> local_search_refiner(hg, context, qg, gain_manager);

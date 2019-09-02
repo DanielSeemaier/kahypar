@@ -182,9 +182,28 @@ static inline void partition(Hypergraph& hypergraph, const Context& context) {
              "Vcycle" << vcycle << "produced a cyclic partition");
     } else {
       LOG << "Using Refiner:" << context.local_search.algorithm_second;
-      ctx_copy.partition.epsilon = context.partition.epsilon;
-      ctx_copy.setupPartWeights(hypergraph.totalWeight());
-      LOG << "Reset epsilon' to" << context.partition.epsilon << "for" << vcycle << "-nd/th vcycle";
+
+      { // just for testing ...
+        std::unique_ptr<IRefiner> pre_refiner(
+          RefinerFactory::getInstance().createObject(
+            context.local_search.algorithm_second, hypergraph, context));
+
+        LOG << "Performing pre V-cycle refinement with all border nodes";
+        pre_refiner->initialize(0);
+        UncontractionGainChanges changes;
+        changes.representative.push_back(0);
+        changes.contraction_partner.push_back(0);
+        std::vector<HypernodeID> refinement_nodes;
+        for (const HypernodeID& hn : hypergraph.nodes()) {
+          if (hypergraph.isBorderNode(hn)) {
+            refinement_nodes.push_back(hn);
+          }
+        }
+        Metrics current_metrics = {metrics::hyperedgeCut(hypergraph),
+                                   metrics::km1(hypergraph),
+                                   metrics::imbalance(hypergraph, context)};
+        pre_refiner->refine(refinement_nodes, {0, 0}, changes, current_metrics);
+      }
 
       partitionVCycle(hypergraph, *coarsener, *km1_refiner_second, context);
       ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hypergraph, context).isAcyclic(),
