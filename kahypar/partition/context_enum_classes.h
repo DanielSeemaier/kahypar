@@ -42,6 +42,12 @@ enum class InitialPartitioningTechnique : uint8_t {
   UNDEFINED
 };
 
+enum class InitialPartitioningLevel : uint8_t {
+  finest,
+  coarsest,
+  UNDEFINED
+};
+
 enum class RatingFunction : uint8_t {
   heavy_edge,
   edge_frequency,
@@ -676,6 +682,17 @@ static InitialPartitioningTechnique inititalPartitioningTechniqueFromString(cons
   LOG << "Illegal option:" << technique;
   exit(0);
   return InitialPartitioningTechnique::multilevel;
+}
+
+static InitialPartitioningLevel inititalPartitioningLevelFromString(const std::string& level) {
+  if (level == "finest") {
+    return InitialPartitioningLevel::finest;
+  } else if (level == "coarsest") {
+    return InitialPartitioningLevel::coarsest;
+  }
+  LOG << "Illegal option:" << level;
+  exit(0);
+  return InitialPartitioningLevel::finest;
 }
 
 static LouvainEdgeWeight edgeWeightFromString(const std::string& type) {

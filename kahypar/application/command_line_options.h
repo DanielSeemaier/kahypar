@@ -430,6 +430,15 @@ po::options_description createInitialPartitioningOptionsDescription(Context& con
     "IP Technique:\n"
     " - flat\n"
     " - (multi)level")
+    ("i-level",
+     po::value<std::string>()->value_name("<string>")->notifier(
+       [&](const std::string& ip_level) {
+         context.initial_partitioning.level =
+           kahypar::inititalPartitioningLevelFromString(ip_level);
+       }),
+     "IP Level:\n"
+     " - finest\n"
+     " - coarsest")
     ("i-algo",
     po::value<std::string>()->value_name("<string>")->notifier(
       [&](const std::string& ip_algo) {

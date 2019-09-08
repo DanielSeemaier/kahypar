@@ -82,7 +82,7 @@ class AcyclicClusterCoarseningV1 final : public ICoarsener, private VertexPairCo
       num_contractions = 0;
 
       // TODO make fraction a config param
-      const auto clustering = dag::findAcyclicClustering(_hg, _context, 0.25 / _context.partition.k);
+      const auto clustering = dag::findAcyclicClustering(_hg, _context, 0.1 / _context.partition.k);
       for (const HypernodeID& hn : _hg.nodes()) {
         if (clustering[hn] != hn) {
           performContraction(clustering[hn], hn);

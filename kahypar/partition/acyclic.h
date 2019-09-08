@@ -37,7 +37,7 @@ namespace acyclic {
 static constexpr bool debug = false;
 
 static inline bool partitionVCycle(Hypergraph& hypergraph, ICoarsener& coarsener,
-                                   IRefiner& refiner, const Context& context) {
+                                   IRefiner& refiner, const Context& context, const bool use_parent1 = false) {
   // In order to perform parallel net detection, we have to reset the edge hashes
   // before coarsening.
   hypergraph.resetEdgeHashes();
@@ -53,6 +53,22 @@ static inline bool partitionVCycle(Hypergraph& hypergraph, ICoarsener& coarsener
 
   if (context.partition.verbose_output && context.type == ContextType::main) {
     io::printHypergraphInfo(hypergraph, "Coarsened Hypergraph");
+  }
+
+  if (context.partition_evolutionary && context.evolutionary.action.requires().evolutionary_parent_contraction) {
+    hypergraph.reset();
+    hypergraph.setPartition(*context.evolutionary.parent1);
+
+    if (!use_parent1) {
+      const HyperedgeWeight parent_1_objective = metrics::correctMetric(hypergraph, context);
+
+      hypergraph.setPartition(*context.evolutionary.parent2);
+      const HyperedgeWeight parent_2_objective = metrics::correctMetric(hypergraph, context);
+
+      if (parent_1_objective < parent_2_objective) {
+        hypergraph.setPartition(*context.evolutionary.parent1);
+      }
+    }
   }
 
   hypergraph.initializeNumCutHyperedges();
@@ -129,6 +145,41 @@ static inline void performInitialPartitioning(Hypergraph& hypergraph, const Cont
   }
 }
 
+static inline void performMultilevelInitialPartitioning(Hypergraph& hypergraph, const Context& context,
+                                                        ICoarsener& coarsener, IRefiner& refiner) {
+  multilevel::partition(hypergraph, coarsener, refiner, context);
+
+  Context ctx_copy = context;
+  std::unique_ptr<IRefiner> ip_refiner(
+    RefinerFactory::getInstance().createObject(
+      context.initial_partitioning.local_search.algorithm, hypergraph, ctx_copy));
+  if (metrics::imbalance(hypergraph, context) > context.partition.epsilon) {
+    ctx_copy.partition.epsilon = metrics::imbalance(hypergraph, context);
+  }
+  ctx_copy.setupPartWeights(hypergraph.totalWeight());
+
+  if (context.partition.refine_initial_partition) {
+    LOG << "Performing initial refinement on finest level with configured refiner";
+    ip_refiner->initialize(0);
+    UncontractionGainChanges changes;
+    changes.representative.push_back(0);
+    changes.contraction_partner.push_back(0);
+    std::vector<HypernodeID> refinement_nodes;
+    for (const HypernodeID& hn : hypergraph.nodes()) {
+      refinement_nodes.push_back(hn);
+    }
+    Metrics current_metrics = {metrics::hyperedgeCut(hypergraph),
+                               metrics::km1(hypergraph),
+                               metrics::imbalance(hypergraph, context)};
+    ip_refiner->refine(refinement_nodes, {0, 0}, changes, current_metrics);
+    ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hypergraph, context).isAcyclic(),
+           "Initial partition is not acyclic!");
+    LOG << "Final KM1 after IP:" << current_metrics.km1;
+  } else {
+    LOG << "Initial refinement on finest level disabled";
+  }
+}
+
 static inline std::vector<PartitionID> createPartitionSnapshot(const Hypergraph& hg) {
   std::vector<PartitionID> partition(hg.initialNumNodes());
   for (const HypernodeID& hn : hg.nodes()) {
@@ -143,10 +194,6 @@ static inline void partition(Hypergraph& hypergraph, const Context& context) {
   Context ctx_copy = context;
   ctx_copy.enable_hard_rebalance = context.enable_hard_rebalance;
 
-  std::unique_ptr<ICoarsener> coarsener(
-    CoarsenerFactory::getInstance().createObject(
-      context.coarsening.algorithm, hypergraph, context,
-      hypergraph.weightOfHeaviestNode()));
   std::unique_ptr<IRefiner> km1_refiner(
     RefinerFactory::getInstance().createObject(
       context.local_search.algorithm, hypergraph, ctx_copy));
@@ -154,9 +201,43 @@ static inline void partition(Hypergraph& hypergraph, const Context& context) {
     RefinerFactory::getInstance().createObject(
       context.local_search.algorithm_second, hypergraph, ctx_copy));
 
-  if (!context.partition.vcycle_refinement_for_input_partition) {
-    performInitialPartitioning(hypergraph, context);
+  Context coarsening_context(context);
+  const bool recombine = context.partition_evolutionary && context.evolutionary.action.requires().initial_partitioning;
+  std::vector<PartitionID> parent1;
+  std::vector<PartitionID> parent2;
+
+  if (recombine) {
+    coarsening_context.evolutionary.action = Action { meta::Int2Type<static_cast<int>(EvoDecision::combine)>() };
+    parent2 = createPartitionSnapshot(hypergraph);
+    coarsening_context.evolutionary.parent2 = &parent2;
   }
+
+  if (!context.partition.vcycle_refinement_for_input_partition) {
+    if (!context.partition_evolutionary || context.evolutionary.action.requires().initial_partitioning) {
+      if (context.initial_partitioning.level == InitialPartitioningLevel::finest) {
+        performInitialPartitioning(hypergraph, context);
+      } else {
+        ASSERT(context.initial_partitioning.level == InitialPartitioningLevel::coarsest);
+        ASSERT(!context.partition_evolutionary, "currently unsupported");
+
+        std::unique_ptr<ICoarsener> coarsener(
+          CoarsenerFactory::getInstance().createObject(
+            context.coarsening.algorithm, hypergraph, context,
+            hypergraph.weightOfHeaviestNode()));
+        performMultilevelInitialPartitioning(hypergraph, context, *coarsener, *km1_refiner);
+      }
+    }
+  }
+
+  if (recombine) {
+    parent1 = createPartitionSnapshot(hypergraph);
+    coarsening_context.evolutionary.parent1 = &parent1;
+  }
+
+  std::unique_ptr<ICoarsener> coarsener(
+    CoarsenerFactory::getInstance().createObject(
+      context.coarsening.algorithm, hypergraph, coarsening_context,
+      hypergraph.weightOfHeaviestNode()));
 
   if (metrics::imbalance(hypergraph, context) > context.partition.epsilon) {
     ctx_copy.partition.epsilon = metrics::imbalance(hypergraph, context);
@@ -177,7 +258,7 @@ static inline void partition(Hypergraph& hypergraph, const Context& context) {
     context.partition.current_v_cycle = vcycle;
     if (vcycle == 1) {
       LOG << "Using Refiner:" << context.local_search.algorithm;
-      partitionVCycle(hypergraph, *coarsener, *km1_refiner, ctx_copy);
+      partitionVCycle(hypergraph, *coarsener, *km1_refiner, ctx_copy, recombine);
       ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hypergraph, context).isAcyclic(),
              "Vcycle" << vcycle << "produced a cyclic partition");
     } else {
@@ -214,7 +295,9 @@ static inline void partition(Hypergraph& hypergraph, const Context& context) {
 
     const HyperedgeWeight current_km1 = metrics::km1(hypergraph);
     const bool current_achieved_imbalance = metrics::imbalance(hypergraph, ctx_copy) < context.partition.final_epsilon;
-    if (current_km1 < best_km1 && (!achieved_imbalance || current_achieved_imbalance)) {
+    // if previous partition is imbalanced, always accept the current partition if it is balanced or better than the previous one
+    // otherwise only accept balanced partition that is better than the best balanced partition found so far
+    if ((current_km1 < best_km1 && achieved_imbalance) || (!achieved_imbalance && (current_achieved_imbalance || current_km1 < best_km1))) {
       LOG << "V-Cycle" << vcycle << "improved KM1 from" << best_km1 << "to" << current_km1;
       best_km1 = current_km1;
       best_partition = createPartitionSnapshot(hypergraph);

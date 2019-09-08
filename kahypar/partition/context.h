@@ -256,6 +256,7 @@ inline std::ostream& operator<< (std::ostream& str, const LocalSearchParameters&
 struct InitialPartitioningParameters {
   Mode mode = Mode::UNDEFINED;
   InitialPartitioningTechnique technique = InitialPartitioningTechnique::UNDEFINED;
+  InitialPartitioningLevel level = InitialPartitioningLevel::UNDEFINED;
   InitialPartitionerAlgorithm algo = InitialPartitionerAlgorithm::UNDEFINED;
   CoarseningParameters coarsening = { };
   LocalSearchParameters local_search = { };
