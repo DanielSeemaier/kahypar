@@ -55,7 +55,8 @@ static inline bool partitionVCycle(Hypergraph& hypergraph, ICoarsener& coarsener
     io::printHypergraphInfo(hypergraph, "Coarsened Hypergraph");
   }
 
-  if (context.partition_evolutionary && context.evolutionary.action.requires().evolutionary_parent_contraction) {
+  // special meaing of use_parent1 that doesnt make any sense, this is ugly, refactor this
+  if ((context.partition_evolutionary && context.evolutionary.action.requires().evolutionary_parent_contraction) || use_parent1) {
     hypergraph.reset();
     hypergraph.setPartition(*context.evolutionary.parent1);
 
@@ -190,26 +191,17 @@ static inline std::vector<PartitionID> createPartitionSnapshot(const Hypergraph&
 
 static inline void partition(Hypergraph& hypergraph, const Context& context) {
   ASSERT(hypergraph.isDirected());
+  LOG << hypergraph.partID(0);
 
-  Context ctx_copy = context;
-  ctx_copy.enable_hard_rebalance = context.enable_hard_rebalance;
-
-  std::unique_ptr<IRefiner> km1_refiner(
-    RefinerFactory::getInstance().createObject(
-      context.local_search.algorithm, hypergraph, ctx_copy));
-  std::unique_ptr<IRefiner> km1_refiner_second(
-    RefinerFactory::getInstance().createObject(
-      context.local_search.algorithm_second, hypergraph, ctx_copy));
-
-  Context coarsening_context(context);
+  Context ctx_copy(context);
   const bool recombine = context.partition_evolutionary && context.evolutionary.action.requires().initial_partitioning;
   std::vector<PartitionID> parent1;
   std::vector<PartitionID> parent2;
 
   if (recombine) {
-    coarsening_context.evolutionary.action = Action { meta::Int2Type<static_cast<int>(EvoDecision::combine)>() };
+    ctx_copy.evolutionary.action = Action { meta::Int2Type<static_cast<int>(EvoDecision::combine)>() };
     parent2 = createPartitionSnapshot(hypergraph);
-    coarsening_context.evolutionary.parent2 = &parent2;
+    ctx_copy.evolutionary.parent2 = &parent2;
   }
 
   if (!context.partition.vcycle_refinement_for_input_partition) {
@@ -224,6 +216,9 @@ static inline void partition(Hypergraph& hypergraph, const Context& context) {
           CoarsenerFactory::getInstance().createObject(
             context.coarsening.algorithm, hypergraph, context,
             hypergraph.weightOfHeaviestNode()));
+        std::unique_ptr<IRefiner> km1_refiner(
+          RefinerFactory::getInstance().createObject(
+            context.local_search.algorithm, hypergraph, context));
         performMultilevelInitialPartitioning(hypergraph, context, *coarsener, *km1_refiner);
       }
     }
@@ -231,13 +226,19 @@ static inline void partition(Hypergraph& hypergraph, const Context& context) {
 
   if (recombine) {
     parent1 = createPartitionSnapshot(hypergraph);
-    coarsening_context.evolutionary.parent1 = &parent1;
+    ctx_copy.evolutionary.parent1 = &parent1;
   }
 
   std::unique_ptr<ICoarsener> coarsener(
     CoarsenerFactory::getInstance().createObject(
-      context.coarsening.algorithm, hypergraph, coarsening_context,
+      context.coarsening.algorithm, hypergraph, ctx_copy,
       hypergraph.weightOfHeaviestNode()));
+  std::unique_ptr<IRefiner> km1_refiner(
+    RefinerFactory::getInstance().createObject(
+      context.local_search.algorithm, hypergraph, ctx_copy));
+  std::unique_ptr<IRefiner> km1_refiner_second(
+    RefinerFactory::getInstance().createObject(
+      context.local_search.algorithm_second, hypergraph, ctx_copy));
 
   if (metrics::imbalance(hypergraph, context) > context.partition.epsilon) {
     ctx_copy.partition.epsilon = metrics::imbalance(hypergraph, context);
@@ -297,7 +298,7 @@ static inline void partition(Hypergraph& hypergraph, const Context& context) {
     const bool current_achieved_imbalance = metrics::imbalance(hypergraph, ctx_copy) < context.partition.final_epsilon;
     // if previous partition is imbalanced, always accept the current partition if it is balanced or better than the previous one
     // otherwise only accept balanced partition that is better than the best balanced partition found so far
-    if ((current_km1 < best_km1 && achieved_imbalance) || (!achieved_imbalance && (current_achieved_imbalance || current_km1 < best_km1))) {
+    if (best_km1 == 0 || (current_km1 < best_km1 && achieved_imbalance) || (!achieved_imbalance && (current_achieved_imbalance || current_km1 < best_km1))) {
       LOG << "V-Cycle" << vcycle << "improved KM1 from" << best_km1 << "to" << current_km1;
       best_km1 = current_km1;
       best_partition = createPartitionSnapshot(hypergraph);

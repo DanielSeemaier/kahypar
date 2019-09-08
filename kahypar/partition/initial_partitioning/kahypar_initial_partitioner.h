@@ -12,6 +12,8 @@
 
 namespace kahypar {
 class KaHyParInitialPartitioner : public IInitialPartitioner, private InitialPartitionerBase<KaHyParInitialPartitioner> {
+  static constexpr bool debug = true;
+
   using Base = InitialPartitionerBase<KaHyParInitialPartitioner>;
   friend Base;
 
@@ -33,7 +35,7 @@ class KaHyParInitialPartitioner : public IInitialPartitioner, private InitialPar
   }
 
   void initialPartition() {
-    LOG << "initialPartition()";
+    DBG << "initialPartition()";
 
     _hg.resetPartitioning();
     _hg.changeK(_context.partition.k);
@@ -45,19 +47,19 @@ class KaHyParInitialPartitioner : public IInitialPartitioner, private InitialPar
 
     const bool acyclic = AdjacencyMatrixQuotientGraph<DFSCycleDetector>(_hg, _context).isAcyclic();
     if (!acyclic) {
-      LOG << "Error, obtained cyclic IP!";
+      DBG << "Error, obtained cyclic IP!";
       std::exit(1);
     } else {
-      LOG << "IP is acyclic, nice!";
+      DBG << "IP is acyclic, nice!";
     }
 
     for (PartitionID k = 0; k < _context.partition.k; ++k) {
-      LOG << "Block" << k << ":" << _hg.partWeight(k) << _hg.partSize(k);
+      DBG << "Block" << k << ":" << _hg.partWeight(k) << _hg.partSize(k);
     }
 
     const double imbalance = metrics::imbalance(_hg, _context);
     if (_context.partition.balance_initial_partition && (imbalance > _context.partition.final_epsilon || imbalance > _context.partition.epsilon)) {
-      LOG << "Running hard rebalance to improve IP imbalance from" << imbalance << "to min{"
+      DBG << "Running hard rebalance to improve IP imbalance from" << imbalance << "to min{"
           << _context.partition.final_epsilon << "," << _context.partition.epsilon << "}";
       rebalancePartition(_hg, _context);
     }
@@ -67,7 +69,7 @@ class KaHyParInitialPartitioner : public IInitialPartitioner, private InitialPar
     Context balanced_context = context;
     balanced_context.partition.epsilon = context.partition.final_epsilon;
     balanced_context.setupPartWeights(hg.totalWeight());
-    LOG << "Improve imbalance to:" << balanced_context.partition.epsilon;
+    DBG << "Improve imbalance to:" << balanced_context.partition.epsilon;
 
     AdjacencyMatrixQuotientGraph<DFSCycleDetector> qg(hg, balanced_context);
     KMinusOneGainManager gain_manager(hg, balanced_context);
@@ -102,7 +104,7 @@ class KaHyParInitialPartitioner : public IInitialPartitioner, private InitialPar
     if (k < 2) {
       return;
     }
-    LOG << "Subdividing part" << part << "in" << k << "blocks ...";
+    DBG << "Subdividing part" << part << "in" << k << "blocks ...";
 
     const auto pair = extractPartAsUnpartitionedHypergraphForBisection(_hg, part, Objective::km1);
     const auto& hg_ptr = pair.first;
@@ -110,8 +112,8 @@ class KaHyParInitialPartitioner : public IInitialPartitioner, private InitialPar
     hg_ptr->resetPartitioning();
     Context ctx = createContext(2, 0.03);
     kahypar::PartitionerFacade().partition(*hg_ptr, ctx);
-    LOG << "Bisection KM1:" << metrics::km1(*hg_ptr);
-    LOG << "Bisection imbalance:" << metrics::imbalance(*hg_ptr, ctx);
+    DBG << "Bisection KM1:" << metrics::km1(*hg_ptr);
+    DBG << "Bisection imbalance:" << metrics::imbalance(*hg_ptr, ctx);
 
     PartitionID pre_num_part_0 = 0;
     PartitionID pre_num_part_1 = 0;
@@ -126,16 +128,16 @@ class KaHyParInitialPartitioner : public IInitialPartitioner, private InitialPar
     dag::fixBipartitionAcyclicity(*hg_ptr, ctx);
     hg_ptr->initializeNumCutHyperedges();
 
-    LOG << "Bisection KM1 after acyclicity fix:" << metrics::km1(*hg_ptr);
-    LOG << "Bisection imbalance after acyclicity fix:" << metrics::imbalance(*hg_ptr, ctx);
+    DBG << "Bisection KM1 after acyclicity fix:" << metrics::km1(*hg_ptr);
+    DBG << "Bisection imbalance after acyclicity fix:" << metrics::imbalance(*hg_ptr, ctx);
 
     if (_context.initial_partitioning.balance_partition) {
-      LOG << "Run HardRebalanceRefiner on initial partition to improve imbalance, then local search to improve KM1";
+      DBG << "Run HardRebalanceRefiner on initial partition to improve imbalance, then local search to improve KM1";
       rebalancePartition(*hg_ptr, ctx, true);
     }
 
-    LOG << "Bisection KM1 after rebalance + local search:" << metrics::km1(*hg_ptr);
-    LOG << "Bisection imbalance after rebalance + local search:" << metrics::imbalance(*hg_ptr, ctx);
+    DBG << "Bisection KM1 after rebalance + local search:" << metrics::km1(*hg_ptr);
+    DBG << "Bisection imbalance after rebalance + local search:" << metrics::imbalance(*hg_ptr, ctx);
 
     // keep HNs in hg_ptr->partID(hn) == 0 in block `part`
     for (const HypernodeID& hn : hg_ptr->nodes()) {
@@ -183,16 +185,16 @@ class KaHyParInitialPartitioner : public IInitialPartitioner, private InitialPar
       ASSERT(k_part_0 == 1);
     }
 
-    LOG << "Split" << hg_ptr->initialNumNodes() << "from" << part << "into" << pre_num_part_0 << "and" << pre_num_part_1 << "blocks";
-    LOG << "\t\tAfter acyclic fix:" << num_part_0 << "and" << num_part_1 << "blocks";
-    LOG << "\tFirst block:" << part << "second block:" << part + k_part_0;
-    LOG << "\tContinue with k:" << k_part_0 << "and" << k_part_1;
+    DBG << "Split" << hg_ptr->initialNumNodes() << "from" << part << "into" << pre_num_part_0 << "and" << pre_num_part_1 << "blocks";
+    DBG << "\t\tAfter acyclic fix:" << num_part_0 << "and" << num_part_1 << "blocks";
+    DBG << "\tFirst block:" << part << "second block:" << part + k_part_0;
+    DBG << "\tContinue with k:" << k_part_0 << "and" << k_part_1;
     const bool acyclic = AdjacencyMatrixQuotientGraph<DFSCycleDetector>(_hg, _context).isAcyclic();
     if (!acyclic) {
-      LOG << "Error, obtained cyclic IP!";
+      DBG << "Error, obtained cyclic IP!";
       std::exit(1);
     } else {
-      LOG << "IP is acyclic, nice!";
+      DBG << "IP is acyclic, nice!";
     }
 
     performPartition(part, k_part_0);
@@ -201,6 +203,7 @@ class KaHyParInitialPartitioner : public IInitialPartitioner, private InitialPar
 
   Context createContext(const PartitionID k, const double epsilon) const {
     Context ip_context;
+    ip_context.partition.time_limit = 0;
     ip_context.partition.current_v_cycle = 0;
     ip_context.partition.graph_partition_filename = "";
     ip_context.partition.quiet_mode = true;

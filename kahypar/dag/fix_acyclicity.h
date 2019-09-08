@@ -220,10 +220,7 @@ void fixBipartitionAcyclicity(Hypergraph &hg, const Context& context) {
   // select the most balanced partition from 01 and 10, i.e. if 01 is better balanced, restore it and otherwise do
   // nothing because we already have partition 10
   if (imbalance_01 <= imbalance_10) {
-    LOG << "Chose 01";
     hg.setPartition(partition_01);
-  } else {
-    LOG << "Chose 10";
   }
 }
 } // namespace dag
