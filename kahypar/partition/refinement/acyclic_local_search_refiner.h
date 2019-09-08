@@ -72,6 +72,10 @@ class AcyclicLocalSearchRefiner final : public IRefiner {
     LOG << "[LocalSearch] Total size of initial PQs:" << _initial_pq_size;
     LOG << "[LocalSearch] Number of initially enabled PQs:" << _num_initially_enabled_pqs;
     LOG << "[LocalSearch] Max part weights:" << _context.partition.max_part_weights[0];
+    LOG << "[LocalSearch] Perform moves time:" << _perform_moves_time;
+    LOG << "[LocalSearch] Refine time:" << _refine_time;
+    LOG << "[LocalSearch] Refine until best cut time:" << _actual_refine_time;
+    LOG << "[LocalSearch] Gains time:" << _gain_time;
   }
 
  private:
@@ -93,6 +97,10 @@ class AcyclicLocalSearchRefiner final : public IRefiner {
     _num_moves_in_last_iteration = 0;
     _improved_km1 = 0;
     _initial_pq_size = 0;
+    _perform_moves_time = 0.0;
+    _refine_time = 0.0;
+    _gain_time = 0.0;
+    _actual_refine_time = 0.0;
     _num_initially_enabled_pqs = 0;
   }
 
@@ -107,6 +115,8 @@ class AcyclicLocalSearchRefiner final : public IRefiner {
                   Metrics& best_metrics) final {
     ASSERT(best_metrics.km1 == metrics::km1(_hg));
     ASSERT(best_metrics.imbalance == metrics::imbalance(_hg, _context));
+
+    HighResClockTimepoint start_refine = std::chrono::high_resolution_clock::now();
 
     ++_num_calls;
 
@@ -140,6 +150,8 @@ class AcyclicLocalSearchRefiner final : public IRefiner {
 
     _initial_pq_size += _pq.size();
     _num_initially_enabled_pqs += _pq.numEnabledParts();
+
+    double refine_time_until_best_cut = 0.0;
 
     const double beta = std::log(_hg.currentNumNodes());
     while (!_pq.empty() && !_stopping_policy.searchShouldStop(touched_hns_since_last_improvement,
@@ -232,6 +244,7 @@ class AcyclicLocalSearchRefiner final : public IRefiner {
 
         // perform gain updates
         _hns_to_activate.clear();
+        HighResClockTimepoint start_gain = std::chrono::high_resolution_clock::now();
         _gain_manager.updateAfterMovement(max_gain_node, from_part, to_part,
                                           [&](const HypernodeID& hn, const PartitionID& part, const Gain& gain) {
                                             if (_hg.marked(hn)) {
@@ -267,6 +280,8 @@ class AcyclicLocalSearchRefiner final : public IRefiner {
                                             ASSERT(_pq.contains(hn, part));
                                             _pq.remove(hn, part);
                                           });
+        HighResClockTimepoint end_gain = std::chrono::high_resolution_clock::now();
+        _gain_time += std::chrono::duration<double>(end_gain - start_gain).count();;
 
         for (const HypernodeID& hn_to_activate : _hns_to_activate) {
           if (!_hg.active(hn_to_activate)) {
@@ -293,6 +308,9 @@ class AcyclicLocalSearchRefiner final : public IRefiner {
           min_cut_index = _moves.size();
           touched_hns_since_last_improvement = 0;
           _gain_manager.resetDelta();
+
+          HighResClockTimepoint end_best_cut = std::chrono::high_resolution_clock::now();
+          refine_time_until_best_cut = std::chrono::duration<double>(end_best_cut - start_refine).count();
         }
         _moves.emplace_back(max_gain_node, from_part, to_part);
 
@@ -343,6 +361,10 @@ class AcyclicLocalSearchRefiner final : public IRefiner {
     DBG << "Improved KM1:" << initial_km1 << "-->" << best_metrics.km1;
     _improved_km1 += initial_km1 - best_metrics.km1;
     DBG << "Changed imbalance:" << initial_imbalance << "-->" << best_metrics.imbalance;
+
+    HighResClockTimepoint end_refine = std::chrono::high_resolution_clock::now();
+    _refine_time += std::chrono::duration<double>(end_refine - start_refine).count();
+    _actual_refine_time += refine_time_until_best_cut;
 
     return FMImprovementPolicy::improvementFound(best_metrics.km1, initial_km1,
                                                  best_metrics.imbalance, initial_imbalance,
@@ -454,6 +476,10 @@ class AcyclicLocalSearchRefiner final : public IRefiner {
   std::size_t _num_non_border_refinement_nodes{0};
   std::size_t _initial_pq_size{0};
   std::size_t _num_initially_enabled_pqs{0};
+  double _perform_moves_time{0.0};
+  double _actual_refine_time{0.0};
+  double _refine_time{0.0};
+  double _gain_time{0.0};
   HyperedgeWeight _improved_km1{0};
 };
 } // namespace kahypar

@@ -104,6 +104,10 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
     LOG << "[HardRebalance] Number of times no path was found:" << _num_no_path;
     LOG << "[HardRebalance] Number of times a path was found:" << _num_found_path;
     LOG << "[HardRebalance] Number of times rebalance was successful:" << _num_success;
+    LOG << "[HardRebalance] Perform moves time:" << _perform_moves_time;
+    LOG << "[HardRebalance] Refine time:" << _refine_time;
+    LOG << "[HardRebalance] Gains time:" << _gain_time;
+    LOG << "[HardRebalance] Path time:" << _path_time;
   }
 
  private:
@@ -128,6 +132,10 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
     _num_no_path = 0;
     _num_found_path = 0;
     _num_success = 0;
+    _perform_moves_time = 0.0;
+    _refine_time = 0.0;
+    _gain_time = 0.0;
+    _path_time = 0.0;
   }
 
   void performMovesAndUpdateCacheImpl(const std::vector<Move>& moves,
@@ -138,6 +146,8 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
       _qg_changed = true;
       return;
     }
+
+    const HighResClockTimepoint start_perform_moves = std::chrono::high_resolution_clock::now();
 
     _hg.resetHypernodeState();
 
@@ -156,6 +166,9 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
       this->move(move.hn, move.from, move.to);
     }
 
+    const HighResClockTimepoint end_perform_moves = std::chrono::high_resolution_clock::now();
+    _perform_moves_time += std::chrono::duration<double>(end_perform_moves - start_perform_moves).count();;
+
     ASSERT([&]() {
       ASSERT_THAT_FIXTURES_ARE_CORRECT();
       ASSERT_THAT_HYPERNODES_CONTAINED_IN_PQS_ARE_CORRECT();
@@ -167,6 +180,8 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
                   const std::array<HypernodeWeight, 2>&,
                   const UncontractionGainChanges&,
                   Metrics& best_metrics) final {
+    const HighResClockTimepoint start_refine = std::chrono::high_resolution_clock::now();
+
     ASSERT(best_metrics.imbalance == metrics::imbalance(_hg, _context));
     ASSERT(best_metrics.km1 == metrics::km1(_hg));
     _hg.resetHypernodeState();
@@ -259,7 +274,10 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
           << V(cached_gain_before_move));
 
         // update gains
+        const HighResClockTimepoint start_update_gc = std::chrono::high_resolution_clock::now();
         _gain_manager.updateAfterMovement(max_gain_hn, from_part, to_part);
+        const HighResClockTimepoint end_update_gc = std::chrono::high_resolution_clock::now();
+        _gain_time += std::chrono::duration<double>(end_update_gc - start_update_gc).count();;
 
         move(max_gain_hn, from_part, to_part);
         _moves.emplace_back(max_gain_hn, from_part, to_part);
@@ -295,6 +313,9 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
       _moved_from[hn] = 0;
     }
     _moved_from_entries.clear();
+
+    const HighResClockTimepoint end_refine = std::chrono::high_resolution_clock::now();
+    _refine_time += std::chrono::duration<double>(end_refine - start_refine).count();;
 
     return false;
   }
@@ -348,6 +369,8 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
   }
 
   std::pair<PartitionID, PartitionID> selectPath() const {
+    const HighResClockTimepoint start_path = std::chrono::high_resolution_clock::now();
+
     const auto& ordering = _qg.topologicalOrdering();
     const auto& inverse_ordering = _qg.inverseTopologicalOrdering();
 
@@ -431,6 +454,10 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
       }
       return true;
     }());
+
+    const HighResClockTimepoint end_path = std::chrono::high_resolution_clock::now();
+    const_cast<AcyclicHardRebalanceRefiner*>(this)->_path_time += std::chrono::duration<double>(end_path - start_path).count();
+
     return {best_end, best_start};
   }
 
@@ -446,6 +473,8 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
     updateFixtures(moved_hn, from_part, to_part);
     processFixtureStateChanges();
 
+    const HighResClockTimepoint start_update_gains = std::chrono::high_resolution_clock::now();
+
     _updated_neighbors.resetUsedEntries();
 
     updateHypernodeGain(moved_hn);
@@ -459,6 +488,9 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
         }
       }
     }
+
+    const HighResClockTimepoint end_update_gains = std::chrono::high_resolution_clock::now();
+    _gain_time += std::chrono::duration<double>(end_update_gains - start_update_gains).count();;
   }
 
   void updateHypernodeGain(const HypernodeID hn) {
@@ -837,6 +869,10 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
   std::size_t _num_moves_in_last_iteration{0};
   HyperedgeWeight _improved_km1{0};
   double _improved_imbalance{0.0};
+  double _perform_moves_time{0.0};
+  double _refine_time{0.0};
+  double _gain_time{0.0};
+  double _path_time{0.0};
 };
 
 constexpr std::array<std::size_t, 2> AcyclicHardRebalanceRefiner::kDirections;

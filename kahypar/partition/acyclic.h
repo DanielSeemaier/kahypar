@@ -202,7 +202,9 @@ static inline void partition(Hypergraph& hypergraph, const Context& context) {
         Metrics current_metrics = {metrics::hyperedgeCut(hypergraph),
                                    metrics::km1(hypergraph),
                                    metrics::imbalance(hypergraph, context)};
+        LOG << "Before: KM1 is" << current_metrics.km1 << "and imbalance is" << current_metrics.imbalance;
         pre_refiner->refine(refinement_nodes, {0, 0}, changes, current_metrics);
+        LOG << "Changed KM1 to" << current_metrics.km1 << "and imbalance to" << current_metrics.imbalance;
       }
 
       partitionVCycle(hypergraph, *coarsener, *km1_refiner_second, context);

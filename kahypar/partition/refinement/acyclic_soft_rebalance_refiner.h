@@ -62,6 +62,18 @@ class AcyclicSoftRebalanceRefiner final : public IRefiner {
     LOG << "[SoftRebalance] Improved KM1 by:" << _improved_km1;
   }
 
+  void preUncontraction(const HypernodeID representant) override {
+    if (_qg_changed) {
+      return;
+    }
+  }
+
+  void postUncontraction(const HypernodeID representant, const std::vector<HypernodeID>&& partners) override {
+    if (_qg_changed) {
+      return;
+    }
+  }
+
  private:
   void initializeImpl(const HyperedgeWeight max_gain) final {
     if (!_is_initialized) {
@@ -73,6 +85,16 @@ class AcyclicSoftRebalanceRefiner final : public IRefiner {
     }
     _hg.resetHypernodeState();
     refreshTopologicalOrdering();
+
+    _num_refreshes = 0;
+    _num_no_refreshes = 0;
+    _num_moves = 0;
+    _num_moves_in_last_iteration = 0;
+    _num_zero_gain_moves = 0;
+    _num_positive_gain_moves = 0;
+    _num_negative_gain_moves = 0;
+    _improved_km1 = 0;
+    _improved_imbalance = 0.0;
   }
 
   void performMovesAndUpdateCacheImpl(const std::vector<Move>& moves,
@@ -350,7 +372,7 @@ class AcyclicSoftRebalanceRefiner final : public IRefiner {
   }
 
   void refreshTopologicalOrdering() {
-    _qg_changed = false;
+    LOG << "Re-initialize PQs in AcyclicSoftRebalanceRefiner";
     _pq.clear();
     for (const HypernodeID& hn : _hg.nodes()) {
       resetMinMaxNeighborsFor(hn);
@@ -482,7 +504,7 @@ class AcyclicSoftRebalanceRefiner final : public IRefiner {
   KMinusOneGainManager& _gain_manager;
 
   KWayRefinementPQ _pq;
-  std::vector<BinaryMaxHeap<PartitionID, Gain>> _pq_inst;
+  std::vector<ds::BinaryMaxHeap<PartitionID, Gain>> _pq_inst;
 
   std::vector<PartitionID> _min_successor_part;
   std::vector<PartitionID> _max_predecessor_part;
