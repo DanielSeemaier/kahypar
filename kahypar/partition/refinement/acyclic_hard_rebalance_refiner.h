@@ -101,6 +101,7 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
     LOG << "[HardRebalance] Negative gain moves:" << _num_negative_gain_moves;
     LOG << "[HardRebalance] Improved imbalance by:" << _improved_imbalance;
     LOG << "[HardRebalance] Improved KM1 by:" << _improved_km1;
+    LOG << "[HardRebalance] Expected improved KM1 by path heuristic:" << _expected_improved_km1;
     LOG << "[HardRebalance] Number of times no path was found:" << _num_no_path;
     LOG << "[HardRebalance] Number of times a path was found:" << _num_found_path;
     LOG << "[HardRebalance] Number of times rebalance was successful:" << _num_success;
@@ -129,6 +130,7 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
     _num_zero_gain_moves = 0;
     _improved_imbalance = 0.0;
     _improved_km1 = 0;
+    _expected_improved_km1 = 0;
     _num_no_path = 0;
     _num_found_path = 0;
     _num_success = 0;
@@ -434,6 +436,7 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
     }
 
     DBG << "Path:" << best_start << "-->" << best_end << "/" << best_direction << "/" << best_gain;
+    _expected_improved_km1 += best_gain;
 
     ASSERT([&]() {
       if (best_start != Hypergraph::kInvalidPartition || best_end != Hypergraph::kInvalidPartition) {
@@ -868,6 +871,7 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
   std::size_t _num_success{0};
   std::size_t _num_moves_in_last_iteration{0};
   HyperedgeWeight _improved_km1{0};
+  mutable HyperedgeWeight _expected_improved_km1{0};
   double _improved_imbalance{0.0};
   double _perform_moves_time{0.0};
   double _refine_time{0.0};
