@@ -45,7 +45,8 @@ class EvoPartitioner {
  public:
   explicit EvoPartitioner(const Context& context) :
     _timelimit(),
-    _population() {
+    _population(),
+    _population_imbalanced() {
     _timelimit = context.partition.time_limit;
   }
 
@@ -116,11 +117,25 @@ class EvoPartitioner {
     context.evolutionary.edge_frequency_amount = sqrt(context.evolutionary.population_size);
     DBG << "EDGE-FREQUENCY-AMOUNT";
     DBG << context.evolutionary.edge_frequency_amount;
+    Context imbalanced_context(context);
+    const double epsilon_prime = 0.3; // TODO make this a config parameter, maximum imbalanced
+
     while (_population.size() < context.evolutionary.population_size &&
            Timer::instance().evolutionaryResult().total_evolutionary <= _timelimit) {
       ++context.evolutionary.iteration;
       HighResClockTimepoint start = std::chrono::high_resolution_clock::now();
+      LOG << "Generating normal individual ...";
       _population.generateIndividual(hg, context);
+      if (context.evolutionary.use_imbalanced_population) {
+        const double progress = _population.size() / static_cast<double>(context.evolutionary.population_size);
+        const double default_epsilon = context.partition.epsilon;
+        const double epsilon = default_epsilon + (epsilon_prime - default_epsilon) * progress;
+        imbalanced_context.partition.epsilon = epsilon;
+        imbalanced_context.partition.final_epsilon = epsilon;
+        LOG << "Generating imbalanced (" << V(epsilon) << ") individual ...";
+
+        _population_imbalanced.generateIndividual(hg, imbalanced_context);
+      }
       HighResClockTimepoint end = std::chrono::high_resolution_clock::now();
       Timer::instance().add(context, Timepoint::evolutionary,
                             std::chrono::duration<double>(end - start).count());
@@ -144,7 +159,7 @@ class EvoPartitioner {
     context.evolutionary.combine_strategy = pick::appropriateCombineStrategy(context);
     switch (context.evolutionary.combine_strategy) {
       case EvoCombineStrategy::basic: {
-          size_t insert_position = _population.insert(combine::usingTournamentSelection(hg, context, _population), context);
+          size_t insert_position = _population.insert(combine::usingTournamentSelection(hg, context, _population, _population_imbalanced), context);
           verbose(context, insert_position);
           break;
         }
@@ -226,5 +241,6 @@ class EvoPartitioner {
 
   int _timelimit;
   Population _population;
+  Population _population_imbalanced;
 };
 }  // namespace kahypar

@@ -398,6 +398,7 @@ struct EvolutionaryParameters {
   mutable std::vector<ClusterID> communities;
   bool unlimited_coarsening_contraction;
   bool random_vcycles;
+  bool use_imbalanced_population;
 };
 
 inline std::ostream& operator<< (std::ostream& str, const EvolutionaryParameters& params) {
@@ -409,6 +410,7 @@ inline std::ostream& operator<< (std::ostream& str, const EvolutionaryParameters
   str << "  Combine Strategy                    " << params.combine_strategy << std::endl;
   str << "  Mutation Strategy                   " << params.mutate_strategy << std::endl;
   str << "  Diversification Interval            " << params.diversify_interval << std::endl;
+  str << "  Use Imbalanced Population           " << params.use_imbalanced_population << std::endl;
   return str;
 }
 

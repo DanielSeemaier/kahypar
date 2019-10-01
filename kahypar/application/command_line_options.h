@@ -610,6 +610,13 @@ po::options_description createEvolutionaryOptionsDescription(Context& context,
     }),
     "The Chance of a mutation being selected as operation\n"
     "default: 0.5)")
+    (
+      "use-imbalanced-population",
+      po::value<bool>()->value_name("<bool>")->notifier(
+        [&](const bool& use_imbalanced_population) {
+          context.evolutionary.use_imbalanced_population = use_imbalanced_population;
+        }),
+        "Use imbalance population during evolutionary partitioning\n")
     ("edge-frequency-chance",
     po::value<float>()->value_name("<float>")->notifier(
       [&](const float& edge_chance) {

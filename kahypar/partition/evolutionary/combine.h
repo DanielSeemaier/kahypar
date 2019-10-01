@@ -82,7 +82,7 @@ Individual partitions(Hypergraph& hg,
 }
 
 
-Individual usingTournamentSelection(Hypergraph& hg, const Context& context, const Population& population) {
+Individual usingTournamentSelection(Hypergraph& hg, const Context& context, const Population& population, const Population& imbalanced_population) {
   Context temporary_context(context);
 
   temporary_context.evolutionary.action =
@@ -90,10 +90,22 @@ Individual usingTournamentSelection(Hypergraph& hg, const Context& context, cons
   temporary_context.coarsening.rating.rating_function = RatingFunction::heavy_edge;
   temporary_context.coarsening.rating.partition_policy = RatingPartitionPolicy::evolutionary;
 
-  const auto& parents = population.tournamentSelect();
+  if (context.evolutionary.use_imbalanced_population) {
+    if (imbalanced_population.size() == 0) {
+      throw std::logic_error("imbalance_population is empty");
+    }
 
-
-  return combine::partitions(hg, parents, temporary_context);
+    LOG << "Using tournament selection on population and imbalanced_population";
+    const Parents parents = {
+      population.singleTournamentSelection(),
+      imbalanced_population.singleTournamentSelection()
+    };
+    return combine::partitions(hg, parents, temporary_context);
+  } else {
+    LOG << "Using tournamentSelect() on population";
+    const auto& parents = population.tournamentSelect();
+    return combine::partitions(hg, parents, temporary_context);
+  }
 }
 
 
