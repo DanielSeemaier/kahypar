@@ -610,20 +610,39 @@ po::options_description createEvolutionaryOptionsDescription(Context& context,
     }),
     "The Chance of a mutation being selected as operation\n"
     "default: 0.5)")
-    (
-      "use-imbalanced-population",
-      po::value<bool>()->value_name("<bool>")->notifier(
-        [&](const bool& use_imbalanced_population) {
-          context.evolutionary.use_imbalanced_population = use_imbalanced_population;
-        }),
-        "Use imbalance population during evolutionary partitioning\n")
+    ("use-imbalanced-population",
+    po::value<bool>()->value_name("<bool>")->notifier(
+      [&](const bool& use_imbalanced_population) {
+        context.evolutionary.use_imbalanced_population = use_imbalanced_population;
+    }),
+    "Use imbalance population during evolutionary partitioning\n")
+    ("use-cross-combine",
+    po::value<bool>()->value_name("<bool>")->notifier(
+      [&](const bool& use_cross_combine) {
+        context.evolutionary.use_cross_combine = use_cross_combine;
+    }),
+    "Chance to use individuals with random K / EpsilonPrime in combine operations\n")
     ("edge-frequency-chance",
     po::value<float>()->value_name("<float>")->notifier(
       [&](const float& edge_chance) {
       context.evolutionary.edge_frequency_chance = edge_chance;
     }),
     "The Chance of a mutation being selected as operation\n"
-    "default: 0.5)");
+    "default: 0.5)")
+    ("lower-epsilon-prime-bound",
+     po::value<float>()->value_name("<float>")->notifier(
+       [&](const float& lower_bound) {
+         context.evolutionary.lower_epsilon_prime_bound = lower_bound;
+       }),
+     "Lower bound for EpsilonPrime value used for random individuals during cross combine\n"
+     "default: 0.03)")
+    ("upper-epsilon-prime-bound",
+     po::value<float>()->value_name("<float>")->notifier(
+       [&](const float& upper_bound) {
+         context.evolutionary.upper_epsilon_prime_bound = upper_bound;
+       }),
+     "Upper bound for EpsilonPrime value used for random individuals during cross combine\n"
+     "default: 2.0)");
   return evolutionary_options;
 }
 

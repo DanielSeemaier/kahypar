@@ -399,6 +399,9 @@ struct EvolutionaryParameters {
   bool unlimited_coarsening_contraction;
   bool random_vcycles;
   bool use_imbalanced_population;
+  bool use_cross_combine;
+  float lower_epsilon_prime_bound = 0.03;
+  float upper_epsilon_prime_bound = 2.0;
 };
 
 inline std::ostream& operator<< (std::ostream& str, const EvolutionaryParameters& params) {
@@ -411,6 +414,8 @@ inline std::ostream& operator<< (std::ostream& str, const EvolutionaryParameters
   str << "  Mutation Strategy                   " << params.mutate_strategy << std::endl;
   str << "  Diversification Interval            " << params.diversify_interval << std::endl;
   str << "  Use Imbalanced Population           " << params.use_imbalanced_population << std::endl;
+  str << "  Use Cross Combine                   " << params.use_cross_combine << std::endl;
+  str << "  EpsilonPrime                        [" << params.lower_epsilon_prime_bound << ", " << params.upper_epsilon_prime_bound << "]" << std::endl;
   return str;
 }
 

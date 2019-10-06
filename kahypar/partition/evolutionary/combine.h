@@ -90,7 +90,8 @@ Individual usingTournamentSelection(Hypergraph& hg, const Context& context, cons
   temporary_context.coarsening.rating.rating_function = RatingFunction::heavy_edge;
   temporary_context.coarsening.rating.partition_policy = RatingPartitionPolicy::evolutionary;
 
-  if (context.evolutionary.use_imbalanced_population) {
+  bool coin = Randomize::instance().flipCoin();
+  if (coin && context.evolutionary.use_imbalanced_population) {
     if (imbalanced_population.size() == 0) {
       throw std::logic_error("imbalance_population is empty");
     }
@@ -101,12 +102,40 @@ Individual usingTournamentSelection(Hypergraph& hg, const Context& context, cons
       imbalanced_population.singleTournamentSelection()
     };
     return combine::partitions(hg, parents, temporary_context);
+  } else if (coin && context.evolutionary.use_cross_combine) {
+    LOG << "Using on-the-fly individual with random k and epsilon";
+    const PartitionID lower_bound = std::max<PartitionID>(2, context.partition.k / 2);
+    const PartitionID upper_bound = context.partition.k * 4;
+    const PartitionID k_prime = Randomize::instance().getRandomInt(lower_bound, upper_bound);
+    const double epsilon_prime = Randomize::instance().getRandomFloat(
+      context.evolutionary.lower_epsilon_prime_bound,
+      context.evolutionary.upper_epsilon_prime_bound
+    );
+    LOG << "\t" << V(k_prime) << V(epsilon_prime);
+
+    Context individual_context(context);
+    individual_context.partition.k = k_prime;
+    individual_context.partition.epsilon = epsilon_prime;
+    individual_context.partition.final_epsilon = epsilon_prime;
+    individual_context.setupPartWeights(hg.totalWeight());
+
+    hg.changeK(k_prime);
+    Population individual_population;
+    individual_population.generateIndividual(hg, individual_context);
+    hg.changeK(context.partition.k);
+
+    const Parents parents = {
+      population.singleTournamentSelection(),
+      individual_population.individualAt(0)
+    };
+    return combine::partitions(hg, parents, temporary_context);
   } else {
     LOG << "Using tournamentSelect() on population";
     const auto& parents = population.tournamentSelect();
     return combine::partitions(hg, parents, temporary_context);
   }
 }
+
 
 
 Individual edgeFrequency(Hypergraph& hg, const Context& context, const Population& population) {
