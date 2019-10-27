@@ -36,10 +36,10 @@ struct Move {
     to(to) { }
 
   Move(const Move&) = default;
-  Move& operator= (const Move&) = default;
+  Move& operator= (const Move&) = delete;
 
   Move(Move&&) = default;
-  Move& operator= (Move&&) = default;
+  Move& operator= (Move&&) = delete;
 
   ~Move() = default;
 };

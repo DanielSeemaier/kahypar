@@ -34,6 +34,7 @@
 #include "kahypar/partition/refinement/kway_fm_flow_refiner.h"
 #include "kahypar/partition/refinement/kway_fm_km1_refiner.h"
 #include "kahypar/partition/refinement/acyclic_kway_fm_km1_refiner.h"
+#include "kahypar/partition/refinement/acyclic_2way_km1_refiner.h"
 #include "kahypar/partition/refinement/policies/fm_stop_policy.h"
 
 #define REGISTER_DISPATCHED_REFINER(id, dispatcher, ...)          \
@@ -90,4 +91,5 @@ REGISTER_REFINER(RefinementAlgorithm::kway_fm_flow_km1, KWayFMFlowRefiner);
 REREGISTER_REFINER(RefinementAlgorithm::kway_fm_flow, KWayFMFlowRefiner, 2);
 REGISTER_REFINER(RefinementAlgorithm::do_nothing, DoNothingRefiner);
 REGISTER_REFINER(RefinementAlgorithm::acyclic_km1, AcyclicKMinusOneRefiner);
+//REGISTER_REFINER(RefinementAlgorithm::acyclic_twoway_km1, AcyclicTwoWayKMinusOneRefiner); TODO
 }  // namespace kahypar

@@ -3,13 +3,31 @@
 using namespace kahypar;
 
 int main(int argc, char* argv[]) {
-  if (argc != 3) {
-    std::cout << "Usage: " << argv[0] << " <*.netD> <*.hgr>" << std::endl;
+  if (argc < 3) {
+    std::cout << "Usage: " << argv[0] << " <*.netD> <*.hgr> [--graph_hgr]" << std::endl;
     std::exit(0);
   }
 
   std::string netd_filename = argv[1];
   std::string hgr_filename = argv[2];
+  const bool graph_hgr = argc >= 4 && std::string(argv[3]) == "--graph_hgr";
+  const bool graph_graph = argc >= 4 && std::string(argv[3]) == "--graph";
+  const bool dot = argc >= 4 && std::string(argv[3]) == "--dot";
+  std::cout << "Output format: ";
+  if (!graph_graph) {
+    if (graph_hgr) {
+      std::cout << "graph in hypergraph format";
+    } else {
+      std::cout << "hypergraph";
+    }
+  } else {
+    if (dot) {
+      std::cout << "dot";
+    } else {
+      std::cout << "graph";
+    }
+  }
+  std::cout << "\n";
 
   std::ifstream in(netd_filename);
   std::size_t ignored, num_pins, num_nets, num_modules, pad_offset;
@@ -87,20 +105,22 @@ int main(int argc, char* argv[]) {
 
     for (const auto& head_name : edge.first) {
       const std::size_t head = name_to_id[head_name];
-      if (std::find(other_graph[head].second.begin(), other_graph[head].second.end(), net_id) == other_graph[head].second.end()) {
+      if (std::find(other_graph[head].second.begin(), other_graph[head].second.end(), net_id) ==
+          other_graph[head].second.end()) {
         other_graph[head].second.push_back(net_id);
       }
     }
 
     for (const auto& tail_name : edge.second) {
       const std::size_t tail = name_to_id[tail_name];
-      if (std::find(other_graph[tail].first.begin(), other_graph[tail].first.end(), net_id) == other_graph[tail].first.end()) {
+      if (std::find(other_graph[tail].first.begin(), other_graph[tail].first.end(), net_id) ==
+          other_graph[tail].first.end()) {
         other_graph[tail].first.push_back(net_id);
       }
     }
   }
 
-  auto name_to_id_f = [](const std::string &name) {
+  auto name_to_id_f = [](const std::string& name) {
     return std::strtol(name.data() + 1, nullptr, 10) + 1;
   };
 
@@ -126,8 +146,8 @@ int main(int argc, char* argv[]) {
       }
     }
 
-    auto &nc_tails = other_graph[edge.first].second;
-    for (const auto &rejected_tail : rejected_tails) {
+    auto& nc_tails = other_graph[edge.first].second;
+    for (const auto& rejected_tail : rejected_tails) {
       auto pos = std::find(nc_tails.begin(), nc_tails.end(), rejected_tail);
       ASSERT(pos != nc_tails.end(), V(rejected_tails));
       nc_tails.erase(pos);
@@ -171,35 +191,102 @@ int main(int argc, char* argv[]) {
 //  }
 //  out.close();
 
-  std::size_t num_hyperedges = 0;
-  for (const auto& edge : other_graph) {
-    if (!edge.second.first.empty() && !edge.second.second.empty()) {
-      num_hyperedges += 1;//edge.second.first.size();
-    }
-  }
+
   const std::size_t num_hypernodes = net_id;
-  out << num_hyperedges << " " << num_hypernodes << " 11 1\n";
 
-  for (const auto& edge : other_graph) {
-    const auto& heads = edge.second.first;
-    const auto& tails = edge.second.second;
+  if (dot) {
+    out << "digraph G {\n";
+    for (std::size_t n = 0; n < num_hypernodes; ++n) {
+      out << n << ";\n";
+    }
 
-    for (const auto& head : heads) {
-      out << "1 1 " << head << " ";
-      for (const auto& tail : tails) {
-        out << tail << " ";
+    for (const auto& edge : other_graph) {
+      const auto& heads = edge.second.first;
+      const auto& tails = edge.second.second;
+      for (const auto& head : heads) {
+        for (const auto& tail : tails) {
+          out << tail - 1 << "->" << head - 1 << ";\n";
+        }
+      }
+    }
+    out << "}\n";
+  } else if (graph_graph) {
+    std::size_t num_edges = 0;
+
+    std::vector<std::vector<std::size_t>> G(num_hypernodes);
+    for (const auto& edge : other_graph) {
+      const auto& heads = edge.second.first;
+      const auto& tails = edge.second.second;
+      for (const auto& head : heads) {
+        for (const auto& tail : tails) {
+          G[tail - 1].push_back(head);
+          ++num_edges;
+        }
+      }
+    }
+
+    out << num_hypernodes << " " << num_edges << "\n";
+    for (const auto& heads : G) {
+      for (const auto& head : heads) {
+        out << head << " ";
       }
       out << "\n";
-      break;
     }
-  }
+  } else {
+    if (!graph_hgr) {
+      std::size_t num_hyperedges = 0;
+      for (const auto& edge : other_graph) {
+        if (!edge.second.first.empty() && !edge.second.second.empty()) {
+          num_hyperedges += 1;//edge.second.first.size();
+        }
+      }
 
-  for (std::size_t i = 0; i < num_hypernodes; ++i) {
-    out << "1\n";
+      out << num_hyperedges << " " << num_hypernodes << " 11 1\n";
+      for (const auto& edge : other_graph) {
+        const auto& heads = edge.second.first;
+        const auto& tails = edge.second.second;
+
+        for (const auto& head : heads) {
+          out << "1 1 " << head << " ";
+          for (const auto& tail : tails) {
+            out << tail << " ";
+          }
+          out << "\n";
+          break;
+        }
+      }
+
+      for (std::size_t i = 0; i < num_hypernodes; ++i) {
+        out << "1\n";
+      }
+    } else {
+      std::size_t num_hyperedges = 0;
+      for (const auto& edge : other_graph) {
+        num_hyperedges += edge.second.first.size() * edge.second.second.size();
+      }
+
+      out << num_hyperedges << " " << num_hypernodes << " 11 1\n";
+      for (const auto& edge : other_graph) {
+        const auto& heads = edge.second.first;
+        const auto& tails = edge.second.second;
+
+        for (const auto& head : heads) {
+          for (const auto& tail : tails) {
+            out << "1 1 " << head << " " << tail << "\n";
+          }
+        }
+      }
+
+      for (std::size_t i = 0; i < num_hypernodes; ++i) {
+        out << "1\n";
+      }
+    }
   }
   out.close();
 
-  validateHypergraphFile(hgr_filename);
+  if (!graph_graph) {
+    validateHypergraphFile(hgr_filename);
+  }
   return 0;
 }
 

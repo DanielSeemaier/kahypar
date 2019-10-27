@@ -108,6 +108,7 @@ class KaHyParInitialPartitioner : public IInitialPartitioner, private InitialPar
 
     const auto pair = extractPartAsUnpartitionedHypergraphForBisection(_hg, part, Objective::km1);
     const auto& hg_ptr = pair.first;
+    const auto subgraph_size = hg_ptr->initialNumNodes();
     const auto& map = pair.second;
     hg_ptr->resetPartitioning();
     Context ctx = createContext(2, 0.03);
@@ -125,16 +126,18 @@ class KaHyParInitialPartitioner : public IInitialPartitioner, private InitialPar
       }
     }
 
+    ctx.initial_partitioning.balance_partition = _context.initial_partitioning.balance_partition;
     dag::fixBipartitionAcyclicity(*hg_ptr, ctx);
     hg_ptr->initializeNumCutHyperedges();
 
     DBG << "Bisection KM1 after acyclicity fix:" << metrics::km1(*hg_ptr);
     DBG << "Bisection imbalance after acyclicity fix:" << metrics::imbalance(*hg_ptr, ctx);
+    hg_ptr->printPartSizes();
 
-    if (_context.initial_partitioning.balance_partition) {
-      DBG << "Run HardRebalanceRefiner on initial partition to improve imbalance, then local search to improve KM1";
-      rebalancePartition(*hg_ptr, ctx, true);
-    }
+//    if (_context.initial_partitioning.balance_partition) {
+//      DBG << "Run HardRebalanceRefiner on initial partition to improve imbalance, then local search to improve KM1";
+//      rebalancePartition(*hg_ptr, ctx, true);
+//    }
 
     DBG << "Bisection KM1 after rebalance + local search:" << metrics::km1(*hg_ptr);
     DBG << "Bisection imbalance after rebalance + local search:" << metrics::imbalance(*hg_ptr, ctx);
@@ -162,8 +165,8 @@ class KaHyParInitialPartitioner : public IInitialPartitioner, private InitialPar
       k_part_0 = k / 2;
       k_part_1 = k / 2;
     } else {
-      k_part_0 = std::ceil(k * (static_cast<double>(num_part_0) / hg_ptr->initialNumNodes()));
-      k_part_1 = std::floor(k * (static_cast<double>(num_part_1) / hg_ptr->initialNumNodes()));
+      k_part_0 = std::ceil(k * (static_cast<double>(num_part_0) / subgraph_size));
+      k_part_1 = std::floor(k * (static_cast<double>(num_part_1) / subgraph_size));
     }
 
     k_part_0 = std::max<PartitionID>(1, k_part_0);
@@ -185,7 +188,7 @@ class KaHyParInitialPartitioner : public IInitialPartitioner, private InitialPar
       ASSERT(k_part_0 == 1);
     }
 
-    DBG << "Split" << hg_ptr->initialNumNodes() << "from" << part << "into" << pre_num_part_0 << "and" << pre_num_part_1 << "blocks";
+    DBG << "Split" << subgraph_size << "from" << part << "into" << pre_num_part_0 << "and" << pre_num_part_1 << "blocks";
     DBG << "\t\tAfter acyclic fix:" << num_part_0 << "and" << num_part_1 << "blocks";
     DBG << "\tFirst block:" << part << "second block:" << part + k_part_0;
     DBG << "\tContinue with k:" << k_part_0 << "and" << k_part_1;
@@ -193,8 +196,6 @@ class KaHyParInitialPartitioner : public IInitialPartitioner, private InitialPar
     if (!acyclic) {
       DBG << "Error, obtained cyclic IP!";
       std::exit(1);
-    } else {
-      DBG << "IP is acyclic, nice!";
     }
 
     performPartition(part, k_part_0);

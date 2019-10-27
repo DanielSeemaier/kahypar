@@ -901,6 +901,12 @@ class GenericHypergraph {
     }
   }
 
+  void printPartSizes() const {
+    for (PartitionID part = 0; part < k(); ++part) {
+      LOG << V(part) << "-->" << partSize(part);
+    }
+  }
+
   /*!
    * Debug information:
    * Print all available debug information to stdout.

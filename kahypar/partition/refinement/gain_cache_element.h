@@ -48,7 +48,7 @@ struct RollbackElement {
   RollbackElement& operator= (const RollbackElement&) = delete;
 
   RollbackElement(RollbackElement&&) = default;
-  RollbackElement& operator= (RollbackElement&&) = default;
+  RollbackElement& operator= (RollbackElement&&) = delete;
 
   ~RollbackElement() = default;
 };

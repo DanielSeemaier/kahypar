@@ -207,6 +207,7 @@ static inline void partition(Hypergraph& hypergraph, const Context& context) {
   if (!context.partition.vcycle_refinement_for_input_partition) {
     if (!context.partition_evolutionary || context.evolutionary.action.requires().initial_partitioning) {
       if (context.initial_partitioning.level == InitialPartitioningLevel::finest) {
+        hypergraph.resetPartitioning();
         performInitialPartitioning(hypergraph, context);
       } else {
         ASSERT(context.initial_partitioning.level == InitialPartitioningLevel::coarsest);

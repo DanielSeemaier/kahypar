@@ -4,6 +4,7 @@
 #include <vector>
 #include <utility>
 
+#include "kahypar/partition/refinement/acyclic_2way_km1_refiner.h"
 #include "kahypar/dag/quotient_graph.h"
 #include "kahypar/datastructure/hypergraph.h"
 #include "kahypar/definitions.h"
@@ -165,6 +166,43 @@ std::vector<PartitionID> createPartitionSnapshot(const Hypergraph& hg) {
   }
   return partition;
 }
+
+void rebalancePartition(Hypergraph& hg, const Context& context, const bool refine_km1 = false) {
+  hg.initializeNumCutHyperedges();
+
+  Context balanced_context = context;
+  balanced_context.partition.epsilon = context.partition.final_epsilon;
+  balanced_context.setupPartWeights(hg.totalWeight());
+  DBG << "Improve imbalance to:" << balanced_context.partition.epsilon;
+
+  AdjacencyMatrixQuotientGraph<DFSCycleDetector> qg(hg, balanced_context);
+  KMinusOneGainManager gain_manager(hg, balanced_context);
+  gain_manager.initialize();
+  AcyclicHardRebalanceRefiner hard_balance_refiner(hg, balanced_context, qg, gain_manager);
+  hard_balance_refiner.initialize(0);
+  Metrics current_metrics = {metrics::hyperedgeCut(hg),
+                             metrics::km1(hg),
+                             metrics::imbalance(hg, context)};
+  UncontractionGainChanges changes{};
+  std::vector<HypernodeID> refinement_nodes{};
+  hard_balance_refiner.refine(refinement_nodes, {0, 0}, changes, current_metrics);
+  //hard_balance_refiner.printSummary();
+
+  if (refine_km1) {
+    AcyclicTwoWayKMinusOneRefiner local_search_refiner(hg, context, qg, gain_manager);
+    local_search_refiner.initialize(0);
+
+    std::vector<HypernodeID> local_search_refinement_nodes;
+    for (const HypernodeID& hn : hg.nodes()) {
+      if (hg.isBorderNode(hn)) {
+        local_search_refinement_nodes.push_back(hn);
+      }
+    }
+
+    local_search_refiner.refine(local_search_refinement_nodes, {0, 0}, changes, current_metrics);
+    //local_search_refiner.printSummary();
+  }
+}
 } // namespace internal
 
 //void fixAcyclicity(Hypergraph& hg, const Context& context) {
@@ -198,7 +236,14 @@ void fixBipartitionAcyclicity(Hypergraph &hg, const Context& context) {
 
   // move successors of nodes in part 0 in part 1 to part 0
   internal::breakEdge(hg, 0, 1);
+  const auto imbalance_01_prime = metrics::imbalance(hg, context);
+  const auto km_01_prime = metrics::km1(hg);
+  if (context.initial_partitioning.balance_partition) {
+    DBG << "Run HardRebalanceRefiner on initial partition to improve imbalance, then local search to improve KM1";
+    internal::rebalancePartition(hg, context, true);
+  }
   double imbalance_01 = metrics::imbalance(hg, context);
+  const auto km_01 = metrics::km1(hg);
   const auto partition_01 = internal::createPartitionSnapshot(hg);
 
   if (!AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hg, context).isAcyclic()) {
@@ -210,16 +255,27 @@ void fixBipartitionAcyclicity(Hypergraph &hg, const Context& context) {
   // other way around
   hg.setPartition(original_partition);
   internal::breakEdge(hg, 1, 0);
+  const auto imbalance_10_prime = metrics::imbalance(hg, context);
+  const auto km_10_prime = metrics::km1(hg);
+  if (context.initial_partitioning.balance_partition) {
+    DBG << "Run HardRebalanceRefiner on initial partition to improve imbalance, then local search to improve KM1";
+    internal::rebalancePartition(hg, context, true);
+  }
   double imbalance_10 = metrics::imbalance(hg, context);
+  const auto km_10 = metrics::km1(hg);
 
   if (!AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hg, context).isAcyclic()) {
     LOG << "Error, imbalance 10 is cyclic!";
     std::exit(1);
   }
 
+  LOG << "Breaking edge 0 --> 1:" << V(km_01) << V(imbalance_01) << V(km_01_prime) << V(imbalance_01_prime);
+  LOG << "Breaking edge 1 --> 0:" << V(km_10) << V(imbalance_10) << V(km_10_prime) << V(imbalance_10_prime);
+
   // select the most balanced partition from 01 and 10, i.e. if 01 is better balanced, restore it and otherwise do
   // nothing because we already have partition 10
-  if (imbalance_01 <= imbalance_10) {
+  //if (imbalance_01 <= imbalance_10) {
+  if (km_01 < km_10) {
     hg.setPartition(partition_01);
   }
 }
