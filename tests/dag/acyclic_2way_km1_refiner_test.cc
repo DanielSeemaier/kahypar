@@ -93,6 +93,19 @@ TEST_P(AcyclicTwoWayKM1RefinerTest, OnlyUsesBorderNodes) {
   ASSERT_THAT(metrics::imbalance(hg, context), Eq(expected_imbalance));
 }
 
+TEST_P(AcyclicTwoWayKM1RefinerTest, AnotherTestCase) {
+  const auto my_variable = 10;
+  if (my_variable >= 5) {
+    std::cout << "Hello World" << std::endl;
+  }
+  const auto f = []() {
+    return 0;
+  };
+  std::cout << f() << std::endl;
+  std::cout << "This is a very clean and readable font that every programmer should use for day to day business" << std::endl;
+
+}
+
 //TEST_P(AcyclicTwoWayKM1RefinerTest, CanRefineDuringUncoarsening) {
 //  auto contractions = contractArbitrarily(3, 250, true);
 //

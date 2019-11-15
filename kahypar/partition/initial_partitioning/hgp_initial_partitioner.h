@@ -11,23 +11,23 @@
 #include "kahypar/dag/fix_acyclicity.h"
 
 namespace kahypar {
-class KaHyParInitialPartitioner : public IInitialPartitioner, private InitialPartitionerBase<KaHyParInitialPartitioner> {
+class HgpInitialPartitioner : public IInitialPartitioner, private InitialPartitionerBase<HgpInitialPartitioner> {
   static constexpr bool debug = true;
 
-  using Base = InitialPartitionerBase<KaHyParInitialPartitioner>;
+  using Base = InitialPartitionerBase<HgpInitialPartitioner>;
   friend Base;
 
  public:
-  KaHyParInitialPartitioner(Hypergraph& hypergraph, Context& context) :
-    Base(hypergraph, context) { }
+  HgpInitialPartitioner(Hypergraph& hypergraph, Context& context) :
+    Base(hypergraph, context) {}
 
-  ~KaHyParInitialPartitioner() override = default;
+  ~HgpInitialPartitioner() override = default;
 
-  KaHyParInitialPartitioner(const KaHyParInitialPartitioner&) = delete;
-  KaHyParInitialPartitioner& operator= (const KaHyParInitialPartitioner&) = delete;
+  HgpInitialPartitioner(const HgpInitialPartitioner&) = delete;
+  HgpInitialPartitioner& operator=(const HgpInitialPartitioner&) = delete;
 
-  KaHyParInitialPartitioner(KaHyParInitialPartitioner&&) = delete;
-  KaHyParInitialPartitioner& operator= (KaHyParInitialPartitioner&&) = delete;
+  HgpInitialPartitioner(HgpInitialPartitioner&&) = delete;
+  HgpInitialPartitioner& operator=(HgpInitialPartitioner&&) = delete;
 
  private:
   void partitionImpl() final {
@@ -58,7 +58,8 @@ class KaHyParInitialPartitioner : public IInitialPartitioner, private InitialPar
     }
 
     const double imbalance = metrics::imbalance(_hg, _context);
-    if (_context.partition.balance_initial_partition && (imbalance > _context.partition.final_epsilon || imbalance > _context.partition.epsilon)) {
+    if (_context.partition.balance_initial_partition &&
+        (imbalance > _context.partition.final_epsilon || imbalance > _context.partition.epsilon)) {
       DBG << "Running hard rebalance to improve IP imbalance from" << imbalance << "to min{"
           << _context.partition.final_epsilon << "," << _context.partition.epsilon << "}";
       rebalancePartition(_hg, _context);
@@ -85,18 +86,23 @@ class KaHyParInitialPartitioner : public IInitialPartitioner, private InitialPar
     //hard_balance_refiner.printSummary();
 
     if (refine_km1) {
-      AcyclicLocalSearchRefiner<NumberOfFruitlessMovesStopsSearch> local_search_refiner(hg, context, qg, gain_manager);
-      local_search_refiner.initialize(0);
+      HyperedgeWeight previous_km1 = current_metrics.km1;
 
-      std::vector<HypernodeID> local_search_refinement_nodes;
-      for (const HypernodeID& hn : hg.nodes()) {
-        if (hg.isBorderNode(hn)) {
+      do {
+        previous_km1 = current_metrics.km1;
+        DBG << "Running KM1 refiner..." << previous_km1;
+
+        AcyclicLocalSearchRefiner<NumberOfFruitlessMovesStopsSearch> local_search_refiner(hg, context, qg,
+                                                                                          gain_manager);
+        local_search_refiner.initialize(0);
+        std::vector<HypernodeID> local_search_refinement_nodes;
+        for (const HypernodeID& hn : hg.nodes()) {
           local_search_refinement_nodes.push_back(hn);
         }
-      }
+        local_search_refiner.refine(local_search_refinement_nodes, {0, 0}, changes, current_metrics);
 
-      local_search_refiner.refine(local_search_refinement_nodes, {0, 0}, changes, current_metrics);
-      //local_search_refiner.printSummary();
+        DBG << "-->" << current_metrics.km1;
+      } while (0.99 * previous_km1 > current_metrics.km1);
     }
   }
 
@@ -111,8 +117,10 @@ class KaHyParInitialPartitioner : public IInitialPartitioner, private InitialPar
     const auto subgraph_size = hg_ptr->initialNumNodes();
     const auto& map = pair.second;
     hg_ptr->resetPartitioning();
+    invokeHypergraphPartitioner(*hg_ptr, 2, 0.03);
+
     Context ctx = createContext(2, 0.03);
-    kahypar::PartitionerFacade().partition(*hg_ptr, ctx);
+    ctx.setupPartWeights(hg_ptr->totalWeight());
     DBG << "Bisection KM1:" << metrics::km1(*hg_ptr);
     DBG << "Bisection imbalance:" << metrics::imbalance(*hg_ptr, ctx);
 
@@ -188,7 +196,8 @@ class KaHyParInitialPartitioner : public IInitialPartitioner, private InitialPar
       ASSERT(k_part_0 == 1);
     }
 
-    DBG << "Split" << subgraph_size << "from" << part << "into" << pre_num_part_0 << "and" << pre_num_part_1 << "blocks";
+    DBG
+    << "Split" << subgraph_size << "from" << part << "into" << pre_num_part_0 << "and" << pre_num_part_1 << "blocks";
     DBG << "\t\tAfter acyclic fix:" << num_part_0 << "and" << num_part_1 << "blocks";
     DBG << "\tFirst block:" << part << "second block:" << part + k_part_0;
     DBG << "\tContinue with k:" << k_part_0 << "and" << k_part_1;
@@ -202,7 +211,26 @@ class KaHyParInitialPartitioner : public IInitialPartitioner, private InitialPar
     performPartition(part + k_part_0, k_part_1);
   }
 
-  Context createContext(const PartitionID k, const double epsilon) const {
+  void invokeHypergraphPartitioner(Hypergraph& hg, const PartitionID k, const double epsilon) const {
+    if (_context.initial_partitioning.partitioner == "kahypar") {
+      invokeKaHyPar(hg, k, epsilon);
+    } else if (_context.initial_partitioning.partitioner == "patoh") {
+      invokePaToH(hg, k, epsilon);
+    } else {
+      throw std::invalid_argument("bad configuration for i-partitioner");
+    }
+  }
+
+  void invokeKaHyPar(Hypergraph& hg, const PartitionID k, const double epsilon) const {
+    Context ctx = createContext(k, epsilon);
+    kahypar::PartitionerFacade().partition(hg, ctx);
+  }
+
+  void invokePaToH(Hypergraph& hg, const PartitionID k, const double epsilon) const {
+    throw std::invalid_argument("not implemented");
+  }
+
+  static Context createContext(const PartitionID k, const double epsilon) {
     Context ip_context;
     ip_context.partition.time_limit = 0;
     ip_context.partition.current_v_cycle = 0;

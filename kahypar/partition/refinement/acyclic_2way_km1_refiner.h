@@ -81,28 +81,27 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
 
     addFixturesForHypernode(representant, partner);
     addFixturesForHypernode(partner, representant);
-    processFixtureStateChanges();
+    resetFixtureStateChanges();
 
     ASSERT([&]() {
       ASSERT_THAT_FIXTURES_ARE_CORRECT();
-      ASSERT_THAT_HYPERNODES_CONTAINED_IN_PQS_ARE_CORRECT();
       return true;
     }());
   }
 
   void printSummary() const override {
-    LOG << "[HardRebalance] Iterations with refresh:" << _num_refreshes;
-    LOG << "[HardRebalance] Iterations without refresh:" << _num_no_refreshes;
-    LOG << "[HardRebalance] Number of moves:" << _num_moves;
-    LOG << "[HardRebalance] Number of moves in the last iteration:" << _num_moves_in_last_iteration;
-    LOG << "[HardRebalance] Positive gain moves:" << _num_positive_gain_moves;
-    LOG << "[HardRebalance] Zero gain moves:" << _num_zero_gain_moves;
-    LOG << "[HardRebalance] Negative gain moves:" << _num_negative_gain_moves;
-    LOG << "[HardRebalance] Improved imbalance by:" << _improved_imbalance;
-    LOG << "[HardRebalance] Improved KM1 by:" << _improved_km1;
-    LOG << "[HardRebalance] Perform moves time:" << _perform_moves_time;
-    LOG << "[HardRebalance] Refine time:" << _refine_time;
-    LOG << "[HardRebalance] Gains time:" << _gain_time;
+    LOG << "[2way] Iterations with refresh:" << _num_refreshes;
+    LOG << "[2way] Iterations without refresh:" << _num_no_refreshes;
+    LOG << "[2way] Number of moves:" << _num_moves;
+    LOG << "[2way] Number of moves in the last iteration:" << _num_moves_in_last_iteration;
+    LOG << "[2way] Positive gain moves:" << _num_positive_gain_moves;
+    LOG << "[2way] Zero gain moves:" << _num_zero_gain_moves;
+    LOG << "[2way] Negative gain moves:" << _num_negative_gain_moves;
+    LOG << "[2way] Improved imbalance by:" << _improved_imbalance;
+    LOG << "[2way] Improved KM1 by:" << _improved_km1;
+    LOG << "[2way] Perform moves time:" << _perform_moves_time;
+    LOG << "[2way] Refine time:" << _refine_time;
+    LOG << "[2way] Gains time:" << _gain_time;
   }
 
  private:
@@ -112,6 +111,9 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
       _pq[NEXT].initialize(_hg.initialNumNodes());
       _is_initialized = true;
     }
+
+    _gain_manager.resetDelta();
+
     _hg.resetHypernodeState();
     refreshTopologicalOrdering();
 
@@ -154,7 +156,8 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
         }
       }
       _hg.changeNodePart(move.hn, move.from, move.to);
-      this->move(move.hn, move.from, move.to);
+      updateFixtures(move.hn, move.from, move.to);
+      processFixtureStateChanges();
     }
 
     const HighResClockTimepoint end_perform_moves = std::chrono::high_resolution_clock::now();
@@ -162,7 +165,6 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
 
     ASSERT([&]() {
       ASSERT_THAT_FIXTURES_ARE_CORRECT();
-      ASSERT_THAT_HYPERNODES_CONTAINED_IN_PQS_ARE_CORRECT();
       return true;
     }());
   }
@@ -171,6 +173,7 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
                   const std::array<HypernodeWeight, 2>&,
                   const UncontractionGainChanges&,
                   Metrics& best_metrics) final {
+    DBG << "Run with" << refinement_nodes;
     ASSERT(_hg.k() == 2, "2way refiner, but graph has more than 2 blocks:" << _hg.k());
 
     const HighResClockTimepoint start_refine = std::chrono::high_resolution_clock::now();
@@ -179,6 +182,10 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
     ASSERT(best_metrics.km1 == metrics::km1(_hg));
     _hg.resetHypernodeState();
     _moves.clear();
+    _pq[PREV].clear();
+    _pq[NEXT].clear();
+    _state_changes[PREV].resetUsedEntries();
+    _state_changes[NEXT].resetUsedEntries();
 
     const auto& ordering = _qg.topologicalOrdering();
     if (_qg_changed || _qg.changed()) {
@@ -194,17 +201,51 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
 
     ASSERT([&]() {
       ASSERT_THAT_FIXTURES_ARE_CORRECT();
-      ASSERT_THAT_HYPERNODES_CONTAINED_IN_PQS_ARE_CORRECT();
       return true;
     }());
     ASSERT(_qg.isAcyclic());
     ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(_hg, _context).isAcyclic());
 
+    ASSERT(!_gain_manager.hasDelta());
+
+    // activate refinement nodes
+    for (const HypernodeID& node : refinement_nodes) {
+      for (const auto& direction : kDirections) {
+        if (!isValidDirection(_hg.partID(node), direction)) {
+          continue;
+        }
+        if (_fixtures[direction][node] > 0) {
+          continue;
+        }
+        const auto from_part = _hg.partID(node);
+        const auto to_part = adjacentPart(from_part, direction);
+        const auto gain = _gain_manager.gain(node, to_part);
+        _pq[direction].insert(node, from_part, gain);
+        _hg.activate(node);
+      }
+    }
+
+    _pq[0].enablePart(0);
+    _pq[0].enablePart(1);
+    _pq[1].enablePart(0);
+    _pq[1].enablePart(1);
+
+    DBG << "Start with:" << _pq[0].size() << "--" << _pq[1].size();
+
     // main refinement loop
+    const auto max_fruitless_moves = std::max<uint32_t>(_context.local_search.fm.max_number_of_fruitless_moves,
+                                                        refinement_nodes.size());
+
     int moves_since_improvement = 0;
-    int min_cut_index = 0;
-    while (moves_since_improvement < _hg.currentNumNodes() / 4 && (!_pq[0].empty() || !_pq[1].empty())) {
-      PartitionID from_part = findBiggestPart();
+    int min_cut_index = -1;
+    while (moves_since_improvement < max_fruitless_moves && (!_pq[PREV].empty() || !_pq[NEXT].empty())) {
+      PartitionID from_part = Hypergraph::kInvalidPartition;
+      if (isOverloaded(0) || isOverloaded(1)) {
+        from_part = findBiggestPart();
+      } else {
+        from_part = findBestPart();
+      }
+      ASSERT(from_part != Hypergraph::kInvalidPartition);
       PartitionID to_part = otherPart(from_part);
       std::size_t direction = directionToAdjacent(from_part, to_part);
       if (_pq[direction].empty()) {
@@ -219,13 +260,12 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
       Gain max_gain = 0;
       _pq[direction].deleteMaxFromPartition(max_gain_hn, max_gain, from_part);
       ASSERT(_hg.partID(max_gain_hn) == from_part);
-      ASSERT(!_hg.active(max_gain_hn));
+      ASSERT(_hg.active(max_gain_hn));
       ASSERT(!_hg.marked(max_gain_hn));
-
-      _hg.activate(max_gain_hn);
       _hg.mark(max_gain_hn);
 
       if (_hg.partWeight(to_part) + _hg.nodeWeight(max_gain_hn) > _context.partition.max_part_weights[to_part]) {
+        DBG << "Reject move due to weight constraint" << V(max_gain_hn);
         continue; // don't move
       }
 
@@ -273,12 +313,14 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
       ++moves_since_improvement;
 
       if (current_km1 < best_metrics.km1) { // accept new cut
-        DBG << "Accept" << current_km1;
+        DBG << "Accept improvement:" << best_metrics.km1 << "-->" << current_km1;
         best_metrics.km1 = current_km1;
         ASSERT(best_metrics.km1 == metrics::km1(_hg));
         _gain_manager.resetDelta();
         moves_since_improvement = 0;
         min_cut_index = _moves.size();
+      } else {
+        DBG << "Do not accept worsening:" << best_metrics.km1 << "-->" << current_km1;
       }
 
       _moves.emplace_back(max_gain_hn, from_part, to_part);
@@ -286,38 +328,40 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
 
     ASSERT([&]() {
       ASSERT_THAT_FIXTURES_ARE_CORRECT();
-      ASSERT_THAT_HYPERNODES_CONTAINED_IN_PQS_ARE_CORRECT();
       return true;
     }());
 
     // rollback to the best last accepted state
-    if (!_moves.empty()) {
-      int last_index = _moves.size() - 1;
-      while (last_index != min_cut_index) {
-        const HypernodeID hn = _moves[last_index].hn;
-        const PartitionID from_part = _moves[last_index].to;
-        const PartitionID to_part = _moves[last_index].from;
-        DBG << "Rollback" << hn << "/" << from_part << "-->" << to_part;
+    int last_index = _moves.size() - 1;
+    while (last_index != min_cut_index) {
+      const HypernodeID hn = _moves[last_index].hn;
+      const PartitionID from_part = _moves[last_index].to;
+      const PartitionID to_part = _moves[last_index].from;
+      DBG << "Rollback" << hn << "/" << from_part << "-->" << to_part;
 
-        const bool success = _qg.testAndUpdateBeforeMovement(hn, from_part, to_part);
-        ASSERT(success);
-        _hg.changeNodePart(hn, from_part, to_part);
+      const bool success = _qg.testAndUpdateBeforeMovement(hn, from_part, to_part);
+      ASSERT(success);
+      _hg.changeNodePart(hn, from_part, to_part);
+      updateFixtures(hn, from_part, to_part);
 
-        _moves.pop_back();
-        --last_index;
+      _moves.pop_back();
+      --last_index;
 
-        --_num_moves;
-        if (_hg.currentNumNodes() == _hg.initialNumNodes()) {
-          --_num_moves_in_last_iteration;
-        }
+      --_num_moves;
+      if (_hg.currentNumNodes() == _hg.initialNumNodes()) {
+        --_num_moves_in_last_iteration;
       }
-      _gain_manager.rollbackDelta();
     }
+    _gain_manager.rollbackDelta();
+    resetFixtureStateChanges();
+
 
     best_metrics.imbalance = metrics::imbalance(_hg, _context);
 
     ASSERT(_qg.isAcyclic());
     ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(_hg, _context).isAcyclic());
+
+    ASSERT(!_gain_manager.hasDelta());
 
     ASSERT(best_metrics.km1 == metrics::km1(_hg));
     ASSERT(best_metrics.imbalance == metrics::imbalance(_hg, _context));
@@ -332,11 +376,14 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
     return false;
   }
 
+  bool isOverloaded(const PartitionID k) const {
+    return _hg.partWeight(k) > _context.partition.max_part_weights[k];
+  }
+
   /*********************************************************************************
    * SCHEDULING METHODS
    *********************************************************************************/
   void refreshTopologicalOrdering() {
-    DBG << "Re-initialize PQs in AcyclicHardRebalanceRefiner";
     _fixtures[PREV].clear();
     _fixtures[NEXT].clear();
     _fixtures[PREV].resize(_hg.initialNumNodes());
@@ -347,12 +394,6 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
     initializeFixtures();
     ASSERT([&]() {
       ASSERT_THAT_FIXTURES_ARE_CORRECT();
-      return true;
-    }());
-
-    processFixtureStateChanges();
-    ASSERT([&]() {
-      ASSERT_THAT_HYPERNODES_CONTAINED_IN_PQS_ARE_CORRECT();
       return true;
     }());
 
@@ -371,6 +412,38 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
       }
     }
     return biggest;
+  }
+
+  PartitionID findBestPart() const {
+    const auto has_from_0 = hasMovableNodes(0);
+    const auto has_from_1 = hasMovableNodes(1);
+    if (has_from_0 && !has_from_1) {
+      return 0;
+    } else if (has_from_1 && !has_from_0) {
+      return 1;
+    } else if (has_from_0 && has_from_1) {
+      if (bestGain(0) < bestGain(1)) {
+        return 1;
+      } else {
+        return 0;
+      }
+    } else {
+      return Hypergraph::kInvalidPartition;
+    }
+  }
+
+  bool hasMovableNodes(const PartitionID part) const {
+    const auto direction = directionToAdjacent(part, 1 - part);
+    return !_pq[direction].empty(part);
+  }
+
+  Gain bestGain(const PartitionID part) const {
+    const auto direction = directionToAdjacent(part, 1 - part);
+    if (!_pq[direction].empty(part)) {
+      return _pq[direction].maxKey(part);
+    } else {
+      return std::numeric_limits<Gain>::min();
+    }
   }
 
   PartitionID otherPart(const PartitionID part) const {
@@ -419,15 +492,21 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
         continue;
       }
 
-      ASSERT(_pq[direction].contains(hn, from_part));
-      DBGC(hn == hn_to_debug) << "Update gain from" << _pq[direction].key(hn, from_part)
-                              << "to" << _gain_manager.gain(hn, to_part)
-                              << "for HN" << hn << "and parts" << from_part << " / " << to_part;
-      _pq[direction].updateKey(hn, from_part, _gain_manager.gain(hn, to_part));
+      if (_hg.active(hn)) {
+        ASSERT(_pq[direction].contains(hn, from_part));
+        DBGC(hn == hn_to_debug) << "Update gain from" << _pq[direction].key(hn, from_part)
+                                << "to" << _gain_manager.gain(hn, to_part)
+                                << "for HN" << hn << "and parts" << from_part << " / " << to_part;
+        _pq[direction].updateKey(hn, from_part, _gain_manager.gain(hn, to_part));
+      } else {
+        _pq[direction].insert(hn, from_part, _gain_manager.gain(hn, to_part));
+        _hg.activate(hn);
+        _pq[direction].enablePart(from_part);
+      }
     }
   }
 
-  std::size_t directionToAdjacent(const PartitionID from, const PartitionID to) {
+  std::size_t directionToAdjacent(const PartitionID from, const PartitionID to) const {
     return adjacentPart(from, PREV) == to ? PREV : NEXT;
   }
 
@@ -496,6 +575,12 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
     return !((direction == NEXT && isLastPartition(part)) || (direction == PREV && isFirstPartition(part)));
   }
 
+  void resetFixtureStateChanges() {
+    for (const auto& direction : kDirections) {
+      _state_changes[direction].resetUsedEntries();
+    }
+  }
+
   void processFixtureStateChanges() {
     DBG << "processFixtureStateChanges(): " << V(_state_changes[PREV].size()) << V(_state_changes[NEXT].size());
 
@@ -519,12 +604,14 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
             _pq[direction].updateKey(hn, part, gain);
           } else {
             _pq[direction].insert(hn, part, gain);
+            _hg.activate(hn);
           }
           _pq[direction].enablePart(part);
         } else if (_state_changes[direction].get(hn) == DEACTIVATE) {
           DBG << "Deactivate HN" << V(hn) << V(direction) << V(part);
           if (_pq[direction].contains(hn, part)) {
             _pq[direction].remove(hn, part);
+            _hg.deactivate(hn);
           }
           if (_pq[direction].empty(part)) {
             _pq[direction].disablePart(part);
@@ -533,9 +620,7 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
       }
     }
 
-    for (const auto& direction : kDirections) {
-      _state_changes[direction].resetUsedEntries();
-    }
+    resetFixtureStateChanges();
   }
 
   void initializeFixtures() {
@@ -630,7 +715,7 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
       }
     }
 
-    ASSERT(_fixtures[PREV][hn] == 0);
+    ASSERT(_fixtures[PREV][hn] == 0, V(hn) << V(_fixtures[PREV][hn]));
     ASSERT(_fixtures[NEXT][hn] == 0);
     _state_changes[PREV].set(hn, DEACTIVATE);
     _state_changes[NEXT].set(hn, DEACTIVATE);
@@ -673,6 +758,7 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
   }
 
 #ifdef KAHYPAR_USE_ASSERTIONS
+
   void ASSERT_THAT_FIXTURES_ARE_CORRECT() const {
     std::array<std::vector<HypernodeID>, 2> fixtures{std::vector<HypernodeID>(_hg.initialNumNodes()),
                                                      std::vector<HypernodeID>(_hg.initialNumNodes())};
@@ -701,36 +787,6 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
     }
   }
 
-  void ASSERT_THAT_HYPERNODES_CONTAINED_IN_PQS_ARE_CORRECT() const {
-    for (const HypernodeID& hn : _hg.nodes()) {
-      for (const std::size_t& direction : kDirections) {
-        if (_hg.marked(hn)) {
-          ASSERT(!_pq[direction].contains(hn));
-          continue;
-        }
-
-        if (_fixtures[direction][hn] == 0
-            && (direction != PREV || !isFirstPartition(_hg.partID(hn)))
-            && (direction != NEXT || !isLastPartition(_hg.partID(hn)))) {
-          ASSERT(_pq[direction].contains(hn));
-          ASSERT(_pq[direction].contains(hn, _hg.partID(hn)));
-
-          const PartitionID from_part = _hg.partID(hn);
-          const PartitionID to_part = adjacentPart(from_part, direction);
-          ASSERT(to_part != Hypergraph::kInvalidPartition);
-          ASSERT(_pq[direction].key(hn, from_part) == _gain_manager.gain(hn, to_part),
-            "In PQ:" << _pq[direction].key(hn, _hg.partID(hn))
-            << "Cached:" << _gain_manager.gain(hn, to_part)
-            << "Real:" << gainInducedByHypergraph(hn, to_part)
-            << "For:" << V(hn) << V(from_part) << V(to_part));
-        } else {
-          ASSERT(!_pq[direction].contains(hn));
-          ASSERT(!_pq[direction].contains(hn, _hg.partID(hn)));
-        }
-      }
-    }
-  }
-
   Gain gainInducedByHypergraph(const HypernodeID hn, const PartitionID target_part) const {
     Gain gain = 0;
     for (const HyperedgeID& he : _hg.incidentEdges(hn)) {
@@ -748,6 +804,7 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
     gain -= pins_in_target_part == 0 ? he_weight : 0;
     return gain;
   }
+
 #endif
 
   Hypergraph& _hg;

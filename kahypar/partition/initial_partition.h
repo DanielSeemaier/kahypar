@@ -159,7 +159,7 @@ static inline void partition(Hypergraph& hg, const Context& context) {
   auto extracted_init_hypergraph = ds::reindex(hg);
   std::vector<HypernodeID> mapping(std::move(extracted_init_hypergraph.second));
   double init_alpha = context.initial_partitioning.init_alpha;
-  if (context.initial_partitioning.algo == InitialPartitionerAlgorithm::kahypar) {
+  if (context.initial_partitioning.algo == InitialPartitionerAlgorithm::partitioner) {
     // TODO ME
     init_alpha = 0;
   }

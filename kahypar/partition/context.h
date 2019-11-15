@@ -282,6 +282,8 @@ struct InitialPartitioningParameters {
   bool verbose_output = false;
   // Force a balanced initial partition
   bool balance_partition = false;
+  // When using a hypergraph partitioner to compute the initial partition, this selects the partitioner to use
+  std::string partitioner = "kahypar";
 };
 
 inline std::ostream& operator<< (std::ostream& str, const InitialPartitioningParameters& params) {
@@ -437,6 +439,7 @@ class Context {
   bool enable_soft_rebalance = false;
   bool enable_hard_rebalance = false;
   bool refine_rebalance_moves = true;
+  std::string patoh_path = "";
 
   Context() :
     stats(*this) { }
@@ -455,7 +458,8 @@ class Context {
     reduce_balance_during_uncoarsening(other.reduce_balance_during_uncoarsening),
     enable_hard_rebalance(other.enable_hard_rebalance),
     enable_soft_rebalance(other.enable_soft_rebalance),
-    refine_rebalance_moves(other.refine_rebalance_moves) { }
+    refine_rebalance_moves(other.refine_rebalance_moves),
+    patoh_path(other.patoh_path) { }
 
   Context& operator= (const Context&) = delete;
 

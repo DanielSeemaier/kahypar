@@ -30,4 +30,4 @@
 #include "kahypar/partition/initial_partitioning/pool_initial_partitioner.h"
 #include "kahypar/partition/initial_partitioning/random_initial_partitioner.h"
 #include "kahypar/partition/initial_partitioning/topological_ordering.h"
-#include "kahypar/partition/initial_partitioning/kahypar_initial_partitioner.h"
+#include "kahypar/partition/initial_partitioning/hgp_initial_partitioner.h"

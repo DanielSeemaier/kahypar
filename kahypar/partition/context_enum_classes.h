@@ -126,7 +126,7 @@ enum class InitialPartitionerAlgorithm : uint8_t {
   lp,
   pool,
   topological_ordering,
-  kahypar,
+  partitioner,
   UNDEFINED
 };
 
@@ -411,7 +411,7 @@ std::ostream& operator<< (std::ostream& os, const InitialPartitionerAlgorithm& a
     case InitialPartitionerAlgorithm::lp: return os << "lp";
     case InitialPartitionerAlgorithm::pool: return os << "pool";
     case InitialPartitionerAlgorithm::topological_ordering: return os << "topological_ordering";
-    case InitialPartitionerAlgorithm::kahypar: return os << "kahypar";
+    case InitialPartitionerAlgorithm::partitioner: return os << "partitioner";
     case InitialPartitionerAlgorithm::UNDEFINED: return os << "UNDEFINED";
       // omit default case to trigger compiler warning for missing cases
   }
@@ -669,8 +669,8 @@ static InitialPartitionerAlgorithm initialPartitioningAlgorithmFromString(const 
     return InitialPartitionerAlgorithm::pool;
   } else if (mode == "topological_ordering") {
     return InitialPartitionerAlgorithm::topological_ordering;
-  } else if (mode == "kahypar") {
-    return InitialPartitionerAlgorithm::kahypar;
+  } else if (mode == "partitioner") {
+    return InitialPartitionerAlgorithm::partitioner;
   }
   LOG << "Illegal option:" << mode;
   exit(0);

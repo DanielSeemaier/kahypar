@@ -185,6 +185,8 @@ if(NOT MSVC)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-function")
   endif()
 
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-declarations")
+
   include(CheckSSE4_2)
   if( BUILTIN_POPCNT )
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse4.2")

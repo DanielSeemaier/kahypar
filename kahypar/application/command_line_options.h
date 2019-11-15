@@ -133,7 +133,13 @@ po::options_description createGeneralOptionsDescription(Context& context, const 
     "Partitioning mode: \n"
     " - (acyclic) partitioning\n"
     " - (recursive) bisection \n"
-    " - (direct) k-way \n");
+    " - (direct) k-way \n")
+    ("patoh",
+    po::value<std::string>()->value_name("<string>")->notifier(
+    [&](const std::string& path) {
+      context.patoh_path = path;
+    }),
+    "Path to the PaToH executable");
   return options;
 }
 
@@ -446,6 +452,12 @@ po::options_description createInitialPartitioningOptionsDescription(Context& con
         kahypar::initialPartitioningAlgorithmFromString(ip_algo);
     }),
     "Algorithm used to create initial partition: pool ")
+    ("i-partitioner",
+    po::value<std::string>()->value_name("<string>")->notifier(
+      [&](const std::string& ip_partitioner) {
+        context.initial_partitioning.partitioner = ip_partitioner;
+    }),
+    "Use KaHyPar (kahypar) or PaToH (patoh) to compute the initial partition (used if i-algo is set to partitioner)")
     ("i-runs",
     po::value<uint32_t>(&context.initial_partitioning.nruns)->value_name("<uint32_t>"),
     "# initial partition trials")

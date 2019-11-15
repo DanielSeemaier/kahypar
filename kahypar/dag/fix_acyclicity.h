@@ -189,18 +189,21 @@ void rebalancePartition(Hypergraph& hg, const Context& context, const bool refin
   //hard_balance_refiner.printSummary();
 
   if (refine_km1) {
-    AcyclicTwoWayKMinusOneRefiner local_search_refiner(hg, context, qg, gain_manager);
-    local_search_refiner.initialize(0);
+    HyperedgeWeight previous_km1 = current_metrics.km1;
+    do {
+      previous_km1 = current_metrics.km1;
 
-    std::vector<HypernodeID> local_search_refinement_nodes;
-    for (const HypernodeID& hn : hg.nodes()) {
-      if (hg.isBorderNode(hn)) {
+      AcyclicTwoWayKMinusOneRefiner local_search_refiner(hg, context, qg, gain_manager);
+      local_search_refiner.initialize(0);
+
+      std::vector<HypernodeID> local_search_refinement_nodes;
+      for (const HypernodeID& hn : hg.nodes()) {
         local_search_refinement_nodes.push_back(hn);
       }
-    }
 
-    local_search_refiner.refine(local_search_refinement_nodes, {0, 0}, changes, current_metrics);
-    //local_search_refiner.printSummary();
+      local_search_refiner.refine(local_search_refinement_nodes, {0, 0}, changes, current_metrics);
+      DBG << "Result of 2Way refinement:" << previous_km1 << "-->" << current_metrics.km1;
+    } while (0.99 * previous_km1 > current_metrics.km1);
   }
 }
 } // namespace internal

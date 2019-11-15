@@ -88,7 +88,7 @@ class KMinusOneGainManager {
                            ConnectivityDecreaseCallback&& connectivity_dec_cb) {
     DBGC(moved_hn == hn_to_debug) << "updateAfterMovement(" << moved_hn << "," << from_part << "," << to_part << ")";
     ASSERT(_hg.partID(moved_hn) == to_part);
-    ASSERT(!_adjacent_gain_cache.entryExists(moved_hn, from_part));
+    ASSERT(!_adjacent_gain_cache.entryExists(moved_hn, from_part), V(moved_hn) << V(from_part));
     _new_adjacent_part.resetUsedEntries();
     const Gain old_nonadjacent_gain = _nonadjacent_gain_cache[moved_hn];
 
