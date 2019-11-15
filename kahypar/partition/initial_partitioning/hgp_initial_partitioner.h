@@ -227,7 +227,42 @@ class HgpInitialPartitioner : public IInitialPartitioner, private InitialPartiti
   }
 
   void invokePaToH(Hypergraph& hg, const PartitionID k, const double epsilon) const {
-    throw std::invalid_argument("not implemented");
+    // write hypergraph to temporary file
+    const std::string filename = std::string(std::tmpnam(nullptr));
+    io::writeHypergraphForPaToHPartitioning(hg, filename);
+
+    // call PaToH to partition the hypergraph
+    std::stringstream command_ss;
+    command_ss << _context.patoh_path
+      << " " << filename
+      << " " << k
+      << " UM=O"
+      << " SD=" << _context.partition.seed
+      << " IB=" << epsilon;
+    const std::string command = command_ss.str();
+    LOG << "Calling PaToH:" << command;
+    const int patoh_exit_code = std::system(command.c_str());
+    if (patoh_exit_code != 0) {
+      throw std::runtime_error("PaToH returned with a nonzero exit code");
+    }
+
+    // make sure PaToH wrote a partition file and load it
+    const std::string part_filename = filename + ".part." + std::to_string(k);
+    std::ifstream part_file_stream(part_filename);
+    if (!part_file_stream.good()) {
+      throw std::runtime_error("PaToH didn't create the partition file");
+    }
+    part_file_stream.close();
+
+    std::vector<PartitionID> part;
+    io::readPartitionFile(part_filename, part);
+    ASSERT(part.size() == hg.currentNumNodes(), "Mismatch:" << part.size() << "but hypergraph has" << hg.currentNumNodes());
+
+    // apply partition to hypergraph
+    hg.resetPartitioning();
+    for (const HypernodeID& hn : hg.nodes()) {
+      hg.setNodePart(hn, part[hn]);
+    }
   }
 
   static Context createContext(const PartitionID k, const double epsilon) {
