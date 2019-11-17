@@ -54,7 +54,7 @@ class BaseDAGTest {
 
   void partitionUsingTopologicalOrdering(const PartitionID k) {
     Randomize::instance().setSeed(0);
-    auto ordering = calculateTopologicalOrdering(hg);
+    auto ordering = calculateTopologicalOrdering(hg, false);
     PartitionID part = 0;
     HypernodeID nodes_per_part = hg.initialNumNodes() / k + 1;
     HypernodeID nodes_in_cur_part = 0;

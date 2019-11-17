@@ -21,7 +21,7 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
  private:
   using KWayRefinementPQ = ds::KWayPriorityQueue<HypernodeID, Gain, std::numeric_limits<Gain>>;
 
-  static constexpr bool debug = true;
+  static constexpr bool debug = false;
   static constexpr HypernodeID hn_to_debug = 0;
 
   static constexpr std::size_t SUCCESSORS = 0;
@@ -131,7 +131,7 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
     _hg.resetHypernodeState();
     _moves.clear();
     _pqs[0].clear();
-    _pqs[0].clear();
+    _pqs[1].clear();
 
     ASSERT(VALIDATE_FIXTURES_STATE());
     ASSERT(_qg.isAcyclic());
@@ -144,15 +144,18 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
         activate(hn);
       }
     }
-    DBG << "Start with:" << _pqs[0].size() << "--" << _pqs[1].size();
+    //DBG << "Start with:" << _pqs[0].size() << "--" << _pqs[1].size();
 
     // main refinement loop
-    const auto max_fruitless_moves = std::max<uint32_t>(_context.local_search.fm.max_number_of_fruitless_moves,
+    const auto max_fruitless_moves = std::min<uint32_t>(_context.local_search.fm.max_number_of_fruitless_moves,
                                                         refinement_nodes.size());
     int moves_since_improvement = 0;
     int min_cut_index = -1;
 
     while (moves_since_improvement < max_fruitless_moves && (!_pqs[0].empty() || !_pqs[1].empty())) {
+      ASSERT(VALIDATE_PQS_STATE());
+      ASSERT(VALIDATE_FIXTURES_STATE());
+
       // choose from and to part
       const PartitionID from_part = selectPQ();
       ASSERT(from_part != Hypergraph::kInvalidPartition); // already check for that in loop condition
@@ -174,41 +177,51 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
       _hg.mark(max_gain_hn); // exclude this hypernode from this round
 
       // check whether we can move without violating the imbalance constraint
-      if (_hg.partWeight(to_part) + _hg.nodeWeight(max_gain_hn) > _context.partition.max_part_weights[to_part]) {
-        DBG << "Reject move due to weight constraint" << V(max_gain_hn);
-        continue; // don't move
-      }
+      if (_hg.partWeight(to_part) + _hg.nodeWeight(max_gain_hn) <= _context.partition.max_part_weights[to_part]) {
+        // gather some statistics
+        ++_num_moves;
+        if (_hg.initialNumNodes() == _hg.currentNumNodes()) {
+          ++_num_moves_in_last_iteration;
+        }
+        if (max_gain > 0) {
+          ++_num_positive_gain_moves;
+        } else if (max_gain < 0) {
+          ++_num_negative_gain_moves;
+        } else {
+          ++_num_zero_gain_moves;
+        }
 
-      // gather some statistics
-      ++_num_moves;
-      if (_hg.initialNumNodes() == _hg.currentNumNodes()) {
-        ++_num_moves_in_last_iteration;
-      }
-      if (max_gain > 0) {
-        ++_num_positive_gain_moves;
-      } else if (max_gain < 0) {
-        ++_num_negative_gain_moves;
-      } else {
-        ++_num_zero_gain_moves;
-      }
+        // perform actual hypernode movement
+        current_km1 -= max_gain;
+        DBG << "Move HN" << max_gain_hn << ":" << from_part << "-->" << to_part << "for" << max_gain << ","
+            << initial_km1 << "-->" << best_metrics.km1 << "-->" << current_km1;
+        move(max_gain_hn, from_part, to_part);
+        ++moves_since_improvement;
+        ASSERT(current_km1 == metrics::km1(_hg));
 
-      // perform actual hypernode movement
-      DBG << "Move HN" << max_gain_hn << ":" << from_part << "-->" << to_part;
-      current_km1 -= max_gain;
-      move(max_gain_hn, from_part, to_part);
-      ++moves_since_improvement;
-      ASSERT(current_km1 == metrics::km1(_hg));
+        // accept new partition if it improves the cut
+        bool accept = current_km1 < best_metrics.km1;
+        if (!accept && current_km1 == best_metrics.km1) {
+          accept = Randomize::instance().flipCoin();
+        }
+        if (accept) {
+          DBG << "Accept improvement:" << best_metrics.km1 << "-->" << current_km1;
+          best_metrics.km1 = current_km1;
+          _gain_manager.resetDelta();
+          moves_since_improvement = 0;
+          min_cut_index = _moves.size();
+        }
 
-      // accept new partition if it improves the cut
-      if (current_km1 < best_metrics.km1) { // accept new cut
-        DBG << "Accept improvement:" << best_metrics.km1 << "-->" << current_km1;
-        best_metrics.km1 = current_km1;
-        _gain_manager.resetDelta();
-        moves_since_improvement = 0;
-        min_cut_index = _moves.size();
+        _moves.emplace_back(max_gain_hn, from_part, to_part);
+      } else { // move infeasible due to imbalance constraint, but we can still activate its neighbors
+        for (const HyperedgeID& he : _hg.incidentEdges(max_gain_hn)) {
+          for (const HypernodeID& hn : _hg.pins(he)) {
+            if (!_hg.marked(hn) && !_hg.active(hn) && _hg.isBorderNode(hn) && isMovable(hn)) {
+              activate(hn);
+            }
+          }
+        }
       }
-
-      _moves.emplace_back(max_gain_hn, from_part, to_part);
     }
 
     ASSERT(VALIDATE_FIXTURES_STATE());
@@ -361,10 +374,7 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
       if (!_hg.active(hn_to_deactivate)) { // hn might be contained multiple times in _hns_to_deactivate
         continue;
       }
-      const auto part = _hg.partID(hn_to_deactivate);
-      ASSERT(_pqs[part].contains(hn_to_deactivate));
-      _pqs[part].remove(hn_to_deactivate);
-      _hg.deactivate(hn_to_deactivate);
+      deactivate(hn_to_deactivate);
     }
     _hns_to_deactivate.clear(); // populated by addFixtures() and during gain update
 
@@ -383,10 +393,23 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
 
     const PartitionID source = _hg.partID(hn);
     const PartitionID target = otherPartition(source);
-    _pqs[source].push(hn, _gain_manager.gain(hn, target));
+    const Gain gain = _gain_manager.gain(hn, target);
+    _pqs[source].push(hn, gain);
     _hg.activate(hn);
 
-    DBG << "Activated" << hn << "(" << _hg.partID(hn) << ")";
+    DBG << "Activated" << hn << "(" << _hg.partID(hn) << ") with gain" << gain;
+  }
+
+  void deactivate(const HypernodeID hn) {
+    ASSERT(!_hg.marked(hn));
+    ASSERT(_hg.active(hn));
+
+    const auto part = _hg.partID(hn);
+    ASSERT(_pqs[part].contains(hn));
+    _pqs[part].remove(hn);
+    _hg.deactivate(hn);
+
+    DBG << "Deactivate" << hn << "(" << _hg.partID(hn) << ")";
   }
 
   void removeFixtures(const HypernodeID hn) {
