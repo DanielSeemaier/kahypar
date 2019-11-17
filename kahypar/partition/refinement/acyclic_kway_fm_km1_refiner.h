@@ -45,7 +45,7 @@
 #include "kahypar/partition/refinement/policies/fm_improvement_policy.h"
 #include "kahypar/utils/float_compare.h"
 #include "kahypar/utils/randomize.h"
-#include "kahypar/utils/timer.h"
+//#include "kahypar/utils/timer.h"
 
 namespace kahypar {
 template<class StoppingPolicy = Mandatory,
@@ -109,11 +109,11 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
 
   void preUncontraction(const HypernodeID u) override {
     DBG << "preUncontraction(" << u << ")";
-    HighResClockTimepoint start = std::chrono::high_resolution_clock::now();
+//    HighResClockTimepoint start = std::chrono::high_resolution_clock::now();
     _qg.preUncontraction(u);
-    HighResClockTimepoint end = std::chrono::high_resolution_clock::now();
-    Timer::instance().add(_context, Timepoint::cycle_detector,
-                          std::chrono::duration<double>(end - start).count());
+//    HighResClockTimepoint end = std::chrono::high_resolution_clock::now();
+//    Timer::instance().add(_context, Timepoint::cycle_detector,
+//                          std::chrono::duration<double>(end - start).count());
   }
 
   void postUncontraction(const HypernodeID u, const std::vector<HypernodeID>&& partners) override {
@@ -121,11 +121,11 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
     const HypernodeID v = partners.front();
 
     DBG << "postUncontraction(" << u << "," << v << ")";
-    HighResClockTimepoint start = std::chrono::high_resolution_clock::now();
+//    HighResClockTimepoint start = std::chrono::high_resolution_clock::now();
     _qg.postUncontraction(u, {v});
-    HighResClockTimepoint end = std::chrono::high_resolution_clock::now();
-    Timer::instance().add(_context, Timepoint::cycle_detector,
-                          std::chrono::duration<double>(end - start).count());
+//    HighResClockTimepoint end = std::chrono::high_resolution_clock::now();
+//    Timer::instance().add(_context, Timepoint::cycle_detector,
+//                          std::chrono::duration<double>(end - start).count());
   }
 
   void printSummary() const override {
@@ -159,11 +159,11 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
     }
     _gain_cache.clear();
     initializeGainCache();
-    HighResClockTimepoint start = std::chrono::high_resolution_clock::now();
+//    HighResClockTimepoint start = std::chrono::high_resolution_clock::now();
     _qg.rebuild();
-    HighResClockTimepoint end = std::chrono::high_resolution_clock::now();
-    Timer::instance().add(_context, Timepoint::cycle_detector,
-                          std::chrono::duration<double>(end - start).count());
+//    HighResClockTimepoint end = std::chrono::high_resolution_clock::now();
+//    Timer::instance().add(_context, Timepoint::cycle_detector,
+//                          std::chrono::duration<double>(end - start).count());
 
     _num_positive_gain_moves = 0;
     _num_zero_gain_moves = 0;
@@ -277,11 +277,11 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
         ++_num_moves_denied_by_balance_constrain;
       }
       if (do_move) {
-        HighResClockTimepoint start = std::chrono::high_resolution_clock::now();
+//        HighResClockTimepoint start = std::chrono::high_resolution_clock::now();
         do_move = do_move && _qg.testAndUpdateBeforeMovement(max_gain_node, from_part, to_part);
-        HighResClockTimepoint end = std::chrono::high_resolution_clock::now();
-        Timer::instance().add(_context, Timepoint::cycle_detector,
-                              std::chrono::duration<double>(end - start).count());
+//        HighResClockTimepoint end = std::chrono::high_resolution_clock::now();
+//        Timer::instance().add(_context, Timepoint::cycle_detector,
+//                              std::chrono::duration<double>(end - start).count());
 
         if (!do_move) {
           ++_num_moves_denied_by_acyclic_constrain;
@@ -379,12 +379,12 @@ class AcyclicKWayKMinusOneRefiner final : public IRefiner,
       const HypernodeID hn = _performed_moves[last_index].hn;
       const PartitionID from_part = _performed_moves[last_index].to_part;
       const PartitionID to_part = _performed_moves[last_index].from_part;
-      HighResClockTimepoint start = std::chrono::high_resolution_clock::now();
+//      HighResClockTimepoint start = std::chrono::high_resolution_clock::now();
       const bool success = _qg.testAndUpdateBeforeMovement(hn, from_part, to_part);
       ASSERT(success);
-      HighResClockTimepoint end = std::chrono::high_resolution_clock::now();
-      Timer::instance().add(_context, Timepoint::cycle_detector,
-                            std::chrono::duration<double>(end - start).count());
+//      HighResClockTimepoint end = std::chrono::high_resolution_clock::now();
+//      Timer::instance().add(_context, Timepoint::cycle_detector,
+//                            std::chrono::duration<double>(end - start).count());
       _hg.changeNodePart(hn, from_part, to_part);
       _moves.pop_back();
       --last_index;

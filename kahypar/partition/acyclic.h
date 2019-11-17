@@ -45,11 +45,11 @@ static inline bool partitionVCycle(Hypergraph& hypergraph, ICoarsener& coarsener
   io::printVcycleBanner(context);
   io::printCoarseningBanner(context);
 
-  HighResClockTimepoint start = std::chrono::high_resolution_clock::now();
+//  HighResClockTimepoint start = std::chrono::high_resolution_clock::now();
   coarsener.coarsen(context.coarsening.contraction_limit);
-  HighResClockTimepoint end = std::chrono::high_resolution_clock::now();
-  Timer::instance().add(context, Timepoint::v_cycle_coarsening,
-                        std::chrono::duration<double>(end - start).count());
+//  HighResClockTimepoint end = std::chrono::high_resolution_clock::now();
+//  Timer::instance().add(context, Timepoint::v_cycle_coarsening,
+//                        std::chrono::duration<double>(end - start).count());
 
   if (context.partition.verbose_output && context.type == ContextType::main) {
     io::printHypergraphInfo(hypergraph, "Coarsened Hypergraph");
@@ -76,11 +76,11 @@ static inline bool partitionVCycle(Hypergraph& hypergraph, ICoarsener& coarsener
 
   io::printLocalSearchBanner(context);
 
-  start = std::chrono::high_resolution_clock::now();
+//  start = std::chrono::high_resolution_clock::now();
   const bool improved_quality = coarsener.uncoarsen(refiner);
-  end = std::chrono::high_resolution_clock::now();
-  Timer::instance().add(context, Timepoint::v_cycle_local_search,
-                        std::chrono::duration<double>(end - start).count());
+//  end = std::chrono::high_resolution_clock::now();
+//  Timer::instance().add(context, Timepoint::v_cycle_local_search,
+//                        std::chrono::duration<double>(end - start).count());
 
   io::printLocalSearchResults(context, hypergraph);
   refiner.printSummary();
@@ -129,8 +129,8 @@ static inline void performInitialPartitioning(Hypergraph& hypergraph, const Cont
   }
 
   auto end = std::chrono::high_resolution_clock::now();
-  Timer::instance().add(context, Timepoint::initial_partitioning,
-                        std::chrono::duration<double>(end - start).count());
+//  Timer::instance().add(context, Timepoint::initial_partitioning,
+//                        std::chrono::duration<double>(end - start).count());
 
   if (context.partition.verbose_output && context.type == ContextType::main) {
     LOG << "Initial Partitioning Result:";

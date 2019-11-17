@@ -14,7 +14,7 @@
 #include "kahypar/partition/refinement/km1_gain_manager.h"
 #include "kahypar/datastructure/kway_priority_queue.h"
 #include "kahypar/utils/randomize.h"
-#include "kahypar/utils/timer.h"
+//#include "kahypar/utils/timer.h"
 
 namespace kahypar {
 class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {

@@ -16,7 +16,7 @@
 #include "kahypar/partition/refinement/km1_gain_manager.h"
 #include "kahypar/datastructure/kway_priority_queue.h"
 #include "kahypar/utils/randomize.h"
-#include "kahypar/utils/timer.h"
+//#include "kahypar/utils/timer.h"
 
 namespace kahypar {
 template<typename StoppingPolicy = Mandatory,
@@ -199,11 +199,11 @@ class AcyclicLocalSearchRefiner final : public IRefiner {
 
       // quotient graph remains acyclic
       if (move_ok) {
-        HighResClockTimepoint start = std::chrono::high_resolution_clock::now();
+//        HighResClockTimepoint start = std::chrono::high_resolution_clock::now();
         move_ok = move_ok && _qg.testAndUpdateBeforeMovement(max_gain_node, from_part, to_part);
-        HighResClockTimepoint end = std::chrono::high_resolution_clock::now();
-        Timer::instance().add(_context, Timepoint::cycle_detector,
-                              std::chrono::duration<double>(end - start).count());
+//        HighResClockTimepoint end = std::chrono::high_resolution_clock::now();
+//        Timer::instance().add(_context, Timepoint::cycle_detector,
+//                              std::chrono::duration<double>(end - start).count());
 
         if (!move_ok) {
           ++_num_moves_denied_by_acyclic_constrain;

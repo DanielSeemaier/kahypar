@@ -14,7 +14,6 @@
 #include "kahypar/partition/refinement/km1_gain_manager.h"
 #include "kahypar/datastructure/kway_priority_queue.h"
 #include "kahypar/utils/randomize.h"
-#include "kahypar/utils/timer.h"
 
 namespace kahypar {
 class AcyclicHardRebalanceRefiner final : public IRefiner {
@@ -258,10 +257,10 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
         DBG << "Move HN" << max_gain_hn << "from" << from_part << "to" << to_part;
 
         // update QuotientGraph
-        HighResClockTimepoint start_tp = std::chrono::high_resolution_clock::now();
+        //HighResClockTimepoint start_tp = std::chrono::high_resolution_clock::now();
         const bool success = _qg.testAndUpdateBeforeMovement(max_gain_hn, from_part, to_part);
-        HighResClockTimepoint end_tp = std::chrono::high_resolution_clock::now();
-        Timer::instance().add(_context, Timepoint::cycle_detector, std::chrono::duration<double>(end_tp - start_tp).count());
+        //HighResClockTimepoint end_tp = std::chrono::high_resolution_clock::now();
+        //Timer::instance().add(_context, Timepoint::cycle_detector, std::chrono::duration<double>(end_tp - start_tp).count());
         ASSERT(success, V(max_gain_hn) << V(from_part) << V(to_part));
 
         // update Hypergraph
