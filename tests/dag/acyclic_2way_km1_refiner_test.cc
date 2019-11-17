@@ -106,25 +106,25 @@ TEST_P(AcyclicTwoWayKM1RefinerTest, AnotherTestCase) {
 
 }
 
-//TEST_P(AcyclicTwoWayKM1RefinerTest, CanRefineDuringUncoarsening) {
-//  auto contractions = contractArbitrarily(3, 250, true);
-//
-//  qg->rebuild();
-//  gain_manager->initialize();
-//  refiner->initialize(0);
-//
-//  for (auto rit = contractions.crbegin(); rit != contractions.crend(); ++rit) {
-//    refiner->preUncontraction(rit->u);
-//    qg->preUncontraction(rit->u);
-//    gain_manager->preUncontraction(rit->u);
-//    hg.uncontract(*rit);
-//    gain_manager->postUncontraction(rit->u, {rit->v});
-//    qg->postUncontraction(rit->u, {rit->v});
-//    refiner->postUncontraction(rit->u, {rit->v});
-//
-//    runRefiner(0.03, {rit->u, rit->v});
-//  }
-//}
+TEST_P(AcyclicTwoWayKM1RefinerTest, CanRefineDuringUncoarsening) {
+  auto contractions = contractArbitrarily(3, 250, true);
+
+  qg->rebuild();
+  gain_manager->initialize();
+  refiner->initialize(0);
+
+  for (auto rit = contractions.crbegin(); rit != contractions.crend(); ++rit) {
+    refiner->preUncontraction(rit->u);
+    qg->preUncontraction(rit->u);
+    gain_manager->preUncontraction(rit->u);
+    hg.uncontract(*rit);
+    gain_manager->postUncontraction(rit->u, {rit->v});
+    qg->postUncontraction(rit->u, {rit->v});
+    refiner->postUncontraction(rit->u, {rit->v});
+
+    runRefiner(0.03, {rit->u, rit->v});
+  }
+}
 
 INSTANTIATE_TEST_CASE_P(GRAPH_C17_K_2, AcyclicTwoWayKM1RefinerTest, Values("test_instances/c17.hgr 2"));
 

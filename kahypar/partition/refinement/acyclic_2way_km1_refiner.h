@@ -21,17 +21,11 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
  private:
   using KWayRefinementPQ = ds::KWayPriorityQueue<HypernodeID, Gain, std::numeric_limits<Gain>>;
 
-  static constexpr bool debug = false;
+  static constexpr bool debug = true;
   static constexpr HypernodeID hn_to_debug = 0;
 
-  static constexpr std::size_t PREV = 0;
-  static constexpr std::size_t NEXT = 1;
-  static constexpr std::size_t TARGETS = 2;
-
-  static constexpr std::size_t ACTIVATE = 1;
-  static constexpr std::size_t DEACTIVATE = 2;
-
-  static constexpr std::array<std::size_t, 2> kDirections{PREV, NEXT};
+  static constexpr std::size_t SUCCESSORS = 0;
+  static constexpr std::size_t PREDECESSORS = 1;
 
  public:
   AcyclicTwoWayKMinusOneRefiner(Hypergraph& hypergraph, const Context& context,
@@ -40,11 +34,10 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
     _hg(hypergraph),
     _context(context),
     _qg(qg),
-    _pq{KWayRefinementPQ(context.partition.k), KWayRefinementPQ(context.partition.k)},
-    _fixtures{std::vector<HypernodeID>(), std::vector<HypernodeID>()},
-    _state_changes{ds::FastResetArray<std::size_t>(hypergraph.initialNumNodes(), 0),
-                   ds::FastResetArray<std::size_t>(hypergraph.initialNumNodes(), 0)},
-    _updated_neighbors(_hg.initialNumNodes(), false),
+    _pqs{ds::BinaryMaxHeap<HypernodeID, Gain>(_hg.initialNumNodes()),
+         ds::BinaryMaxHeap<HypernodeID, Gain>(_hg.initialNumNodes())},
+    _fixtures{std::vector<HypernodeID>(_hg.initialNumNodes()),
+              std::vector<HypernodeID>(_hg.initialNumNodes())},
     _gain_manager(gain_manager) {}
 
   ~AcyclicTwoWayKMinusOneRefiner() override = default;
@@ -59,66 +52,49 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
     return _moves;
   }
 
-  double improvedImbalance() const {
-    return _improved_imbalance;
-  }
-
   void preUncontraction(const HypernodeID representant) override {
-    if (_qg_changed) { // will refresh fixtures anyways
-      return;
-    }
-
-    removeFixturesForHypernode(representant);
+    removeFixtures(representant);
+    _hns_to_activate.clear(); // populated by removeFixtures()
   }
 
   void postUncontraction(const HypernodeID representant, const std::vector<HypernodeID>&& partners) override {
-    if (_qg_changed) { // will refresh fixtures anyways
-      return;
-    }
-
     ASSERT(partners.size() == 1, "Currently only supports pair contractions.");
     const HypernodeID partner = partners.front();
 
-    addFixturesForHypernode(representant, partner);
-    addFixturesForHypernode(partner, representant);
-    resetFixtureStateChanges();
+    addFixtures(representant);
+    addFixtures(partner);
+    initializeFixtures(representant);
+    initializeFixtures(partner);
 
-    ASSERT([&]() {
-      ASSERT_THAT_FIXTURES_ARE_CORRECT();
-      return true;
-    }());
+    _hns_to_deactivate.clear(); // populated by addFixtures()
   }
 
   void printSummary() const override {
-    LOG << "[2way] Iterations with refresh:" << _num_refreshes;
-    LOG << "[2way] Iterations without refresh:" << _num_no_refreshes;
-    LOG << "[2way] Number of moves:" << _num_moves;
-    LOG << "[2way] Number of moves in the last iteration:" << _num_moves_in_last_iteration;
-    LOG << "[2way] Positive gain moves:" << _num_positive_gain_moves;
-    LOG << "[2way] Zero gain moves:" << _num_zero_gain_moves;
-    LOG << "[2way] Negative gain moves:" << _num_negative_gain_moves;
-    LOG << "[2way] Improved imbalance by:" << _improved_imbalance;
-    LOG << "[2way] Improved KM1 by:" << _improved_km1;
-    LOG << "[2way] Perform moves time:" << _perform_moves_time;
-    LOG << "[2way] Refine time:" << _refine_time;
-    LOG << "[2way] Gains time:" << _gain_time;
+    LOG << "[AcyclicTwoWayKMinusOneRefiner] Number of moves:" << _num_moves;
+    LOG << "[AcyclicTwoWayKMinusOneRefiner] Number of moves in the last iteration:" << _num_moves_in_last_iteration;
+    LOG << "[AcyclicTwoWayKMinusOneRefiner] Positive gain moves:" << _num_positive_gain_moves;
+    LOG << "[AcyclicTwoWayKMinusOneRefiner] Zero gain moves:" << _num_zero_gain_moves;
+    LOG << "[AcyclicTwoWayKMinusOneRefiner] Negative gain moves:" << _num_negative_gain_moves;
+    LOG << "[AcyclicTwoWayKMinusOneRefiner] Improved imbalance by:" << _improved_imbalance;
+    LOG << "[AcyclicTwoWayKMinusOneRefiner] Improved KM1 by:" << _improved_km1;
+    LOG << "[AcyclicTwoWayKMinusOneRefiner] Perform moves time:" << _perform_moves_time;
+    LOG << "[AcyclicTwoWayKMinusOneRefiner] Refine time:" << _refine_time;
+    LOG << "[AcyclicTwoWayKMinusOneRefiner] Gains time:" << _gain_time;
   }
 
  private:
   void initializeImpl(const HyperedgeWeight max_gain) final {
-    if (!_is_initialized) {
-      _pq[PREV].initialize(_hg.initialNumNodes());
-      _pq[NEXT].initialize(_hg.initialNumNodes());
-      _is_initialized = true;
-    }
+    _is_initialized = true;
+
+    _fixtures[PREDECESSORS].clear();
+    _fixtures[PREDECESSORS].resize(_hg.initialNumNodes());
+    _fixtures[SUCCESSORS].clear();
+    _fixtures[SUCCESSORS].resize(_hg.initialNumNodes());
+    initializeFixtures();
 
     _gain_manager.resetDelta();
-
     _hg.resetHypernodeState();
-    refreshTopologicalOrdering();
 
-    _num_refreshes = 0;
-    _num_no_refreshes = 0;
     _num_moves = 0;
     _num_moves_in_last_iteration = 0;
     _num_positive_gain_moves = 0;
@@ -134,141 +110,76 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
   void performMovesAndUpdateCacheImpl(const std::vector<Move>& moves,
                                       std::vector<HypernodeID>& refinement_nodes,
                                       const UncontractionGainChanges& changes) final {
-    const auto& ordering = _qg.topologicalOrdering();
-    if (_qg.changed() || _qg_changed) { // cached topological ordering changed, must reset PQs anyways
-      _qg_changed = true;
-      return;
-    }
-
-    const HighResClockTimepoint start_perform_moves = std::chrono::high_resolution_clock::now();
-
-    _hg.resetHypernodeState();
-
-    for (std::size_t i = moves.size(); i > 0; --i) {
-      const Move& move = moves[i - 1];
-      _hg.changeNodePart(move.hn, move.to, move.from);
-    }
-
-    for (const Move& move : moves) {
-      for (const std::size_t& direction : kDirections) {
-        if (_pq[direction].contains(move.hn, move.from)) {
-          _pq[direction].remove(move.hn, move.from);
-        }
-      }
-      _hg.changeNodePart(move.hn, move.from, move.to);
-      updateFixtures(move.hn, move.from, move.to);
-      processFixtureStateChanges();
-    }
-
-    const HighResClockTimepoint end_perform_moves = std::chrono::high_resolution_clock::now();
-    _perform_moves_time += std::chrono::duration<double>(end_perform_moves - start_perform_moves).count();;
-
-    ASSERT([&]() {
-      ASSERT_THAT_FIXTURES_ARE_CORRECT();
-      return true;
-    }());
+    throw std::runtime_error("not implemented");
   }
 
   bool refineImpl(std::vector<HypernodeID>& refinement_nodes,
                   const std::array<HypernodeWeight, 2>&,
                   const UncontractionGainChanges&,
                   Metrics& best_metrics) final {
-    DBG << "Run with" << refinement_nodes;
     ASSERT(_hg.k() == 2, "2way refiner, but graph has more than 2 blocks:" << _hg.k());
+    DBG << "Run with" << refinement_nodes;
 
     const HighResClockTimepoint start_refine = std::chrono::high_resolution_clock::now();
 
     ASSERT(best_metrics.imbalance == metrics::imbalance(_hg, _context));
     ASSERT(best_metrics.km1 == metrics::km1(_hg));
-    _hg.resetHypernodeState();
-    _moves.clear();
-    _pq[PREV].clear();
-    _pq[NEXT].clear();
-    _state_changes[PREV].resetUsedEntries();
-    _state_changes[NEXT].resetUsedEntries();
-
-    const auto& ordering = _qg.topologicalOrdering();
-    if (_qg_changed || _qg.changed()) {
-      refreshTopologicalOrdering();
-      ++_num_refreshes;
-    } else {
-      ++_num_no_refreshes;
-    }
-
     const double initial_imbalance = best_metrics.imbalance;
     const HyperedgeWeight initial_km1 = best_metrics.km1;
     HyperedgeWeight current_km1 = initial_km1;
 
-    ASSERT([&]() {
-      ASSERT_THAT_FIXTURES_ARE_CORRECT();
-      return true;
-    }());
+    _hg.resetHypernodeState();
+    _moves.clear();
+    _pqs[0].clear();
+    _pqs[0].clear();
+
+    ASSERT(VALIDATE_FIXTURES_STATE());
     ASSERT(_qg.isAcyclic());
     ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(_hg, _context).isAcyclic());
-
     ASSERT(!_gain_manager.hasDelta());
 
     // activate refinement nodes
-    for (const HypernodeID& node : refinement_nodes) {
-      for (const auto& direction : kDirections) {
-        if (!isValidDirection(_hg.partID(node), direction)) {
-          continue;
-        }
-        if (_fixtures[direction][node] > 0) {
-          continue;
-        }
-        const auto from_part = _hg.partID(node);
-        const auto to_part = adjacentPart(from_part, direction);
-        const auto gain = _gain_manager.gain(node, to_part);
-        _pq[direction].insert(node, from_part, gain);
-        _hg.activate(node);
+    for (const HypernodeID& hn : refinement_nodes) {
+      if (isMovable(hn) && _hg.isBorderNode(hn)) {
+        activate(hn);
       }
     }
-
-    _pq[0].enablePart(0);
-    _pq[0].enablePart(1);
-    _pq[1].enablePart(0);
-    _pq[1].enablePart(1);
-
-    DBG << "Start with:" << _pq[0].size() << "--" << _pq[1].size();
+    DBG << "Start with:" << _pqs[0].size() << "--" << _pqs[1].size();
 
     // main refinement loop
     const auto max_fruitless_moves = std::max<uint32_t>(_context.local_search.fm.max_number_of_fruitless_moves,
                                                         refinement_nodes.size());
-
     int moves_since_improvement = 0;
     int min_cut_index = -1;
-    while (moves_since_improvement < max_fruitless_moves && (!_pq[PREV].empty() || !_pq[NEXT].empty())) {
-      PartitionID from_part = Hypergraph::kInvalidPartition;
-      if (isOverloaded(0) || isOverloaded(1)) {
-        from_part = findBiggestPart();
-      } else {
-        from_part = findBestPart();
-      }
-      ASSERT(from_part != Hypergraph::kInvalidPartition);
-      PartitionID to_part = otherPart(from_part);
-      std::size_t direction = directionToAdjacent(from_part, to_part);
-      if (_pq[direction].empty()) {
-        from_part = otherPart(from_part);
-        to_part = otherPart(from_part);
-        direction = directionToAdjacent(from_part, to_part);
-      }
-      ASSERT(!_pq[direction].empty(from_part)); // otherwise, refinement loop should have stopped
-      ASSERT(!_pq[direction].empty()); // otherwise, refinement loop should have stopped
 
-      HypernodeID max_gain_hn = 0;
-      Gain max_gain = 0;
-      _pq[direction].deleteMaxFromPartition(max_gain_hn, max_gain, from_part);
+    while (moves_since_improvement < max_fruitless_moves && (!_pqs[0].empty() || !_pqs[1].empty())) {
+      // choose from and to part
+      const PartitionID from_part = selectPQ();
+      ASSERT(from_part != Hypergraph::kInvalidPartition); // already check for that in loop condition
+      ASSERT(!_pqs[from_part].empty());
+      const PartitionID to_part = otherPartition(from_part);
+
+      // pull hypernode from selected PQ
+      const HypernodeID max_gain_hn = _pqs[from_part].top();
+      const Gain max_gain = _pqs[from_part].topKey();
+      _pqs[from_part].pop();
+
       ASSERT(_hg.partID(max_gain_hn) == from_part);
+      ASSERT(isMovable(max_gain_hn));
+      ASSERT(max_gain == _gain_manager.gain(max_gain_hn, to_part));
+      ASSERT(max_gain == gainInducedByHypergraph(max_gain_hn, to_part));
       ASSERT(_hg.active(max_gain_hn));
       ASSERT(!_hg.marked(max_gain_hn));
-      _hg.mark(max_gain_hn);
 
+      _hg.mark(max_gain_hn); // exclude this hypernode from this round
+
+      // check whether we can move without violating the imbalance constraint
       if (_hg.partWeight(to_part) + _hg.nodeWeight(max_gain_hn) > _context.partition.max_part_weights[to_part]) {
         DBG << "Reject move due to weight constraint" << V(max_gain_hn);
         continue; // don't move
       }
 
+      // gather some statistics
       ++_num_moves;
       if (_hg.initialNumNodes() == _hg.currentNumNodes()) {
         ++_num_moves_in_last_iteration;
@@ -280,56 +191,27 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
       } else {
         ++_num_zero_gain_moves;
       }
+
+      // perform actual hypernode movement
+      DBG << "Move HN" << max_gain_hn << ":" << from_part << "-->" << to_part;
       current_km1 -= max_gain;
-
-      DBG << "Move HN" << max_gain_hn << "from" << from_part << "to" << to_part;
-
-      // update QuotientGraph
-      HighResClockTimepoint start_tp = std::chrono::high_resolution_clock::now();
-      const bool success = _qg.testAndUpdateBeforeMovement(max_gain_hn, from_part, to_part);
-      HighResClockTimepoint end_tp = std::chrono::high_resolution_clock::now();
-      Timer::instance().add(_context, Timepoint::cycle_detector,
-                            std::chrono::duration<double>(end_tp - start_tp).count());
-      ASSERT(success, V(max_gain_hn) << V(from_part) << V(to_part));
-
-      // update Hypergraph
-#ifdef KAHYPAR_USE_ASSERTIONS
-      const auto km1_before_move = metrics::km1(_hg);
-      const auto cached_gain_before_move = _gain_manager.gain(max_gain_hn, to_part);
-#endif // KAHYPAR_USE_ASSERTIONS
-      _hg.changeNodePart(max_gain_hn, from_part, to_part);
-      ASSERT(km1_before_move - metrics::km1(_hg) == max_gain, V(km1_before_move)
-        << V(metrics::km1(_hg))
-        << V(max_gain)
-        << V(cached_gain_before_move));
-
-      // update gains
-      const HighResClockTimepoint start_update_gc = std::chrono::high_resolution_clock::now();
-      _gain_manager.updateAfterMovement(max_gain_hn, from_part, to_part);
-      const HighResClockTimepoint end_update_gc = std::chrono::high_resolution_clock::now();
-      _gain_time += std::chrono::duration<double>(end_update_gc - start_update_gc).count();;
-
       move(max_gain_hn, from_part, to_part);
       ++moves_since_improvement;
+      ASSERT(current_km1 == metrics::km1(_hg));
 
+      // accept new partition if it improves the cut
       if (current_km1 < best_metrics.km1) { // accept new cut
         DBG << "Accept improvement:" << best_metrics.km1 << "-->" << current_km1;
         best_metrics.km1 = current_km1;
-        ASSERT(best_metrics.km1 == metrics::km1(_hg));
         _gain_manager.resetDelta();
         moves_since_improvement = 0;
         min_cut_index = _moves.size();
-      } else {
-        DBG << "Do not accept worsening:" << best_metrics.km1 << "-->" << current_km1;
       }
 
       _moves.emplace_back(max_gain_hn, from_part, to_part);
     }
 
-    ASSERT([&]() {
-      ASSERT_THAT_FIXTURES_ARE_CORRECT();
-      return true;
-    }());
+    ASSERT(VALIDATE_FIXTURES_STATE());
 
     // rollback to the best last accepted state
     int last_index = _moves.size() - 1;
@@ -337,460 +219,289 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
       const HypernodeID hn = _moves[last_index].hn;
       const PartitionID from_part = _moves[last_index].to;
       const PartitionID to_part = _moves[last_index].from;
-      DBG << "Rollback" << hn << "/" << from_part << "-->" << to_part;
-
-      const bool success = _qg.testAndUpdateBeforeMovement(hn, from_part, to_part);
-      ASSERT(success);
-      _hg.changeNodePart(hn, from_part, to_part);
-      updateFixtures(hn, from_part, to_part);
-
       _moves.pop_back();
       --last_index;
 
+      // revert hypernode movement
+      DBG << "Rollback" << hn << ":" << from_part << "-->" << to_part;
+      removeFixtures(hn);
+      const bool success = _qg.testAndUpdateBeforeMovement(hn, from_part, to_part);
+      ASSERT(success);
+      _hg.changeNodePart(hn, from_part, to_part);
+      addFixtures(hn);
+      initializeFixtures(hn);
+
+      // statistics
       --_num_moves;
       if (_hg.currentNumNodes() == _hg.initialNumNodes()) {
         --_num_moves_in_last_iteration;
       }
     }
+    _hns_to_activate.clear();
+    _hns_to_deactivate.clear();
+
+    // rollback gain cache
     _gain_manager.rollbackDelta();
-    resetFixtureStateChanges();
-
-
-    best_metrics.imbalance = metrics::imbalance(_hg, _context);
 
     ASSERT(_qg.isAcyclic());
     ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(_hg, _context).isAcyclic());
-
     ASSERT(!_gain_manager.hasDelta());
-
     ASSERT(best_metrics.km1 == metrics::km1(_hg));
-    ASSERT(best_metrics.imbalance == metrics::imbalance(_hg, _context));
+
+    best_metrics.imbalance = metrics::imbalance(_hg, _context);
     _improved_imbalance += initial_imbalance - best_metrics.imbalance;
     _improved_km1 += initial_km1 - best_metrics.km1;
 
     const HighResClockTimepoint end_refine = std::chrono::high_resolution_clock::now();
     _refine_time += std::chrono::duration<double>(end_refine - start_refine).count();;
 
-    _hg.resetHypernodeState();
-
-    return false;
+    return _improved_km1 > 0;
   }
 
-  bool isOverloaded(const PartitionID k) const {
-    return _hg.partWeight(k) > _context.partition.max_part_weights[k];
-  }
-
-  /*********************************************************************************
-   * SCHEDULING METHODS
-   *********************************************************************************/
-  void refreshTopologicalOrdering() {
-    _fixtures[PREV].clear();
-    _fixtures[NEXT].clear();
-    _fixtures[PREV].resize(_hg.initialNumNodes());
-    _fixtures[NEXT].resize(_hg.initialNumNodes());
-    _pq[PREV].clear();
-    _pq[NEXT].clear();
-
-    initializeFixtures();
-    ASSERT([&]() {
-      ASSERT_THAT_FIXTURES_ARE_CORRECT();
-      return true;
-    }());
-
-    _qg_changed = false;
-  }
-
-  std::size_t reverse(const std::size_t direction) const {
-    return 1 - direction;
-  }
-
-  PartitionID findBiggestPart() const {
-    PartitionID biggest = 0;
-    for (PartitionID part = 0; part < _hg.k(); ++part) {
-      if (_hg.partWeight(part) > _hg.partWeight(biggest)) {
-        biggest = part;
-      }
-    }
-    return biggest;
-  }
-
-  PartitionID findBestPart() const {
-    const auto has_from_0 = hasMovableNodes(0);
-    const auto has_from_1 = hasMovableNodes(1);
-    if (has_from_0 && !has_from_1) {
-      return 0;
-    } else if (has_from_1 && !has_from_0) {
-      return 1;
-    } else if (has_from_0 && has_from_1) {
-      if (bestGain(0) < bestGain(1)) {
-        return 1;
-      } else {
-        return 0;
-      }
-    } else {
+  PartitionID selectPQ() const {
+    // handle empty PQs
+    if (_pqs[0].empty() && _pqs[1].empty()) {
       return Hypergraph::kInvalidPartition;
     }
-  }
-
-  bool hasMovableNodes(const PartitionID part) const {
-    const auto direction = directionToAdjacent(part, 1 - part);
-    return !_pq[direction].empty(part);
-  }
-
-  Gain bestGain(const PartitionID part) const {
-    const auto direction = directionToAdjacent(part, 1 - part);
-    if (!_pq[direction].empty(part)) {
-      return _pq[direction].maxKey(part);
-    } else {
-      return std::numeric_limits<Gain>::min();
+    if (_pqs[0].empty()) {
+      return 1;
     }
-  }
-
-  PartitionID otherPart(const PartitionID part) const {
-    return 1 - part;
-  }
-
-  /*********************************************************************************
-   * GAIN UPDATE METHODS
-   *********************************************************************************/
-  void move(const HypernodeID moved_hn, const PartitionID from_part, const PartitionID to_part) {
-    updateFixtures(moved_hn, from_part, to_part);
-    processFixtureStateChanges();
-
-    const HighResClockTimepoint start_update_gains = std::chrono::high_resolution_clock::now();
-
-    _updated_neighbors.resetUsedEntries();
-    _updated_neighbors.set(moved_hn, true); // don't update moved_hn
-
-    for (const HyperedgeID& he : _hg.incidentEdges(moved_hn)) {
-      for (const HypernodeID& pin : _hg.pins(he)) {
-        if (!_updated_neighbors.get(pin)) {
-          updateHypernodeGain(pin);
-          _updated_neighbors.set(pin, true);
-        }
-      }
+    if (_pqs[1].empty()) {
+      return 0;
     }
 
-    const HighResClockTimepoint end_update_gains = std::chrono::high_resolution_clock::now();
-    _gain_time += std::chrono::duration<double>(end_update_gains - start_update_gains).count();;
-  }
-
-  void updateHypernodeGain(const HypernodeID hn) {
-    DBGC(hn == hn_to_debug) << "updateHypernodeGain(" << hn << ")";
-    if (_hg.marked(hn)) { // marked hypernodes are not in the PQ -- check should never fail here
-      return;
+    // both PQs viable, select overloaded block if any
+    if (isOverloaded(0)) {
+      return 0;
+    }
+    if (isOverloaded(1)) {
+      return 1;
     }
 
-    for (const std::size_t direction : kDirections) {
-      if (_fixtures[direction][hn] != 0) {
+    // both PQs viable and partition is balanced, select based on gain
+    if (_pqs[0].topKey() > _pqs[1].topKey()) {
+      return 0;
+    }
+    if (_pqs[1].topKey() > _pqs[0].topKey()) {
+      return 1;
+    }
+    ASSERT(_pqs[0].topKey() == _pqs[1].topKey());
+    return Randomize::instance().flipCoin() ? 1 : 0; // both PQs offer the same gain so flip a coin to decide
+  }
+
+  bool isOverloaded(const PartitionID part) const {
+    return _hg.partWeight(part) > _context.partition.max_part_weights[part];
+  }
+
+  void move(const HypernodeID hn, const PartitionID from_part, const PartitionID to_part) {
+    ASSERT(_hg.marked(hn), "Mark HN before calling move()");
+    ASSERT(_hg.partID(hn) == from_part);
+
+    ASSERT(_hns_to_activate.empty());
+    ASSERT(_hns_to_deactivate.empty());
+
+#ifdef KAHYPAR_USE_ASSERTIONS
+    const auto km1_before_move = metrics::km1(_hg);
+    const auto expected_gain = _gain_manager.gain(hn, to_part);
+#endif // KAHYPAR_USE_ASSERTIONS
+
+    removeFixtures(hn);
+
+    _qg.testAndUpdateBeforeMovement(hn, from_part, to_part);
+    _hg.changeNodePart(hn, from_part, to_part);
+    _gain_manager.updateAfterMovement(hn, from_part, to_part,
+                                      [&](const HypernodeID& hn, const PartitionID& part, const Gain& gain) {
+                                        if (!_hg.marked(hn) && !_hg.active(hn) && isMovable(hn)) {
+                                          _hns_to_activate.push_back(hn);
+                                          return;
+                                        }
+                                      },
+                                      [&](const HypernodeID& hn, const PartitionID& part, const Gain& delta) {
+                                        if (_hg.marked(hn) || !_hg.active(hn) ||
+                                            part == Hypergraph::kInvalidPartition) {
+                                          return;
+                                        }
+
+                                        const auto source_part = _hg.partID(hn);
+                                        ASSERT(_pqs[source_part].contains(hn));
+                                        _pqs[source_part].updateKeyBy(hn, delta);
+                                      },
+                                      [&](const HypernodeID& hn, const PartitionID& part, const Gain&) {
+                                        if (!_hg.marked(hn) && _hg.active(hn)) {
+                                          _hns_to_deactivate.push_back(hn);
+                                        }
+                                      });
+
+    // activate new movable nodes adjacent to `hn`
+#ifdef KAHYPAR_USE_ASSERTIONS
+    for (const HypernodeID& hn_to_activate : _hns_to_activate) {
+      ASSERT(!_hg.marked(hn_to_activate));
+      ASSERT(!_hg.active(hn_to_activate));
+    }
+#endif // KAHYPAR_USE_ASSERTIONS
+    for (const HypernodeID& hn_to_activate : _hns_to_activate) {
+      if (_hg.active(hn_to_activate)) { // hn might be contained multiple times in _hns_to_activate
         continue;
       }
+      activate(hn_to_activate);
+    }
+    _hns_to_activate.clear(); // populated by removeFixtures() and during gain update
 
-      const PartitionID from_part = _hg.partID(hn);
-      const PartitionID to_part = adjacentPart(from_part, direction);
-      if (to_part == Hypergraph::kInvalidPartition) {
+    initializeFixtures(hn);
+    addFixtures(hn);
+
+    // deactivate nodes that are no longer movable
+#ifdef KAHYPAR_USE_ASSERTIONS
+    for (const HypernodeID& hn_to_deactivate : _hns_to_deactivate) {
+      ASSERT(!_hg.marked(hn_to_deactivate));
+      ASSERT(_hg.active(hn_to_deactivate));
+    }
+#endif // KAHYPAR_USE_ASSERTIONS
+    for (const HypernodeID& hn_to_deactivate : _hns_to_deactivate) {
+      if (!_hg.active(hn_to_deactivate)) { // hn might be contained multiple times in _hns_to_deactivate
         continue;
       }
-
-      if (_hg.active(hn)) {
-        ASSERT(_pq[direction].contains(hn, from_part));
-        DBGC(hn == hn_to_debug) << "Update gain from" << _pq[direction].key(hn, from_part)
-                                << "to" << _gain_manager.gain(hn, to_part)
-                                << "for HN" << hn << "and parts" << from_part << " / " << to_part;
-        _pq[direction].updateKey(hn, from_part, _gain_manager.gain(hn, to_part));
-      } else {
-        _pq[direction].insert(hn, from_part, _gain_manager.gain(hn, to_part));
-        _hg.activate(hn);
-        _pq[direction].enablePart(from_part);
-      }
+      const auto part = _hg.partID(hn_to_deactivate);
+      ASSERT(_pqs[part].contains(hn_to_deactivate));
+      _pqs[part].remove(hn_to_deactivate);
+      _hg.deactivate(hn_to_deactivate);
     }
+    _hns_to_deactivate.clear(); // populated by addFixtures() and during gain update
+
+#ifdef KAHYPAR_USE_ASSERTIONS
+    const auto km1_after_move = metrics::km1(_hg);
+    ASSERT(km1_before_move - expected_gain == km1_after_move,
+           "Before:" << V(km1_before_move) << "Gain:" << V(expected_gain) << "After:" << V(km1_after_move));
+#endif // KAHYPAR_USE_ASSERTIONS
   }
 
-  std::size_t directionToAdjacent(const PartitionID from, const PartitionID to) const {
-    return adjacentPart(from, PREV) == to ? PREV : NEXT;
+  void activate(const HypernodeID hn) {
+    ASSERT(isMovable(hn));
+    ASSERT(_hg.isBorderNode(hn));
+    ASSERT(!_hg.active(hn));
+    ASSERT(!_hg.marked(hn));
+
+    const PartitionID source = _hg.partID(hn);
+    const PartitionID target = otherPartition(source);
+    _pqs[source].push(hn, _gain_manager.gain(hn, target));
+    _hg.activate(hn);
+
+    DBG << "Activated" << hn << "(" << _hg.partID(hn) << ")";
   }
 
-  void updateFixtures(const HypernodeID moved_hn, const PartitionID from_part, const PartitionID to_part) {
-    DBGC(moved_hn == hn_to_debug)
-    << "updateFixtures(" << V(moved_hn) << "," << V(from_part) << "," << V(to_part) << ")";
-    _fixtures[PREV][moved_hn] = 0;
-    _fixtures[NEXT][moved_hn] = 0;
-
-    for (const HyperedgeID& he : _hg.incidentHeadEdges(moved_hn)) {
-      for (const HypernodeID& tail : _hg.tails(he)) {
-        if (from_part == _hg.partID(tail)) {
-          ASSERT(_fixtures[NEXT][tail] > 0);
-          --_fixtures[NEXT][tail];
-          if (_fixtures[NEXT][tail] == 0) {
-            _state_changes[NEXT].set(tail, ACTIVATE);
-          }
-        }
-        if (to_part == _hg.partID(tail)) {
-          ++_fixtures[NEXT][tail];
-          ++_fixtures[PREV][moved_hn];
-          if (_fixtures[NEXT][tail] == 1) {
-            _state_changes[NEXT].set(tail, DEACTIVATE);
-          }
-        }
-      }
-    }
-    for (const HyperedgeID& he : _hg.incidentTailEdges(moved_hn)) {
+  void removeFixtures(const HypernodeID hn) {
+    for (const HyperedgeID& he : _hg.incidentTailEdges(hn)) {
       for (const HypernodeID& head : _hg.heads(he)) {
-        if (from_part == _hg.partID(head)) {
-          ASSERT(_fixtures[PREV][head] > 0);
-          --_fixtures[PREV][head];
-          if (_fixtures[PREV][head] == 0) {
-            _state_changes[PREV].set(head, ACTIVATE);
-          }
-        }
-        if (to_part == _hg.partID(head)) {
-          ++_fixtures[PREV][head];
-          ++_fixtures[NEXT][moved_hn];
-          if (_fixtures[PREV][head] == 1) {
-            _state_changes[PREV].set(head, DEACTIVATE);
+        if (_hg.partID(head) == _hg.partID(hn)) {
+          ASSERT(_fixtures[PREDECESSORS][head] > 0);
+          --_fixtures[PREDECESSORS][head];
+
+          if (!_hg.active(head) && isMovable(head)) {
+            _hns_to_activate.push_back(head);
           }
         }
       }
     }
 
-    if (_fixtures[PREV][moved_hn] == 0) {
-      DBGC(moved_hn == hn_to_debug) << "_state_changes in PREV to ACTIVATE for" << V(moved_hn);
-      _state_changes[PREV].set(moved_hn, ACTIVATE);
-    }
-    if (_fixtures[NEXT][moved_hn] == 0) {
-      DBGC(moved_hn == hn_to_debug) << "_state_changes in NEXT to ACTIVATE for" << V(moved_hn);
-      _state_changes[NEXT].set(moved_hn, ACTIVATE);
-    }
-  }
+    for (const HyperedgeID& he : _hg.incidentHeadEdges(hn)) {
+      for (const HypernodeID& tail : _hg.tails(he)) {
+        if (_hg.partID(tail) == _hg.partID(hn)) {
+          ASSERT(_fixtures[SUCCESSORS][tail] > 0);
+          --_fixtures[SUCCESSORS][tail];
 
-  bool isFirstPartition(const PartitionID part) const {
-    return _qg.topologicalOrdering()[part] == 0;
-  }
-
-  bool isLastPartition(const PartitionID part) const {
-    return _qg.topologicalOrdering()[part] == _context.partition.k - 1;
-  }
-
-  bool isValidDirection(const PartitionID part, std::size_t direction) const {
-    return !((direction == NEXT && isLastPartition(part)) || (direction == PREV && isFirstPartition(part)));
-  }
-
-  void resetFixtureStateChanges() {
-    for (const auto& direction : kDirections) {
-      _state_changes[direction].resetUsedEntries();
-    }
-  }
-
-  void processFixtureStateChanges() {
-    DBG << "processFixtureStateChanges(): " << V(_state_changes[PREV].size()) << V(_state_changes[NEXT].size());
-
-    for (const std::size_t& direction : kDirections) {
-      for (const auto& hn : _state_changes[direction].usedEntries()) {
-        if (_hg.marked(hn)) { // keep marked hypernodes out of the PQ
-          continue;
-        }
-
-        const PartitionID part = _hg.partID(hn);
-        if (!isValidDirection(part, direction)) {
-          DBG << "Invalid direction" << V(part) << V(direction);
-          continue;
-        }
-
-        if (_state_changes[direction].get(hn) == ACTIVATE) {
-          const PartitionID to_part = adjacentPart(part, direction);
-          const Gain gain = _gain_manager.gain(hn, to_part);
-          DBG << "Activate" << V(hn) << V(direction) << V(part) << V(to_part) << V(gain);
-          if (_pq[direction].contains(hn, part)) {
-            _pq[direction].updateKey(hn, part, gain);
-          } else {
-            _pq[direction].insert(hn, part, gain);
-            _hg.activate(hn);
+          if (!_hg.active(tail) && isMovable(tail)) {
+            _hns_to_activate.push_back(tail);
           }
-          _pq[direction].enablePart(part);
-        } else if (_state_changes[direction].get(hn) == DEACTIVATE) {
-          DBG << "Deactivate HN" << V(hn) << V(direction) << V(part);
-          if (_pq[direction].contains(hn, part)) {
-            _pq[direction].remove(hn, part);
-            _hg.deactivate(hn);
-          }
-          if (_pq[direction].empty(part)) {
-            _pq[direction].disablePart(part);
+        }
+      }
+    }
+  }
+
+  void addFixtures(const HypernodeID hn) {
+    for (const HyperedgeID& he : _hg.incidentTailEdges(hn)) {
+      for (const HypernodeID& head : _hg.heads(he)) {
+        if (_hg.partID(head) == _hg.partID(hn)) {
+          ++_fixtures[PREDECESSORS][head];
+
+          if (_hg.active(head) && !isMovable(head)) {
+            _hns_to_deactivate.push_back(head);
           }
         }
       }
     }
 
-    resetFixtureStateChanges();
+    for (const HyperedgeID& he : _hg.incidentHeadEdges(hn)) {
+      for (const HypernodeID& tail : _hg.tails(he)) {
+        if (_hg.partID(tail) == _hg.partID(hn)) {
+          ++_fixtures[SUCCESSORS][tail];
+
+          if (_hg.active(tail) && !isMovable(tail)) {
+            _hns_to_deactivate.push_back(tail);
+          }
+        }
+      }
+    }
   }
 
   void initializeFixtures() {
     for (const HypernodeID& hn : _hg.nodes()) {
-      initializeFixturesFor(hn);
+      initializeFixtures(hn);
     }
   }
 
-  void initializeFixturesFor(const HypernodeID hn) {
-    const PartitionID part = _hg.partID(hn);
-    for (const auto& direction : kDirections) {
-      if (_fixtures[direction][hn] == 0 && _pq[direction].contains(hn, part)) {
-        _state_changes[direction].set(hn, DEACTIVATE);
+  void initializeFixtures(const HypernodeID hn) {
+    _fixtures[SUCCESSORS][hn] = 0;
+    _fixtures[PREDECESSORS][hn] = 0;
+
+    for (const HyperedgeID& he : _hg.incidentTailEdges(hn)) {
+      for (const HypernodeID& head : _hg.heads(he)) {
+        if (_hg.partID(head) == _hg.partID(hn)) {
+          ++_fixtures[SUCCESSORS][hn];
+        }
       }
-      _fixtures[direction][hn] = 0;
     }
 
     for (const HyperedgeID& he : _hg.incidentHeadEdges(hn)) {
       for (const HypernodeID& tail : _hg.tails(he)) {
-        if (_hg.partID(hn) == _hg.partID(tail)) {
-          ++_fixtures[PREV][hn];
+        if (_hg.partID(tail) == _hg.partID(hn)) {
+          ++_fixtures[PREDECESSORS][hn];
         }
       }
-    }
-    for (const HyperedgeID& he : _hg.incidentTailEdges(hn)) {
-      for (const HypernodeID& head : _hg.heads(he)) {
-        if (_hg.partID(hn) == _hg.partID(head)) {
-          ++_fixtures[NEXT][hn];
-        }
-      }
-    }
-
-    DBGC(hn == hn_to_debug) << "Initial fixtures for" << V(hn) << V(_fixtures[PREV][hn]) << V(_fixtures[NEXT][hn]);
-
-    if (_fixtures[PREV][hn] == 0) {
-      DBGC(hn == hn_to_debug) << "_state_changes in PREV to ACTIVATE for" << V(hn);
-      _state_changes[PREV].set(hn, ACTIVATE);
-    }
-    if (_fixtures[NEXT][hn] == 0) {
-      DBGC(hn == hn_to_debug) << "_state_changes in NEXT to ACTIVATE for" << V(hn);
-      _state_changes[NEXT].set(hn, ACTIVATE);
     }
   }
 
-  void addFixturesForHypernode(const HypernodeID hn, const HypernodeID ignore) {
-    for (const HyperedgeID& he : _hg.incidentTailEdges(hn)) {
-      for (const HypernodeID& head : _hg.heads(he)) {
-        if (_hg.partID(hn) == _hg.partID(head)) { // (hn --> head)
-          if (head != ignore) {
-            incrementFixtures(head, PREV);
-          }
-          incrementFixtures(hn, NEXT);
-        }
-      }
-    }
-    for (const HyperedgeID& he : _hg.incidentHeadEdges(hn)) {
-      for (const HypernodeID& tail : _hg.tails(he)) {
-        if (_hg.partID(hn) == _hg.partID(tail)) { // (tail -> hn)
-          if (tail != ignore) {
-            incrementFixtures(tail, NEXT);
-          }
-          incrementFixtures(hn, PREV);
-        }
-      }
-    }
-
-    if (_fixtures[PREV][hn] == 0) {
-      DBGC(hn == hn_to_debug) << "State changed to ACTIVE for PREV /" << hn;
-      _state_changes[PREV].set(hn, ACTIVATE);
-    }
-    if (_fixtures[NEXT][hn] == 0) {
-      DBGC(hn == hn_to_debug) << "State changed to ACTIVE for NEXT /" << hn;
-      _state_changes[NEXT].set(hn, ACTIVATE);
-    }
+  bool isMovable(const HypernodeID hn) const {
+    return fixtures(hn) == 0;
   }
 
-  void removeFixturesForHypernode(const HypernodeID hn) {
-    for (const HyperedgeID& he : _hg.incidentTailEdges(hn)) {
-      for (const HypernodeID& head : _hg.heads(he)) {
-        if (_hg.partID(hn) == _hg.partID(head)) { // (hn --> head)
-          decrementFixtures(head, PREV);
-          decrementFixtures(hn, NEXT);
-        }
-      }
-    }
-    for (const HyperedgeID& he : _hg.incidentHeadEdges(hn)) {
-      for (const HypernodeID& tail : _hg.tails(he)) {
-        if (_hg.partID(hn) == _hg.partID(tail)) { // (tail -> hn)
-          decrementFixtures(tail, NEXT);
-          decrementFixtures(hn, PREV);
-        }
-      }
-    }
-
-    ASSERT(_fixtures[PREV][hn] == 0, V(hn) << V(_fixtures[PREV][hn]));
-    ASSERT(_fixtures[NEXT][hn] == 0);
-    _state_changes[PREV].set(hn, DEACTIVATE);
-    _state_changes[NEXT].set(hn, DEACTIVATE);
+  HypernodeID fixtures(const HypernodeID hn) const {
+    const PartitionID source = _hg.partID(hn);
+    return isTailPartition(source)
+           ? _fixtures[SUCCESSORS][hn]
+           : _fixtures[PREDECESSORS][hn];
   }
 
-  void incrementFixtures(const HypernodeID hn, const std::size_t direction) {
-    if (_fixtures[direction][hn] == 0) {
-      _state_changes[direction].set(hn, DEACTIVATE);
+  bool isTailPartition(const PartitionID part) const {
+    for (const QNodeID& target : _qg.outs(part)) {
+      return true;
     }
-    ++_fixtures[direction][hn];
+    return false;
   }
 
-  void decrementFixtures(const HypernodeID hn, const std::size_t direction, const std::size_t by = 1) {
-    if (_fixtures[direction][hn] == 1) {
-      _state_changes[direction].set(hn, ACTIVATE);
-    }
-    ASSERT(_fixtures[direction][hn] >= by);
-    _fixtures[direction][hn] -= by;
+  bool isHeadPartition(const PartitionID part) const {
+    return !isTailPartition(part);
   }
 
-  PartitionID adjacentPart(const PartitionID part, const std::size_t direction) const {
-    const auto& ordering = _qg.topologicalOrdering();
-    const auto& inverse_ordering = _qg.inverseTopologicalOrdering();
-
-    switch (direction) {
-      case PREV:
-        return ordering[part] == 0
-               ? Hypergraph::kInvalidPartition
-               : inverse_ordering[ordering[part] - 1];
-
-      case NEXT:
-        return ordering[part] == _context.partition.k - 1
-               ? Hypergraph::kInvalidPartition
-               : inverse_ordering[ordering[part] + 1];
-
-      default:
-        ASSERT(false, "Invalid direction:" << direction);
-        return 0;
-    }
+  static PartitionID otherPartition(const PartitionID part) {
+    return 1 - part;
   }
 
 #ifdef KAHYPAR_USE_ASSERTIONS
 
-  void ASSERT_THAT_FIXTURES_ARE_CORRECT() const {
-    std::array<std::vector<HypernodeID>, 2> fixtures{std::vector<HypernodeID>(_hg.initialNumNodes()),
-                                                     std::vector<HypernodeID>(_hg.initialNumNodes())};
-
-    for (const HypernodeID& hn : _hg.nodes()) {
-      for (const HyperedgeID& he : _hg.incidentHeadEdges(hn)) {
-        for (const HypernodeID& tail : _hg.tails(he)) {
-          if (_hg.partID(hn) == _hg.partID(tail)) {
-            ++fixtures[PREV][hn];
-          }
-        }
-      }
-      for (const HyperedgeID& he : _hg.incidentTailEdges(hn)) {
-        for (const HypernodeID& head : _hg.heads(he)) {
-          if (_hg.partID(hn) == _hg.partID(head)) {
-            ++fixtures[NEXT][hn];
-          }
-        }
-      }
-    }
-
-    for (const HypernodeID& hn : _hg.nodes()) {
-      for (const std::size_t& direction : kDirections) {
-        ASSERT (fixtures[direction][hn] == _fixtures[direction][hn]);
-      }
-    }
-  }
-
   Gain gainInducedByHypergraph(const HypernodeID hn, const PartitionID target_part) const {
     Gain gain = 0;
     for (const HyperedgeID& he : _hg.incidentEdges(hn)) {
-      ASSERT(_hg.edgeSize(he) > 1, V(he));
+      //ASSERT(_hg.edgeSize(he) > 1, V(he));
       gain += gainInducedByHyperedge(hn, he, target_part);
     }
     return gain;
@@ -805,22 +516,70 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
     return gain;
   }
 
+  bool VALIDATE_FIXTURES_STATE() const {
+    for (const HypernodeID& hn : _hg.nodes()) {
+      HypernodeID num_predecessors = 0;
+      HypernodeID num_successors = 0;
+      for (const HyperedgeID& he : _hg.incidentTailEdges(hn)) {
+        for (const HypernodeID& head : _hg.heads(he)) {
+          if (_hg.partID(head) == _hg.partID(hn)) {
+            ++num_successors;
+          }
+        }
+      }
+      for (const HyperedgeID& he : _hg.incidentHeadEdges(hn)) {
+        for (const HypernodeID& tail : _hg.tails(he)) {
+          if (_hg.partID(tail) == _hg.partID(hn)) {
+            ++num_predecessors;
+          }
+        }
+      }
+
+      ASSERT(_fixtures[PREDECESSORS][hn] == num_predecessors);
+      ASSERT(_fixtures[SUCCESSORS][hn] == num_successors);
+    }
+
+    return true;
+  }
+
+  bool VALIDATE_PQS_STATE() const {
+    for (const HypernodeID& hn : _hg.nodes()) {
+      if (_hg.marked(hn)) {
+        ASSERT(!_pqs[0].contains(hn));
+        ASSERT(!_pqs[1].contains(hn));
+        continue;
+      }
+
+      if (_hg.active(hn)) {
+        const auto source_part = _hg.partID(hn);
+        const auto target_part = otherPartition(source_part);
+        ASSERT(_gain_manager.isAdjacentTo(hn, target_part));
+        ASSERT(_pqs[source_part].contains(hn));
+        ASSERT(!_pqs[target_part].contains(hn));
+        ASSERT(_pqs[source_part].getKey(hn) == _gain_manager.gain(hn, target_part));
+        ASSERT(_pqs[source_part].getKey(hn) == gainInducedByHypergraph(hn, target_part));
+        continue;
+      }
+
+      // not active, not marked
+      ASSERT(!_pqs[0].contains(hn));
+      ASSERT(!_pqs[1].contains(hn));
+    }
+    return true;
+  }
+
 #endif
 
   Hypergraph& _hg;
   const Context& _context;
   AdjacencyMatrixQuotientGraph<DFSCycleDetector>& _qg;
-  std::array<KWayRefinementPQ, TARGETS> _pq;
-  std::array<std::vector<HypernodeID>, TARGETS> _fixtures;
-  std::array<ds::FastResetArray<std::size_t>, 2> _state_changes;
-  std::vector<Move> _moves;
-  ds::FastResetArray<bool> _updated_neighbors;
   KMinusOneGainManager& _gain_manager;
+  std::array<ds::BinaryMaxHeap<HypernodeID, Gain>, 2> _pqs;
+  std::array<std::vector<HypernodeID>, 2> _fixtures;
+  std::vector<Move> _moves;
+  std::vector<HypernodeID> _hns_to_activate;
+  std::vector<HypernodeID> _hns_to_deactivate;
 
-  bool _qg_changed{false};
-
-  std::size_t _num_refreshes{0};
-  std::size_t _num_no_refreshes{0};
   std::size_t _num_moves{0};
   std::size_t _num_positive_gain_moves{0};
   std::size_t _num_negative_gain_moves{0};
@@ -832,6 +591,4 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
   double _refine_time{0.0};
   double _gain_time{0.0};
 };
-
-constexpr std::array<std::size_t, 2> AcyclicTwoWayKMinusOneRefiner::kDirections;
 } // namespace kahypar
