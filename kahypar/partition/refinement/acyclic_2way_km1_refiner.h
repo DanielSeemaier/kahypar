@@ -166,13 +166,13 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
 
     // activate refinement nodes
     for (const HypernodeID& hn : refinement_nodes) {
-      if (isMovable(hn) && _hg.isBorderNode(hn)) {
+      if (!_hg.active(hn) && isMovable(hn) && _hg.isBorderNode(hn)) {
         activate(hn);
       }
 
       for (const HyperedgeID& he : _hg.incidentEdges(hn)) {
         for (const HypernodeID& pin : _hg.pins(he)) {
-          if (!_hg.marked(pin) && !_hg.active(pin) && _hg.isBorderNode(pin) && isMovable(pin)) {
+          if (!_hg.active(pin) && _hg.isBorderNode(pin) && isMovable(pin)) {
             activate(pin);
           }
         }
@@ -362,7 +362,8 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
 
     removeFixtures(hn);
 
-    _qg->testAndUpdateBeforeMovement(hn, from_part, to_part);
+    const bool success = _qg->testAndUpdateBeforeMovement(hn, from_part, to_part);
+    ASSERT(success, V(hn) << V(from_part) << V(to_part));
     _hg.changeNodePart(hn, from_part, to_part);
     _gain_manager->updateAfterMovement(hn, from_part, to_part,
                                        [&](const HypernodeID& hn, const PartitionID& part, const Gain& gain) {
