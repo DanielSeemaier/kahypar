@@ -144,15 +144,16 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
         activate(hn);
       }
     }
-    //DBG << "Start with:" << _pqs[0].size() << "--" << _pqs[1].size();
+    DBG << "Initial PQ sizes:" << _pqs[0].size() << "--" << _pqs[1].size();
 
     // main refinement loop
-    const auto max_fruitless_moves = std::min<uint32_t>(_context.local_search.fm.max_number_of_fruitless_moves,
-                                                        refinement_nodes.size());
+    //const auto max_fruitless_moves = std::min<uint32_t>(_context.local_search.fm.max_number_of_fruitless_moves,
+    //                                                    refinement_nodes.size());
+
     int moves_since_improvement = 0;
     int min_cut_index = -1;
 
-    while (moves_since_improvement < max_fruitless_moves && (!_pqs[0].empty() || !_pqs[1].empty())) {
+    while (moves_since_improvement < _hg.currentNumNodes() / 4 && (!_pqs[0].empty() || !_pqs[1].empty())) {
       ASSERT(VALIDATE_PQS_STATE());
       ASSERT(VALIDATE_FIXTURES_STATE());
 
@@ -288,6 +289,12 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
       return 0;
     }
     if (isOverloaded(1)) {
+      return 1;
+    }
+
+    if (_hg.partWeight(0) > _hg.partWeight(1)) {
+      return 0;
+    } else {
       return 1;
     }
 
@@ -576,7 +583,7 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
       if (_hg.active(hn)) {
         const auto source_part = _hg.partID(hn);
         const auto target_part = otherPartition(source_part);
-        ASSERT(_gain_manager.isAdjacentTo(hn, target_part));
+        //ASSERT(_gain_manager.isAdjacentTo(hn, target_part));
         ASSERT(_pqs[source_part].contains(hn));
         ASSERT(!_pqs[target_part].contains(hn));
         ASSERT(_pqs[source_part].getKey(hn) == _gain_manager.gain(hn, target_part));

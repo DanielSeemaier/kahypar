@@ -45,14 +45,6 @@ class HgpInitialPartitioner : public IInitialPartitioner, private InitialPartiti
 
     performPartition(0, _context.partition.k);
 
-    const bool acyclic = AdjacencyMatrixQuotientGraph<DFSCycleDetector>(_hg, _context).isAcyclic();
-    if (!acyclic) {
-      DBG << "Error, obtained cyclic IP!";
-      std::exit(1);
-    } else {
-      DBG << "IP is acyclic, nice!";
-    }
-
     for (PartitionID k = 0; k < _context.partition.k; ++k) {
       DBG << "Block" << k << ":" << _hg.partWeight(k) << _hg.partSize(k);
     }
@@ -121,8 +113,8 @@ class HgpInitialPartitioner : public IInitialPartitioner, private InitialPartiti
 
     Context ctx = createContext(2, 0.03);
     ctx.setupPartWeights(hg_ptr->totalWeight());
-    DBG << "Bisection KM1:" << metrics::km1(*hg_ptr);
-    DBG << "Bisection imbalance:" << metrics::imbalance(*hg_ptr, ctx);
+    DBG << "Bipartition KM1:" << metrics::km1(*hg_ptr);
+    DBG << "Bipartition imbalance:" << metrics::imbalance(*hg_ptr, ctx);
 
     PartitionID pre_num_part_0 = 0;
     PartitionID pre_num_part_1 = 0;
@@ -138,17 +130,9 @@ class HgpInitialPartitioner : public IInitialPartitioner, private InitialPartiti
     dag::fixBipartitionAcyclicity(*hg_ptr, ctx);
     hg_ptr->initializeNumCutHyperedges();
 
-    DBG << "Bisection KM1 after acyclicity fix:" << metrics::km1(*hg_ptr);
-    DBG << "Bisection imbalance after acyclicity fix:" << metrics::imbalance(*hg_ptr, ctx);
+    DBG << "Bipartition KM1 after acyclicity fix + local search:" << metrics::km1(*hg_ptr);
+    DBG << "Bipartition imbalance after acyclicity fix + local search:" << metrics::imbalance(*hg_ptr, ctx);
     hg_ptr->printPartSizes();
-
-//    if (_context.initial_partitioning.balance_partition) {
-//      DBG << "Run HardRebalanceRefiner on initial partition to improve imbalance, then local search to improve KM1";
-//      rebalancePartition(*hg_ptr, ctx, true);
-//    }
-
-    DBG << "Bisection KM1 after rebalance + local search:" << metrics::km1(*hg_ptr);
-    DBG << "Bisection imbalance after rebalance + local search:" << metrics::imbalance(*hg_ptr, ctx);
 
     // keep HNs in hg_ptr->partID(hn) == 0 in block `part`
     for (const HypernodeID& hn : hg_ptr->nodes()) {
@@ -196,16 +180,10 @@ class HgpInitialPartitioner : public IInitialPartitioner, private InitialPartiti
       ASSERT(k_part_0 == 1);
     }
 
-    DBG
-    << "Split" << subgraph_size << "from" << part << "into" << pre_num_part_0 << "and" << pre_num_part_1 << "blocks";
+    DBG << "Split" << subgraph_size << "from" << part << "into" << pre_num_part_0 << "and" << pre_num_part_1 << "blocks";
     DBG << "\t\tAfter acyclic fix:" << num_part_0 << "and" << num_part_1 << "blocks";
     DBG << "\tFirst block:" << part << "second block:" << part + k_part_0;
     DBG << "\tContinue with k:" << k_part_0 << "and" << k_part_1;
-    const bool acyclic = AdjacencyMatrixQuotientGraph<DFSCycleDetector>(_hg, _context).isAcyclic();
-    if (!acyclic) {
-      DBG << "Error, obtained cyclic IP!";
-      std::exit(1);
-    }
 
     performPartition(part, k_part_0);
     performPartition(part + k_part_0, k_part_1);

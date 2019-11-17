@@ -5,6 +5,7 @@
 #include <utility>
 
 #include "kahypar/partition/refinement/acyclic_2way_km1_refiner.h"
+#include "kahypar/partition/refinement/wip_refiner.h"
 #include "kahypar/dag/quotient_graph.h"
 #include "kahypar/datastructure/hypergraph.h"
 #include "kahypar/definitions.h"
@@ -12,7 +13,9 @@
 namespace kahypar {
 namespace dag {
 namespace internal {
-bool findCycleDFS(const CyclicQuotientGraph& cqg, QNodeID node, std::vector<std::pair<QNodeID, QNodeID>>& path, int mark, std::vector<int>& marked) {
+bool
+findCycleDFS(const CyclicQuotientGraph& cqg, QNodeID node, std::vector<std::pair<QNodeID, QNodeID>>& path, int mark,
+             std::vector<int>& marked) {
   for (const QNodeID& child : cqg.outs(node)) {
     path.emplace_back(node, child);
     if (marked[child] == mark) { // detected cycle
@@ -111,7 +114,8 @@ std::pair<QNodeID, QNodeID> pickEdge(const CyclicQuotientGraph& cqg) {
   return lightest_edge;
 }
 
-void moveSuccessors(Hypergraph& hg, const HypernodeID hn, const PartitionID from_part, const PartitionID to_part) { // TODO can we improve on this?
+void moveSuccessors(Hypergraph& hg, const HypernodeID hn, const PartitionID from_part,
+                    const PartitionID to_part) { // TODO can we improve on this?
   for (const HyperedgeID& he : hg.incidentTailEdges(hn)) {
     for (const HypernodeID& head : hg.heads(he)) {
       if (hg.partID(head) == to_part) {
@@ -173,20 +177,26 @@ void rebalancePartition(Hypergraph& hg, const Context& context, const bool refin
   Context balanced_context = context;
   balanced_context.partition.epsilon = context.partition.final_epsilon;
   balanced_context.setupPartWeights(hg.totalWeight());
-  DBG << "Improve imbalance to:" << balanced_context.partition.epsilon;
 
-  AdjacencyMatrixQuotientGraph<DFSCycleDetector> qg(hg, balanced_context);
-  KMinusOneGainManager gain_manager(hg, balanced_context);
-  gain_manager.initialize();
-  AcyclicHardRebalanceRefiner hard_balance_refiner(hg, balanced_context, qg, gain_manager);
-  hard_balance_refiner.initialize(0);
   Metrics current_metrics = {metrics::hyperedgeCut(hg),
                              metrics::km1(hg),
                              metrics::imbalance(hg, context)};
-  UncontractionGainChanges changes{};
-  std::vector<HypernodeID> refinement_nodes{};
-  hard_balance_refiner.refine(refinement_nodes, {0, 0}, changes, current_metrics);
-  //hard_balance_refiner.printSummary();
+  AdjacencyMatrixQuotientGraph<DFSCycleDetector> qg(hg, balanced_context);
+  KMinusOneGainManager gain_manager(hg, balanced_context);
+  gain_manager.initialize();
+  UncontractionGainChanges changes{}; // dummy
+
+  if (current_metrics.imbalance > balanced_context.partition.epsilon) {
+    DBG << "Running HardRebalance to improve balance from " << current_metrics.imbalance << "to"
+        << balanced_context.partition.epsilon;
+    AcyclicHardRebalanceRefiner hard_balance_refiner(hg, balanced_context, qg, gain_manager);
+    hard_balance_refiner.initialize(0);
+    std::vector<HypernodeID> refinement_nodes{};
+    hard_balance_refiner.refine(refinement_nodes, {0, 0}, changes, current_metrics);
+    DBG << "Imbalance after HardRebalance:" << current_metrics.imbalance;
+  }
+
+  io::writePartitionFile(hg, "//Users/danielseemaier/ibm01.part.2");
 
   if (refine_km1) {
     HyperedgeWeight previous_km1 = current_metrics.km1;
@@ -198,10 +208,13 @@ void rebalancePartition(Hypergraph& hg, const Context& context, const bool refin
 
       std::vector<HypernodeID> local_search_refinement_nodes;
       for (const HypernodeID& hn : hg.nodes()) {
-        local_search_refinement_nodes.push_back(hn);
+        //if (hg.isBorderNode(hn)) {
+          local_search_refinement_nodes.push_back(hn);
+        //}
       }
 
       local_search_refiner.refine(local_search_refinement_nodes, {0, 0}, changes, current_metrics);
+      local_search_refiner.printSummary();
       DBG << "Result of 2Way refinement:" << previous_km1 << "-->" << current_metrics.km1;
     } while (0.99 * previous_km1 > current_metrics.km1);
   }
@@ -219,7 +232,8 @@ void rebalancePartition(Hypergraph& hg, const Context& context, const bool refin
 //  ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hg, context).isAcyclic());
 //}
 
-void fixBipartitionAcyclicity(Hypergraph& hg, const Context& context, const PartitionID part0, const PartitionID part1) {
+void
+fixBipartitionAcyclicity(Hypergraph& hg, const Context& context, const PartitionID part0, const PartitionID part1) {
 //  CyclicQuotientGraph cqg(hg, context);
 
 //  while (!cqg.isAcyclic()) {
@@ -234,7 +248,7 @@ void fixBipartitionAcyclicity(Hypergraph& hg, const Context& context, const Part
   ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hg, context).isAcyclic());
 }
 
-void fixBipartitionAcyclicity(Hypergraph &hg, const Context& context) {
+void fixBipartitionAcyclicity(Hypergraph& hg, const Context& context) {
   const auto original_partition = internal::createPartitionSnapshot(hg);
 
   // move successors of nodes in part 0 in part 1 to part 0
@@ -242,18 +256,12 @@ void fixBipartitionAcyclicity(Hypergraph &hg, const Context& context) {
   const auto imbalance_01_prime = metrics::imbalance(hg, context);
   const auto km_01_prime = metrics::km1(hg);
   if (context.initial_partitioning.balance_partition) {
-    DBG << "Run HardRebalanceRefiner on initial partition to improve imbalance, then local search to improve KM1";
     internal::rebalancePartition(hg, context, true);
   }
   double imbalance_01 = metrics::imbalance(hg, context);
   const auto km_01 = metrics::km1(hg);
   const auto partition_01 = internal::createPartitionSnapshot(hg);
-
-  if (!AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hg, context).isAcyclic()) {
-    LOG << "Error, imbalance 01 is cyclic!";
-    AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hg, context).log();
-    std::exit(1);
-  }
+  ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hg, context).isAcyclic());
 
   // other way around
   hg.setPartition(original_partition);
@@ -261,23 +269,16 @@ void fixBipartitionAcyclicity(Hypergraph &hg, const Context& context) {
   const auto imbalance_10_prime = metrics::imbalance(hg, context);
   const auto km_10_prime = metrics::km1(hg);
   if (context.initial_partitioning.balance_partition) {
-    DBG << "Run HardRebalanceRefiner on initial partition to improve imbalance, then local search to improve KM1";
     internal::rebalancePartition(hg, context, true);
   }
   double imbalance_10 = metrics::imbalance(hg, context);
   const auto km_10 = metrics::km1(hg);
+  ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hg, context).isAcyclic());
 
-  if (!AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hg, context).isAcyclic()) {
-    LOG << "Error, imbalance 10 is cyclic!";
-    std::exit(1);
-  }
+  DBG << "Breaking edge 0 --> 1:" << V(km_01) << V(imbalance_01) << V(km_01_prime) << V(imbalance_01_prime);
+  DBG << "Breaking edge 1 --> 0:" << V(km_10) << V(imbalance_10) << V(km_10_prime) << V(imbalance_10_prime);
 
-  LOG << "Breaking edge 0 --> 1:" << V(km_01) << V(imbalance_01) << V(km_01_prime) << V(imbalance_01_prime);
-  LOG << "Breaking edge 1 --> 0:" << V(km_10) << V(imbalance_10) << V(km_10_prime) << V(imbalance_10_prime);
-
-  // select the most balanced partition from 01 and 10, i.e. if 01 is better balanced, restore it and otherwise do
-  // nothing because we already have partition 10
-  //if (imbalance_01 <= imbalance_10) {
+  // select the better result
   if (km_01 < km_10) {
     hg.setPartition(partition_01);
   }
