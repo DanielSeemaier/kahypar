@@ -92,5 +92,5 @@ REGISTER_REFINER(RefinementAlgorithm::kway_fm_flow_km1, KWayFMFlowRefiner);
 REREGISTER_REFINER(RefinementAlgorithm::kway_fm_flow, KWayFMFlowRefiner, 2);
 REGISTER_REFINER(RefinementAlgorithm::do_nothing, DoNothingRefiner);
 REGISTER_REFINER(RefinementAlgorithm::acyclic_km1, AcyclicKMinusOneRefiner);
-//REGISTER_REFINER(RefinementAlgorithm::acyclic_twoway_km1, AcyclicTwoWayKMinusOneRefiner); TODO + WIP refiner
+REGISTER_REFINER(RefinementAlgorithm::acyclic_twoway_km1, AcyclicTwoWayKMinusOneRefiner); //TODO + WIP refiner
 }  // namespace kahypar

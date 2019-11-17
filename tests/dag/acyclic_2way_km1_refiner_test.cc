@@ -26,9 +26,7 @@ class AcyclicTwoWayKM1RefinerTest : public BaseDAGTest, public TestWithParam<con
 
   void loadGraph(const std::string& filename, const PartitionID k) override {
     BaseDAGTest::loadGraph(filename, k);
-    qg = std::make_unique<AdjacencyMatrixQuotientGraph<DFSCycleDetector>>(hg, context);
-    gain_manager = std::make_unique<KMinusOneGainManager>(hg, context);
-    refiner = std::make_unique<Refiner>(hg, context, *qg, *gain_manager);
+    refiner = std::make_unique<Refiner>(hg, context);
   }
 
   void runRefiner(const double target_epsilon, std::vector<HypernodeID> refinement_nodes = {}) {
@@ -73,51 +71,51 @@ TEST_P(AcyclicTwoWayKM1RefinerTest, CanRefineAllBorderNodes) {
   runRefiner(0.03, borderNodes());
   refiner->printSummary();
 }
-//
-//TEST_P(AcyclicTwoWayKM1RefinerTest, OnlyUsesBorderNodes) {
-//  // partition using all nodes
-//  gain_manager->initialize();
-//  qg->rebuild();
-//  refiner->initialize(0);
-//  runRefiner(0.03, allNodes());
-//  refiner->printSummary();
-//
-//  const HyperedgeWeight expected_km1 = metrics::km1(hg);
-//  const double expected_imbalance = metrics::imbalance(hg, context);
-//
-//  // partition using only border nodes
-//  partitionUsingTopologicalOrdering(context.partition.k);
-//  gain_manager->initialize();
-//  qg->rebuild();
-//  refiner->initialize(0);
-//  runRefiner(0.03, borderNodes());
-//  refiner->printSummary();
-//
-//  ASSERT_THAT(metrics::km1(hg), Eq(expected_km1));
-//  ASSERT_THAT(metrics::imbalance(hg, context), Eq(expected_imbalance));
-//}
 
-//TEST_P(AcyclicTwoWayKM1RefinerTest, CanRefineDuringUncoarsening) {
-//  auto contractions = contractArbitrarily(3, 250, true);
-//
-//  qg->rebuild();
-//  gain_manager->initialize();
-//  refiner->initialize(0);
-//
-//  for (auto rit = contractions.crbegin(); rit != contractions.crend(); ++rit) {
-//    refiner->preUncontraction(rit->u);
-//    qg->preUncontraction(rit->u);
-//    gain_manager->preUncontraction(rit->u);
-//    hg.uncontract(*rit);
-//    gain_manager->postUncontraction(rit->u, {rit->v});
-//    qg->postUncontraction(rit->u, {rit->v});
-//    refiner->postUncontraction(rit->u, {rit->v});
-//
-//    runRefiner(0.03, {rit->u, rit->v});
-//  }
-//
-//  refiner->printSummary();
-//}
+TEST_P(AcyclicTwoWayKM1RefinerTest, OnlyUsesBorderNodes) {
+  // partition using all nodes
+  gain_manager->initialize();
+  qg->rebuild();
+  refiner->initialize(0);
+  runRefiner(0.03, allNodes());
+  refiner->printSummary();
+
+  const HyperedgeWeight expected_km1 = metrics::km1(hg);
+  const double expected_imbalance = metrics::imbalance(hg, context);
+
+  // partition using only border nodes
+  partitionUsingTopologicalOrdering(context.partition.k);
+  gain_manager->initialize();
+  qg->rebuild();
+  refiner->initialize(0);
+  runRefiner(0.03, borderNodes());
+  refiner->printSummary();
+
+  ASSERT_THAT(metrics::km1(hg), Eq(expected_km1));
+  ASSERT_THAT(metrics::imbalance(hg, context), Eq(expected_imbalance));
+}
+
+TEST_P(AcyclicTwoWayKM1RefinerTest, CanRefineDuringUncoarsening) {
+  auto contractions = contractArbitrarily(3, 250, true);
+
+  qg->rebuild();
+  gain_manager->initialize();
+  refiner->initialize(0);
+
+  for (auto rit = contractions.crbegin(); rit != contractions.crend(); ++rit) {
+    refiner->preUncontraction(rit->u);
+    qg->preUncontraction(rit->u);
+    gain_manager->preUncontraction(rit->u);
+    hg.uncontract(*rit);
+    gain_manager->postUncontraction(rit->u, {rit->v});
+    qg->postUncontraction(rit->u, {rit->v});
+    refiner->postUncontraction(rit->u, {rit->v});
+
+    runRefiner(0.03, {rit->u, rit->v});
+  }
+
+  refiner->printSummary();
+}
 
 INSTANTIATE_TEST_CASE_P(GRAPH_C17_K_2, AcyclicTwoWayKM1RefinerTest, Values("test_instances/c17.hgr 2"));
 

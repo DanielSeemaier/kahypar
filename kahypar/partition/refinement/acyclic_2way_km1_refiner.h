@@ -29,16 +29,29 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
 
  public:
   AcyclicTwoWayKMinusOneRefiner(Hypergraph& hypergraph, const Context& context,
-                                AdjacencyMatrixQuotientGraph<DFSCycleDetector>& qg,
-                                KMinusOneGainManager& gain_manager) :
+                                std::shared_ptr<AdjacencyMatrixQuotientGraph<DFSCycleDetector>> qg,
+                                std::shared_ptr<KMinusOneGainManager> gain_manager) :
     _hg(hypergraph),
     _context(context),
-    _qg(qg),
+    _qg(std::move(qg)),
     _pqs{ds::BinaryMaxHeap<HypernodeID, Gain>(_hg.initialNumNodes()),
          ds::BinaryMaxHeap<HypernodeID, Gain>(_hg.initialNumNodes())},
     _fixtures{std::vector<HypernodeID>(_hg.initialNumNodes()),
               std::vector<HypernodeID>(_hg.initialNumNodes())},
-    _gain_manager(gain_manager) {}
+    _gain_manager(std::move(gain_manager)),
+    _control_qg_and_gm(false) {}
+
+  AcyclicTwoWayKMinusOneRefiner(Hypergraph& hypergraph, const Context& context) :
+    _hg(hypergraph),
+    _context(context),
+    _pqs{ds::BinaryMaxHeap<HypernodeID, Gain>(_hg.initialNumNodes()),
+         ds::BinaryMaxHeap<HypernodeID, Gain>(_hg.initialNumNodes())},
+    _fixtures{std::vector<HypernodeID>(_hg.initialNumNodes()),
+              std::vector<HypernodeID>(_hg.initialNumNodes())} {
+    _qg = std::make_shared<AdjacencyMatrixQuotientGraph<DFSCycleDetector>>(_hg, _context);
+    _gain_manager = std::make_shared<KMinusOneGainManager>(_hg, _context);
+    _control_qg_and_gm = true;
+  }
 
   ~AcyclicTwoWayKMinusOneRefiner() override = default;
 
@@ -55,9 +68,19 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
   void preUncontraction(const HypernodeID representant) override {
     removeFixtures(representant);
     _hns_to_activate.clear(); // populated by removeFixtures()
+
+    if (_control_qg_and_gm) {
+      _qg->preUncontraction(representant);
+      _gain_manager->preUncontraction(representant);
+    }
   }
 
   void postUncontraction(const HypernodeID representant, const std::vector<HypernodeID>&& partners) override {
+    if (_control_qg_and_gm) {
+      _qg->postUncontraction(representant, std::forward<const std::vector<HypernodeID>>(partners));
+      _gain_manager->postUncontraction(representant, std::forward<const std::vector<HypernodeID>>(partners));
+    }
+
     ASSERT(partners.size() == 1, "Currently only supports pair contractions.");
     const HypernodeID partner = partners.front();
 
@@ -92,7 +115,11 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
     _fixtures[SUCCESSORS].resize(_hg.initialNumNodes());
     initializeFixtures();
 
-    _gain_manager.resetDelta();
+    if (_gain_manager) {
+      _qg->rebuild();
+      _gain_manager->initialize();
+    }
+    _gain_manager->resetDelta();
     _hg.resetHypernodeState();
 
     _num_moves = 0;
@@ -118,7 +145,6 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
                   const UncontractionGainChanges&,
                   Metrics& best_metrics) final {
     ASSERT(_hg.k() == 2, "2way refiner, but graph has more than 2 blocks:" << _hg.k());
-    DBG << "Run with" << refinement_nodes;
 
     const HighResClockTimepoint start_refine = std::chrono::high_resolution_clock::now();
 
@@ -134,26 +160,32 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
     _pqs[1].clear();
 
     ASSERT(VALIDATE_FIXTURES_STATE());
-    ASSERT(_qg.isAcyclic());
+    ASSERT(_qg->isAcyclic());
     ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(_hg, _context).isAcyclic());
-    ASSERT(!_gain_manager.hasDelta());
+    ASSERT(!_gain_manager->hasDelta());
 
     // activate refinement nodes
     for (const HypernodeID& hn : refinement_nodes) {
       if (isMovable(hn) && _hg.isBorderNode(hn)) {
         activate(hn);
       }
+
+      for (const HyperedgeID& he : _hg.incidentEdges(hn)) {
+        for (const HypernodeID& pin : _hg.pins(he)) {
+          if (!_hg.marked(pin) && !_hg.active(pin) && _hg.isBorderNode(pin) && isMovable(pin)) {
+            activate(pin);
+          }
+        }
+      }
     }
     DBG << "Initial PQ sizes:" << _pqs[0].size() << "--" << _pqs[1].size();
 
     // main refinement loop
-    //const auto max_fruitless_moves = std::min<uint32_t>(_context.local_search.fm.max_number_of_fruitless_moves,
-    //                                                    refinement_nodes.size());
-
     int moves_since_improvement = 0;
     int min_cut_index = -1;
 
-    while (moves_since_improvement < _hg.currentNumNodes() / 4 && (!_pqs[0].empty() || !_pqs[1].empty())) {
+    while (moves_since_improvement < _context.local_search.fm.max_number_of_fruitless_moves
+           && (!_pqs[0].empty() || !_pqs[1].empty())) {
       ASSERT(VALIDATE_PQS_STATE());
       ASSERT(VALIDATE_FIXTURES_STATE());
 
@@ -170,7 +202,7 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
 
       ASSERT(_hg.partID(max_gain_hn) == from_part);
       ASSERT(isMovable(max_gain_hn));
-      ASSERT(max_gain == _gain_manager.gain(max_gain_hn, to_part));
+      ASSERT(max_gain == _gain_manager->gain(max_gain_hn, to_part));
       ASSERT(max_gain == gainInducedByHypergraph(max_gain_hn, to_part));
       ASSERT(_hg.active(max_gain_hn));
       ASSERT(!_hg.marked(max_gain_hn));
@@ -208,7 +240,7 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
         if (accept) {
           DBG << "Accept improvement:" << best_metrics.km1 << "-->" << current_km1;
           best_metrics.km1 = current_km1;
-          _gain_manager.resetDelta();
+          _gain_manager->resetDelta();
           moves_since_improvement = 0;
           min_cut_index = _moves.size();
         }
@@ -239,7 +271,7 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
       // revert hypernode movement
       DBG << "Rollback" << hn << ":" << from_part << "-->" << to_part;
       removeFixtures(hn);
-      const bool success = _qg.testAndUpdateBeforeMovement(hn, from_part, to_part);
+      const bool success = _qg->testAndUpdateBeforeMovement(hn, from_part, to_part);
       ASSERT(success);
       _hg.changeNodePart(hn, from_part, to_part);
       addFixtures(hn);
@@ -255,11 +287,11 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
     _hns_to_deactivate.clear();
 
     // rollback gain cache
-    _gain_manager.rollbackDelta();
+    _gain_manager->rollbackDelta();
 
-    ASSERT(_qg.isAcyclic());
+    ASSERT(_qg->isAcyclic());
     ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(_hg, _context).isAcyclic());
-    ASSERT(!_gain_manager.hasDelta());
+    ASSERT(!_gain_manager->hasDelta());
     ASSERT(best_metrics.km1 == metrics::km1(_hg));
 
     best_metrics.imbalance = metrics::imbalance(_hg, _context);
@@ -269,7 +301,9 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
     const HighResClockTimepoint end_refine = std::chrono::high_resolution_clock::now();
     _refine_time += std::chrono::duration<double>(end_refine - start_refine).count();;
 
-    return _improved_km1 > 0;
+    return CutDecreasedOrInfeasibleImbalanceDecreased::improvementFound(best_metrics.km1, initial_km1,
+                                                                        best_metrics.imbalance, initial_imbalance,
+                                                                        _context.partition.epsilon);
   }
 
   PartitionID selectPQ() const {
@@ -292,6 +326,7 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
       return 1;
     }
 
+    // TODO this seems to work *A LOT* better than selecting the PQ based on topKey()
     if (_hg.partWeight(0) > _hg.partWeight(1)) {
       return 0;
     } else {
@@ -322,35 +357,35 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
 
 #ifdef KAHYPAR_USE_ASSERTIONS
     const auto km1_before_move = metrics::km1(_hg);
-    const auto expected_gain = _gain_manager.gain(hn, to_part);
+    const auto expected_gain = _gain_manager->gain(hn, to_part);
 #endif // KAHYPAR_USE_ASSERTIONS
 
     removeFixtures(hn);
 
-    _qg.testAndUpdateBeforeMovement(hn, from_part, to_part);
+    _qg->testAndUpdateBeforeMovement(hn, from_part, to_part);
     _hg.changeNodePart(hn, from_part, to_part);
-    _gain_manager.updateAfterMovement(hn, from_part, to_part,
-                                      [&](const HypernodeID& hn, const PartitionID& part, const Gain& gain) {
-                                        if (!_hg.marked(hn) && !_hg.active(hn) && isMovable(hn)) {
-                                          _hns_to_activate.push_back(hn);
-                                          return;
-                                        }
-                                      },
-                                      [&](const HypernodeID& hn, const PartitionID& part, const Gain& delta) {
-                                        if (_hg.marked(hn) || !_hg.active(hn) ||
-                                            part == Hypergraph::kInvalidPartition) {
-                                          return;
-                                        }
+    _gain_manager->updateAfterMovement(hn, from_part, to_part,
+                                       [&](const HypernodeID& hn, const PartitionID& part, const Gain& gain) {
+                                         if (!_hg.marked(hn) && !_hg.active(hn) && isMovable(hn)) {
+                                           _hns_to_activate.push_back(hn);
+                                           return;
+                                         }
+                                       },
+                                       [&](const HypernodeID& hn, const PartitionID& part, const Gain& delta) {
+                                         if (_hg.marked(hn) || !_hg.active(hn) ||
+                                             part == Hypergraph::kInvalidPartition) {
+                                           return;
+                                         }
 
-                                        const auto source_part = _hg.partID(hn);
-                                        ASSERT(_pqs[source_part].contains(hn));
-                                        _pqs[source_part].updateKeyBy(hn, delta);
-                                      },
-                                      [&](const HypernodeID& hn, const PartitionID& part, const Gain&) {
-                                        if (!_hg.marked(hn) && _hg.active(hn)) {
-                                          _hns_to_deactivate.push_back(hn);
-                                        }
-                                      });
+                                         const auto source_part = _hg.partID(hn);
+                                         ASSERT(_pqs[source_part].contains(hn));
+                                         _pqs[source_part].updateKeyBy(hn, delta);
+                                       },
+                                       [&](const HypernodeID& hn, const PartitionID& part, const Gain&) {
+                                         if (!_hg.marked(hn) && _hg.active(hn)) {
+                                           _hns_to_deactivate.push_back(hn);
+                                         }
+                                       });
 
     // activate new movable nodes adjacent to `hn`
 #ifdef KAHYPAR_USE_ASSERTIONS
@@ -400,7 +435,7 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
 
     const PartitionID source = _hg.partID(hn);
     const PartitionID target = otherPartition(source);
-    const Gain gain = _gain_manager.gain(hn, target);
+    const Gain gain = _gain_manager->gain(hn, target);
     _pqs[source].push(hn, gain);
     _hg.activate(hn);
 
@@ -512,7 +547,7 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
   }
 
   bool isTailPartition(const PartitionID part) const {
-    for (const QNodeID& target : _qg.outs(part)) {
+    for (const QNodeID& target : _qg->outs(part)) {
       return true;
     }
     return false;
@@ -586,7 +621,7 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
         //ASSERT(_gain_manager.isAdjacentTo(hn, target_part));
         ASSERT(_pqs[source_part].contains(hn));
         ASSERT(!_pqs[target_part].contains(hn));
-        ASSERT(_pqs[source_part].getKey(hn) == _gain_manager.gain(hn, target_part));
+        ASSERT(_pqs[source_part].getKey(hn) == _gain_manager->gain(hn, target_part));
         ASSERT(_pqs[source_part].getKey(hn) == gainInducedByHypergraph(hn, target_part));
         continue;
       }
@@ -602,8 +637,8 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
 
   Hypergraph& _hg;
   const Context& _context;
-  AdjacencyMatrixQuotientGraph<DFSCycleDetector>& _qg;
-  KMinusOneGainManager& _gain_manager;
+  std::shared_ptr<AdjacencyMatrixQuotientGraph<DFSCycleDetector>> _qg;
+  std::shared_ptr<KMinusOneGainManager> _gain_manager;
   std::array<ds::BinaryMaxHeap<HypernodeID, Gain>, 2> _pqs;
   std::array<std::vector<HypernodeID>, 2> _fixtures;
   std::vector<Move> _moves;
@@ -620,5 +655,6 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
   double _perform_moves_time{0.0};
   double _refine_time{0.0};
   double _gain_time{0.0};
+  bool _control_qg_and_gm{false};
 };
 } // namespace kahypar
