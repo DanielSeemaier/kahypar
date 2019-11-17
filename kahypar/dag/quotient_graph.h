@@ -167,6 +167,8 @@ class QuotientGraph {
     std::iota(_nodes.begin(), _nodes.end(), 0);
   }
 
+  virtual ~QuotientGraph() = default;
+
   virtual QNodeID numberOfNodes() const = 0;
   virtual QEdgeID numberOfEdges() const = 0;
   virtual QEdgeWeight edgeWeight(QNodeID u, QNodeID v) const = 0;
@@ -376,8 +378,10 @@ class AdjacencyMatrixQuotientGraph : public QuotientGraph {
   AdjacencyMatrixQuotientGraph(const AdjacencyMatrixQuotientGraph&) = delete;
   AdjacencyMatrixQuotientGraph& operator= (const AdjacencyMatrixQuotientGraph&) = delete;
 
-  AdjacencyMatrixQuotientGraph(AdjacencyMatrixQuotientGraph&&) noexcept = default;
+  AdjacencyMatrixQuotientGraph(AdjacencyMatrixQuotientGraph&&) = delete;
   AdjacencyMatrixQuotientGraph& operator= (AdjacencyMatrixQuotientGraph&&) = delete;
+
+  ~AdjacencyMatrixQuotientGraph() override = default;
 
   QNodeID numberOfNodes() const override {
     return _context.partition.k;

@@ -47,7 +47,7 @@ class HgpInitialPartitioner : public IInitialPartitioner, private InitialPartiti
 
     const bool acyclic = AdjacencyMatrixQuotientGraph<DFSCycleDetector>(_hg, _context).isAcyclic();
     if (!acyclic) {
-      throw std::runtime_error("IP is cyclic!")
+      throw std::runtime_error("IP is cyclic!");
     }
 
     for (PartitionID k = 0; k < _context.partition.k; ++k) {
