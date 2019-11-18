@@ -14,7 +14,7 @@
 #include "kahypar/partition/refinement/km1_gain_manager.h"
 #include "kahypar/datastructure/kway_priority_queue.h"
 #include "kahypar/utils/randomize.h"
-//#include "kahypar/utils/timer.h"
+#include "kahypar/utils/htimer.h"
 
 namespace kahypar {
 class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
@@ -100,20 +100,20 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
     LOG << "[AcyclicTwoWayKMinusOneRefiner] Negative gain moves:" << _num_negative_gain_moves;
     LOG << "[AcyclicTwoWayKMinusOneRefiner] Improved imbalance by:" << _improved_imbalance;
     LOG << "[AcyclicTwoWayKMinusOneRefiner] Improved KM1 by:" << _improved_km1;
-    LOG << "[AcyclicTwoWayKMinusOneRefiner] Perform moves time:" << _perform_moves_time;
-    LOG << "[AcyclicTwoWayKMinusOneRefiner] Refine time:" << _refine_time;
-    LOG << "[AcyclicTwoWayKMinusOneRefiner] Gains time:" << _gain_time;
+    LOG << "[AcyclicTwoWayKMinusOneRefiner] Init time:" << _time_init;
+    LOG << "[AcyclicTwoWayKMinusOneRefiner] Refine time:" << _time_total_refinement;
+    LOG << "[AcyclicTwoWayKMinusOneRefiner] Gains time:" << _time_update_gains;
+    LOG << "[AcyclicTwoWayKMinusOneRefiner] Rollback time:" << _time_rollback;
+    LOG << "[AcyclicTwoWayKMinusOneRefiner] Fixture init+update time:" << _time_init_and_update_fixtures;
+    LOG << "[AcyclicTwoWayKMinusOneRefiner] QG update time:" << _time_update_qg;
+    LOG << "[AcyclicTwoWayKMinusOneRefiner] HN activation time:" << _time_hn_activate;
+    LOG << "[AcyclicTwoWayKMinusOneRefiner] HN deactivation time:" << _time_hn_deactivate;
   }
 
  private:
   void initializeImpl(const HyperedgeWeight max_gain) final {
+    _timer.start();
     _is_initialized = true;
-
-    _fixtures[PREDECESSORS].clear();
-    _fixtures[PREDECESSORS].resize(_hg.initialNumNodes());
-    _fixtures[SUCCESSORS].clear();
-    _fixtures[SUCCESSORS].resize(_hg.initialNumNodes());
-    initializeFixtures();
 
     if (_gain_manager) {
       _qg->rebuild();
@@ -129,9 +129,23 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
     _num_zero_gain_moves = 0;
     _improved_imbalance = 0.0;
     _improved_km1 = 0;
-    _perform_moves_time = 0.0;
-    _refine_time = 0.0;
-    _gain_time = 0.0;
+    _time_total_refinement = 0.0;
+    _time_update_gains = 0.0;
+    _time_rollback = 0.0;
+    _time_init_and_update_fixtures = 0.0;
+    _time_update_qg = 0.0;
+    _time_hn_activate = 0.0;
+    _time_hn_deactivate = 0.0;
+
+    _fixtures[PREDECESSORS].clear();
+    _fixtures[PREDECESSORS].resize(_hg.initialNumNodes());
+    _fixtures[SUCCESSORS].clear();
+    _fixtures[SUCCESSORS].resize(_hg.initialNumNodes());
+    _timer.start();
+    initializeFixtures();
+    _time_init_and_update_fixtures += _timer.stop();
+
+    _time_init = _timer.stop(); // this should be = and not +=
   }
 
   void performMovesAndUpdateCacheImpl(const std::vector<Move>& moves,
@@ -146,7 +160,7 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
                   Metrics& best_metrics) final {
     ASSERT(_hg.k() == 2, "2way refiner, but graph has more than 2 blocks:" << _hg.k());
 
-    const HighResClockTimepoint start_refine = std::chrono::high_resolution_clock::now();
+    _timer.start(); // full refinement timer
 
     ASSERT(best_metrics.imbalance == metrics::imbalance(_hg, _context));
     ASSERT(best_metrics.km1 == metrics::km1(_hg));
@@ -260,6 +274,7 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
     ASSERT(VALIDATE_FIXTURES_STATE());
 
     // rollback to the best last accepted state
+    _timer.start();
     int last_index = _moves.size() - 1;
     while (last_index != min_cut_index) {
       const HypernodeID hn = _moves[last_index].hn;
@@ -285,9 +300,8 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
     }
     _hns_to_activate.clear();
     _hns_to_deactivate.clear();
-
-    // rollback gain cache
     _gain_manager->rollbackDelta();
+    _time_rollback += _timer.stop();
 
     ASSERT(_qg->isAcyclic());
     ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(_hg, _context).isAcyclic());
@@ -298,8 +312,9 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
     _improved_imbalance += initial_imbalance - best_metrics.imbalance;
     _improved_km1 += initial_km1 - best_metrics.km1;
 
-    const HighResClockTimepoint end_refine = std::chrono::high_resolution_clock::now();
-    _refine_time += std::chrono::duration<double>(end_refine - start_refine).count();;
+    ASSERT(_timer.running());
+    _time_total_refinement += _timer.stop();
+    ASSERT(!_timer.running());
 
     return CutDecreasedOrInfeasibleImbalanceDecreased::improvementFound(best_metrics.km1, initial_km1,
                                                                         best_metrics.imbalance, initial_imbalance,
@@ -360,11 +375,18 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
     const auto expected_gain = _gain_manager->gain(hn, to_part);
 #endif // KAHYPAR_USE_ASSERTIONS
 
+    _timer.start();
     removeFixtures(hn);
+    _time_init_and_update_fixtures += _timer.stop();
 
+    _timer.start();
     const bool success = _qg->testAndUpdateBeforeMovement(hn, from_part, to_part);
     ASSERT(success, V(hn) << V(from_part) << V(to_part));
+    _time_update_qg += _timer.stop();
+
     _hg.changeNodePart(hn, from_part, to_part);
+
+    _timer.start();
     _gain_manager->updateAfterMovement(hn, from_part, to_part,
                                        [&](const HypernodeID& hn, const PartitionID& part, const Gain& gain) {
                                          if (!_hg.marked(hn) && !_hg.active(hn) && isMovable(hn)) {
@@ -387,6 +409,7 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
                                            _hns_to_deactivate.push_back(hn);
                                          }
                                        });
+    _time_update_gains += _timer.stop();
 
     // activate new movable nodes adjacent to `hn`
 #ifdef KAHYPAR_USE_ASSERTIONS
@@ -403,8 +426,10 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
     }
     _hns_to_activate.clear(); // populated by removeFixtures() and during gain update
 
+    _timer.start();
     initializeFixtures(hn);
     addFixtures(hn);
+    _time_init_and_update_fixtures += _timer.stop();
 
     // deactivate nodes that are no longer movable
 #ifdef KAHYPAR_USE_ASSERTIONS
@@ -434,11 +459,13 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
     ASSERT(!_hg.active(hn));
     ASSERT(!_hg.marked(hn));
 
+    _timer.start();
     const PartitionID source = _hg.partID(hn);
     const PartitionID target = otherPartition(source);
     const Gain gain = _gain_manager->gain(hn, target);
     _pqs[source].push(hn, gain);
     _hg.activate(hn);
+    _time_hn_activate += _timer.stop();
 
     DBG << "Activated" << hn << "(" << _hg.partID(hn) << ") with gain" << gain;
   }
@@ -447,10 +474,12 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
     ASSERT(!_hg.marked(hn));
     ASSERT(_hg.active(hn));
 
+    _timer.start();
     const auto part = _hg.partID(hn);
     ASSERT(_pqs[part].contains(hn));
     _pqs[part].remove(hn);
     _hg.deactivate(hn);
+    _time_hn_deactivate += _timer.stop();
 
     DBG << "Deactivate" << hn << "(" << _hg.partID(hn) << ")";
   }
@@ -653,9 +682,16 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
   std::size_t _num_moves_in_last_iteration{0};
   HyperedgeWeight _improved_km1{0};
   double _improved_imbalance{0.0};
-  double _perform_moves_time{0.0};
-  double _refine_time{0.0};
-  double _gain_time{0.0};
+  double _time_total_refinement{0.0};
+  double _time_rollback{0.0};
+  double _time_update_gains{0.0};
+  double _time_init_and_update_fixtures{0.0};
+  double _time_update_qg{0.0};
+  double _time_hn_activate{0.0};
+  double _time_hn_deactivate{0.0};
+  double _time_init{0.0};
   bool _control_qg_and_gm{false};
+
+  HTimer _timer;
 };
 } // namespace kahypar
