@@ -115,50 +115,44 @@ std::pair<QNodeID, QNodeID> pickEdge(const CyclicQuotientGraph& cqg) {
 }
 
 void moveSuccessors(Hypergraph& hg, const HypernodeID hn, const PartitionID from_part,
-                    const PartitionID to_part) { // TODO can we improve on this?
+                    const PartitionID to_part) {
   for (const HyperedgeID& he : hg.incidentTailEdges(hn)) {
     for (const HypernodeID& head : hg.heads(he)) {
-      if (hg.partID(head) == to_part) {
-        hg.changeNodePart(head, to_part, from_part);
+      if (hg.partID(head) == from_part) {
+        hg.changeNodePart(head, from_part, to_part);
         moveSuccessors(hg, head, from_part, to_part);
       }
     }
   }
 }
 
-void breakEdge(Hypergraph& hg, const PartitionID from_part, const PartitionID to_part) {
-  std::vector<HypernodeID> hns_in_from_part;
-
-  for (const HypernodeID& hn : hg.nodes()) {
-    if (hg.partID(hn) == from_part) {
-      hns_in_from_part.push_back(hn);
-    }
-  }
-
-  for (const HypernodeID& hn : hns_in_from_part) {
-    for (const HyperedgeID& he : hg.incidentTailEdges(hn)) {
-      for (const HypernodeID& head : hg.heads(he)) {
-        if (hg.partID(head) == to_part) {
-          hg.changeNodePart(head, to_part, from_part);
-          moveSuccessors(hg, head, from_part, to_part);
+void movePredecessors(Hypergraph &hg, const HypernodeID hn, const PartitionID from_part,
+        const PartitionID to_part) {
+    for (const HyperedgeID& he : hg.incidentHeadEdges(hn)) {
+        for (const HypernodeID& tail : hg.tails(he)) {
+            if (hg.partID(tail) == from_part) {
+                hg.changeNodePart(tail, from_part, to_part);
+                movePredecessors(hg, tail, from_part, to_part);
+            }
         }
-      }
     }
-  }
+}
 
-  ///////
-  for (const HypernodeID& hn : hg.nodes()) {
-    if (hg.partID(hn) != from_part) {
-      continue;
-    }
-
-    for (const HyperedgeID& he : hg.incidentTailEdges(hn)) {
-      for (const HypernodeID& head : hg.heads(he)) {
-        if (hg.partID(head) == to_part) {
-          LOG << hn << hg.partID(hn) << "-->" << head << hg.partID(head);
-        }
+void breakEdge(Hypergraph& hg, const PartitionID u, const PartitionID v, const bool direction) {
+  if (direction) { // move successors from v to u
+      for (const HypernodeID &hn : hg.nodes()) {
+          if (hg.partID(hn) != u) {
+              continue;
+          }
+          moveSuccessors(hg, hn, v, u); // move all successors from v to u
       }
-    }
+  } else { // move predecessors from u to v
+      for (const HypernodeID& hn : hg.nodes()) {
+          if (hg.partID(hn) != v) {
+              continue;
+          }
+          movePredecessors(hg, hn, u, v);
+      }
   }
 }
 
@@ -196,8 +190,6 @@ void rebalancePartition(Hypergraph& hg, const Context& context, const bool refin
     DBG << "Imbalance after HardRebalance:" << current_metrics.imbalance;
   }
 
-  io::writePartitionFile(hg, "//Users/danielseemaier/ibm01.part.2");
-
   if (refine_km1) {
     HyperedgeWeight previous_km1 = current_metrics.km1;
     do {
@@ -221,66 +213,74 @@ void rebalancePartition(Hypergraph& hg, const Context& context, const bool refin
 }
 } // namespace internal
 
-//void fixAcyclicity(Hypergraph& hg, const Context& context) {
-//  CyclicQuotientGraph cqg(hg, context);
-//
-//  while (!cqg.isAcyclic()) {
-//    const auto edge = internal::pickEdge(cqg);
-//    internal::breakEdge(hg, cqg, edge.first, edge.second);
-//  }
-//
-//  ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hg, context).isAcyclic());
-//}
-
-void
-fixBipartitionAcyclicity(Hypergraph& hg, const Context& context, const PartitionID part0, const PartitionID part1) {
-//  CyclicQuotientGraph cqg(hg, context);
-
-//  while (!cqg.isAcyclic()) {
-//    const auto edge = internal::pickEdge(cqg);
-//    ASSERT(edge.first == part0 || edge.first == part1);
-//    ASSERT(edge.second == part0 || edge.second == part1);
-//    internal::breakEdge(hg, cqg, edge.first, edge.second);
-//  }
-
-  internal::breakEdge(hg, part0, part1);
-
-  ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hg, context).isAcyclic());
-}
-
 void fixBipartitionAcyclicity(Hypergraph& hg, const Context& context) {
   const auto original_partition = internal::createPartitionSnapshot(hg);
 
-  // move successors of nodes in part 0 in part 1 to part 0
-  internal::breakEdge(hg, 0, 1);
-  const auto imbalance_01_prime = metrics::imbalance(hg, context);
-  const auto km_01_prime = metrics::km1(hg);
+  // variant 1
+  internal::breakEdge(hg, 0, 1, false);
+  const auto imbalance_010_prime = metrics::imbalance(hg, context);
+  const auto km_010_prime = metrics::km1(hg);
   if (context.initial_partitioning.balance_partition) {
     internal::rebalancePartition(hg, context, true);
   }
-  double imbalance_01 = metrics::imbalance(hg, context);
-  const auto km_01 = metrics::km1(hg);
-  const auto partition_01 = internal::createPartitionSnapshot(hg);
+  double imbalance_010 = metrics::imbalance(hg, context);
+  const auto km_010 = metrics::km1(hg);
+  const auto partition_010 = internal::createPartitionSnapshot(hg);
   ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hg, context).isAcyclic());
 
-  // other way around
+  // variant 2
   hg.setPartition(original_partition);
-  internal::breakEdge(hg, 1, 0);
-  const auto imbalance_10_prime = metrics::imbalance(hg, context);
-  const auto km_10_prime = metrics::km1(hg);
+  internal::breakEdge(hg, 0, 1, true);
+  const auto imbalance_011_prime = metrics::imbalance(hg, context);
+  const auto km_011_prime = metrics::km1(hg);
   if (context.initial_partitioning.balance_partition) {
     internal::rebalancePartition(hg, context, true);
   }
-  double imbalance_10 = metrics::imbalance(hg, context);
-  const auto km_10 = metrics::km1(hg);
+  double imbalance_011 = metrics::imbalance(hg, context);
+  const auto km_011 = metrics::km1(hg);
+  const auto partition_011 = internal::createPartitionSnapshot(hg);
   ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hg, context).isAcyclic());
 
-  DBG << "Breaking edge 0 --> 1:" << V(km_01) << V(imbalance_01) << V(km_01_prime) << V(imbalance_01_prime);
-  DBG << "Breaking edge 1 --> 0:" << V(km_10) << V(imbalance_10) << V(km_10_prime) << V(imbalance_10_prime);
+  // variant 3
+  hg.setPartition(original_partition);
+  internal::breakEdge(hg, 1, 0, false);
+  const auto imbalance_100_prime = metrics::imbalance(hg, context);
+  const auto km_100_prime = metrics::km1(hg);
+  if (context.initial_partitioning.balance_partition) {
+    internal::rebalancePartition(hg, context, true);
+  }
+  double imbalance_100 = metrics::imbalance(hg, context);
+  const auto km_100 = metrics::km1(hg);
+  const auto partition_100 = internal::createPartitionSnapshot(hg);
+  ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hg, context).isAcyclic());
 
-  // select the better result
-  if (km_01 < km_10) {
-    hg.setPartition(partition_01);
+  // variant 4
+  hg.setPartition(original_partition);
+  internal::breakEdge(hg, 1, 0, true);
+  const auto imbalance_101_prime = metrics::imbalance(hg, context);
+  const auto km_101_prime = metrics::km1(hg);
+  if (context.initial_partitioning.balance_partition) {
+    internal::rebalancePartition(hg, context, true);
+  }
+  double imbalance_101 = metrics::imbalance(hg, context);
+  const auto km_101 = metrics::km1(hg);
+  ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hg, context).isAcyclic());
+
+  LOG << V(km_010) << V(imbalance_010) << V(km_010_prime) << V(imbalance_010_prime);
+  LOG << V(km_011) << V(imbalance_011) << V(km_011_prime) << V(imbalance_011_prime);
+  LOG << V(km_100) << V(imbalance_100) << V(km_100_prime) << V(imbalance_100_prime);
+  LOG << V(km_101) << V(imbalance_101) << V(km_101_prime) << V(imbalance_101_prime);
+
+  // apply best partition
+  const auto best_km1 = std::min(km_010, std::min(km_011, std::min(km_100, km_101)));
+  if (best_km1 == km_101) {
+      // already set
+  } else if (best_km1 == km_100) {
+      hg.setPartition(partition_100);
+  } else if (best_km1 == km_011) {
+      hg.setPartition(partition_011);
+  } else if (best_km1 == km_010) {
+      hg.setPartition(partition_010);
   }
 }
 } // namespace dag
