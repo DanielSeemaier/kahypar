@@ -307,6 +307,12 @@ po::options_description createCoarseningOptionsDescription(Context& context,
     "Acceptance/Tiebreaking criterion for contraction partners having the same score:\n"
     "random "
     "prefer_unmatched")
+    ((initial_partitioning ? "i-c-external" : "c-external"),
+    po::value<std::string>()->value_name("<string>")->notifier(
+      [&context, initial_partitioning](const std::string& file) {
+      context.coarsening.external_file = file;
+    }),
+    "Path to a file containing HN pairs that should be contracted")
     ((initial_partitioning ? "i-c-fixed-vertex-acceptance-criterion" : "c-fixed-vertex-acceptance-criterion"),
     po::value<std::string>()->value_name("<string>")->notifier(
       [&context, initial_partitioning](const std::string& crit) {

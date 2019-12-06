@@ -43,6 +43,8 @@
 #include "kahypar/partition/refinement/acyclic_kway_fm_km1_refiner.h"
 #include "kahypar/partition/refinement/acyclic_km1_refiner.h"
 #include "kahypar/partition/refinement/policies/fm_stop_policy.h"
+#include "kahypar/partition/coarsening/acyclic_cluster_coarsening_v1.h"
+#include "kahypar/partition/coarsening/external_coarsener.h"
 
 namespace kahypar {
 using CoarsenerFactory = meta::Factory<CoarseningAlgorithm,
@@ -59,6 +61,10 @@ using RatingPolicies = meta::Typelist<RatingScorePolicies, HeavyNodePenaltyPolic
 using MLCoarseningDispatcher = meta::StaticMultiDispatchFactory<MLCoarsener,
                                                                 ICoarsener,
                                                                 RatingPolicies>;
+
+using ExternalCoarseningDispatcher = meta::StaticMultiDispatchFactory<ExternalCoarsener,
+    ICoarsener,
+    RatingPolicies>;
 
 using AcyclicClusterCoarseningV1Dispatcher = meta::StaticMultiDispatchFactory<AcyclicClusterCoarseningV1,
                                                                               ICoarsener,

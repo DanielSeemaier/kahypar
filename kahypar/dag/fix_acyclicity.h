@@ -181,13 +181,13 @@ void rebalancePartition(Hypergraph& hg, const Context& context, const bool refin
   UncontractionGainChanges changes{}; // dummy
 
   if (current_metrics.imbalance > balanced_context.partition.epsilon) {
-    DBG << "Running HardRebalance to improve balance from " << current_metrics.imbalance << "to"
-        << balanced_context.partition.epsilon;
+    //DBG << "Running HardRebalance to improve balance from " << current_metrics.imbalance << "to"
+    //    << balanced_context.partition.epsilon;
     AcyclicHardRebalanceRefiner hard_balance_refiner(hg, balanced_context, qg, gain_manager);
     hard_balance_refiner.initialize(0);
     std::vector<HypernodeID> refinement_nodes{};
     hard_balance_refiner.refine(refinement_nodes, {0, 0}, changes, current_metrics);
-    DBG << "Imbalance after HardRebalance:" << current_metrics.imbalance;
+    //DBG << "Imbalance after HardRebalance:" << current_metrics.imbalance;
   }
 
   if (refine_km1) {
@@ -207,7 +207,7 @@ void rebalancePartition(Hypergraph& hg, const Context& context, const bool refin
 
       local_search_refiner.refine(local_search_refinement_nodes, {0, 0}, changes, current_metrics);
       //local_search_refiner.printSummary();
-      DBG << "Result of 2Way refinement:" << previous_km1 << "-->" << current_metrics.km1;
+      //DBG << "Result of 2Way refinement:" << previous_km1 << "-->" << current_metrics.km1;
     } while (0.99 * previous_km1 > current_metrics.km1);
   }
 }

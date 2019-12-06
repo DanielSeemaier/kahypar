@@ -101,6 +101,21 @@ REGISTER_DISPATCHED_COARSENER(CoarseningAlgorithm::ml_style,
                               meta::PolicyRegistry<FixVertexContractionAcceptancePolicy>::getInstance().getPolicy(
                                 context.coarsening.rating.fixed_vertex_acceptance_policy));
 
+REGISTER_DISPATCHED_COARSENER(CoarseningAlgorithm::external,
+                              ExternalCoarseningDispatcher,
+                              meta::PolicyRegistry<RatingFunction>::getInstance().getPolicy(
+                                  context.coarsening.rating.rating_function),
+                              meta::PolicyRegistry<HeavyNodePenaltyPolicy>::getInstance().getPolicy(
+                                  context.coarsening.rating.heavy_node_penalty_policy),
+                              meta::PolicyRegistry<CommunityPolicy>::getInstance().getPolicy(
+                                  context.coarsening.rating.community_policy),
+                              meta::PolicyRegistry<RatingPartitionPolicy>::getInstance().getPolicy(
+                                  context.coarsening.rating.partition_policy),
+                              meta::PolicyRegistry<AcceptancePolicy>::getInstance().getPolicy(
+                                  context.coarsening.rating.acceptance_policy),
+                              meta::PolicyRegistry<FixVertexContractionAcceptancePolicy>::getInstance().getPolicy(
+                                  context.coarsening.rating.fixed_vertex_acceptance_policy));
+
 REGISTER_DISPATCHED_COARSENER(CoarseningAlgorithm::acyclic_cluster_coarsening_v1,
                               AcyclicClusterCoarseningV1Dispatcher,
                               meta::PolicyRegistry<RatingFunction>::getInstance().getPolicy(

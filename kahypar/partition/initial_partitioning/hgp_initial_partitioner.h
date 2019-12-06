@@ -12,7 +12,7 @@
 
 namespace kahypar {
 class HgpInitialPartitioner : public IInitialPartitioner, private InitialPartitionerBase<HgpInitialPartitioner> {
-  static constexpr bool debug = true;
+  static constexpr bool debug = false;
 
   using Base = InitialPartitionerBase<HgpInitialPartitioner>;
   friend Base;
