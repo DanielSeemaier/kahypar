@@ -104,6 +104,10 @@ private:
         throw std::runtime_error("Contract node is not enabled");
       }
 
+      if (_hg.partID(u) != _hg.partID(v)) {
+        continue;
+      }
+
       performContraction(
           static_cast<HypernodeID>(u),
           static_cast<HypernodeID>(v)
