@@ -145,7 +145,7 @@ class HgpInitialPartitioner : public IInitialPartitioner, private InitialPartiti
     invokeHypergraphPartitioner(*hg_ptr, 2, 0.03);
     const bool fix_ip = _context.initial_partitioning.partitioner != "rmlgp";
 
-    Context ctx = createContext(2, 0.03);
+    Context ctx = createContext(2, _context.partition.epsilon);
     ctx.setupPartWeights(hg_ptr->totalWeight());
     DBG << "Bipartition KM1:" << metrics::km1(*hg_ptr);
     DBG << "Bipartition imbalance:" << metrics::imbalance(*hg_ptr, ctx);

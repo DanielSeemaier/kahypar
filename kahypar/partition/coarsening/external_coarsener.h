@@ -113,12 +113,12 @@ private:
     int u = 0, v = 0;
     int num_rejected = 0;
     LOG << "Using matching from" << _context.coarsening.external_file;
-    LOG << "\t" << 0 << _hg.initialNumNodes();
+//    LOG << "\t" << 0 << _hg.initialNumNodes();
     while (file >> u) {
       if (u < 0) { // separator
         const HypernodeID iteration = _hg.initialNumNodes() - _hg.currentNumNodes();
         _coarsening_levels.push_back(iteration);
-        LOG << "\t" << _coarsening_levels.size() << _hg.currentNumNodes();
+//        LOG << "\t" << _coarsening_levels.size() << _hg.currentNumNodes();
         continue;
       }
 
@@ -143,9 +143,9 @@ private:
     }
 
     LOG << "Contracted" << _hg.initialNumNodes() - _hg.currentNumNodes() << "nodes, rejected" << num_rejected;
-    if (!dag::isAcyclic(_hg)) {
-      throw std::runtime_error("DAG is cyclic");
-    }
+//    if (!dag::isAcyclic(_hg)) {
+//      throw std::runtime_error("DAG is cyclic");
+//    }
     _context.stats.add(StatTag::Coarsening, "HnsAfterCoarsening", _hg.currentNumNodes());
   }
 
