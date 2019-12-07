@@ -44,6 +44,7 @@
 #include "kahypar/partition/refinement/acyclic_km1_refiner.h"
 #include "kahypar/partition/refinement/policies/fm_stop_policy.h"
 #include "kahypar/partition/coarsening/acyclic_cluster_coarsening_v1.h"
+#include "kahypar/partition/coarsening/acyclic_cluster_coarsening_v2.h"
 #include "kahypar/partition/coarsening/external_coarsener.h"
 
 namespace kahypar {
@@ -69,6 +70,10 @@ using ExternalCoarseningDispatcher = meta::StaticMultiDispatchFactory<ExternalCo
 using AcyclicClusterCoarseningV1Dispatcher = meta::StaticMultiDispatchFactory<AcyclicClusterCoarseningV1,
                                                                               ICoarsener,
                                                                               RatingPolicies>;
+
+using AcyclicClusterCoarseningV2Dispatcher = meta::StaticMultiDispatchFactory<AcyclicClusterCoarseningV2,
+    ICoarsener,
+    RatingPolicies>;
 
 using FullCoarseningDispatcher = meta::StaticMultiDispatchFactory<FullVertexPairCoarsener,
                                                                   ICoarsener,

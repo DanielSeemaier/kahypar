@@ -42,7 +42,7 @@ class AcyclicClusteringTest : public BaseDAGTest, public TestWithParam<const cha
     for (const HypernodeID& hn : hg.nodes()) {
       if (clustering[hn] != hn) {
         contractions.push_back(hg.contract(clustering[hn], hn));
-        ASSERT_TRUE(isAcyclic(hg)) << hg.initialNumNodes() << " / " << contractions.size();
+        ASSERT_TRUE(isAcyclic(hg)) << "Leader:" << clustering[hn] << " Node:" << hn;
       }
     }
 
@@ -52,32 +52,44 @@ class AcyclicClusteringTest : public BaseDAGTest, public TestWithParam<const cha
   }
 };
 
-TEST_P(AcyclicClusteringTest, SingleIterationOfClusteringIsContractible) {
-  const auto clustering = findAcyclicClustering(hg, context, 1.0);
+//TEST_P(AcyclicClusteringTest, SingleIterationOfClusteringIsContractible) {
+//  const auto clustering = findAcyclicClustering(hg, context, 1.0);
+//  ASSERT_THAT_CLUSTERING_IS_CONTRACTIBLE(clustering);
+//}
+
+TEST_P(AcyclicClusteringTest, SingleIterationOfClusteringWithCCIsContractible) {
+  const auto clustering = findAcyclicClusteringWithCycleDetection(hg, context, 1.0);
   ASSERT_THAT_CLUSTERING_IS_CONTRACTIBLE(clustering);
 }
 
-TEST_P(AcyclicClusteringTest, TwoIterationsOfClusteringAreContractible) {
-  const auto clustering_iter1 = findAcyclicClustering(hg, context, 1.0);
+//TEST_P(AcyclicClusteringTest, TwoIterationsOfClusteringAreContractible) {
+//  const auto clustering_iter1 = findAcyclicClustering(hg, context, 1.0);
+//  contractClustering(clustering_iter1);
+//  const auto clustering_iter2 = findAcyclicClustering(hg, context, 1.0);
+//  ASSERT_THAT_CLUSTERING_IS_CONTRACTIBLE(clustering_iter2);
+//}
+
+TEST_P(AcyclicClusteringTest, TwoIterationsOfClusteringWithCCAreContractible) {
+  const auto clustering_iter1 = findAcyclicClusteringWithCycleDetection(hg, context, 1.0);
   contractClustering(clustering_iter1);
-  const auto clustering_iter2 = findAcyclicClustering(hg, context, 1.0);
+  const auto clustering_iter2 = findAcyclicClusteringWithCycleDetection(hg, context, 1.0);
   ASSERT_THAT_CLUSTERING_IS_CONTRACTIBLE(clustering_iter2);
 }
 
-TEST_P(AcyclicClusteringTest, MaxClusterWeightIsRespected) {
-  const double max_weight_fraction = 0.01;
-  const auto max_weight = static_cast<HypernodeWeight>(max_weight_fraction * hg.totalWeight()) + 1;
-  HypernodeID last_num_nodes = 0;
-  do {
-    last_num_nodes = hg.currentNumNodes();
-    const auto clustering = findAcyclicClustering(hg, context, max_weight_fraction);
-    contractClustering(clustering);
-  } while (last_num_nodes > hg.currentNumNodes());
-
-  for (const HypernodeID& hn : hg.nodes()) {
-    ASSERT_THAT(hg.nodeWeight(hn), Le(max_weight));
-  }
-}
+//TEST_P(AcyclicClusteringTest, MaxClusterWeightIsRespected) {
+//  const double max_weight_fraction = 0.01;
+//  const auto max_weight = static_cast<HypernodeWeight>(max_weight_fraction * hg.totalWeight()) + 1;
+//  HypernodeID last_num_nodes = 0;
+//  do {
+//    last_num_nodes = hg.currentNumNodes();
+//    const auto clustering = findAcyclicClustering(hg, context, max_weight_fraction);
+//    contractClustering(clustering);
+//  } while (last_num_nodes > hg.currentNumNodes());
+//
+//  for (const HypernodeID& hn : hg.nodes()) {
+//    ASSERT_THAT(hg.nodeWeight(hn), Le(max_weight));
+//  }
+//}
 
 //INSTANTIATE_TEST_CASE_P(GRAPH_STAR, AcyclicClusteringTest, Values("test_instances/star.hgr"));
 

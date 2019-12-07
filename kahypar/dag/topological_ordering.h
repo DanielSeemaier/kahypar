@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <exception>
+#include <deque>
 
 #include "kahypar/definitions.h"
 #include "kahypar/datastructure/hypergraph.h"
@@ -122,7 +123,40 @@ bool isAcyclic(const Hypergraph& hg) {
 }
 
 std::vector<HypernodeID> calculateToplevelValues(const Hypergraph& hg) {
-  return calculateWeakTopologicalOrdering(hg);
+  std::deque<HypernodeID> queue;
+  std::vector<HypernodeID> top(hg.initialNumNodes());
+
+  for (const HypernodeID& hn : hg.nodes()) {
+    bool source = true;
+    for (const HyperedgeID& he : hg.incidentHeadEdges(hn)) {
+      for (const HypernodeID& tail : hg.tails(he)) {
+        source = false;
+        break;
+      }
+      if (!source) {
+        break;
+      }
+    }
+    if (source) {
+      queue.push_back(hn);
+    }
+  }
+
+  while (!queue.empty()) {
+    const HypernodeID u = queue.front();
+    queue.pop_front();
+
+    for (const HyperedgeID& he : hg.incidentTailEdges(u)) {
+      for (const HypernodeID& v : hg.heads(he)) {
+        if (top[u] + 1 > top[v]) {
+          top[v] = top[u] + 1;
+          queue.push_back(v);
+        }
+      }
+    }
+  }
+
+  return top;
 }
 } // namespace dag
 } // namespace kahypar

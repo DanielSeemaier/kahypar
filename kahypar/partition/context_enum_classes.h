@@ -91,6 +91,7 @@ enum class CoarseningAlgorithm : uint8_t {
   ml_style,
   external,
   acyclic_cluster_coarsening_v1,
+  acyclic_cluster_coarsening_v2,
   do_nothing,
   UNDEFINED
 };
@@ -369,6 +370,7 @@ std::ostream& operator<< (std::ostream& os, const CoarseningAlgorithm& algo) {
     case CoarseningAlgorithm::heavy_lazy: return os << "heavy_lazy";
     case CoarseningAlgorithm::ml_style: return os << "ml_style";
     case CoarseningAlgorithm::acyclic_cluster_coarsening_v1: return os << "acyclic_cluster_coarsening_v1";
+    case CoarseningAlgorithm::acyclic_cluster_coarsening_v2: return os << "acyclic_cluster_coarsening_v2";
     case CoarseningAlgorithm::do_nothing: return os << "do_nothing";
     case CoarseningAlgorithm::external: return os << "external";
     case CoarseningAlgorithm::UNDEFINED: return os << "UNDEFINED";
@@ -603,6 +605,8 @@ static CoarseningAlgorithm coarseningAlgorithmFromString(const std::string& type
     return CoarseningAlgorithm::ml_style;
   } else if (type == "acyclic_cluster_coarsening_v1") {
     return CoarseningAlgorithm::acyclic_cluster_coarsening_v1;
+  } else if (type == "acyclic_cluster_coarsening_v2") {
+    return CoarseningAlgorithm::acyclic_cluster_coarsening_v2;
   } else if (type == "external") {
     return CoarseningAlgorithm::external;
   } else if (type == "do_nothing") {
