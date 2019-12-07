@@ -39,6 +39,7 @@
 #include "kahypar/partition/preprocessing/single_node_hyperedge_remover.h"
 #include "kahypar/partition/recursive_bisection.h"
 #include "kahypar/partition/acyclic.h"
+#include "kahypar/partition/acyclic_rb.h"
 
 namespace kahypar {
 // Workaround for bug in gtest
@@ -74,7 +75,7 @@ static inline void partition(Hypergraph& hypergraph, const Context& context) {
       direct_kway::partition(hypergraph, context);
       break;
     case Mode::acyclic:
-      acyclic::partition(hypergraph, context);
+      acyclic_rb::partition(hypergraph, context);
       break;
     case Mode::UNDEFINED:
       LOG << "Partitioning Mode undefined!";

@@ -278,23 +278,37 @@ static inline void partition(Hypergraph& input_hypergraph,
             }
           }
 
-
-          std::unique_ptr<ICoarsener> coarsener(
-            CoarsenerFactory::getInstance().createObject(
-              current_context.coarsening.algorithm,
-              current_hypergraph, current_context,
-              current_hypergraph.weightOfHeaviestNode()));
-
-          std::unique_ptr<IRefiner> refiner(
-            RefinerFactory::getInstance().createObject(
-              current_context.local_search.algorithm,
-              current_hypergraph, current_context));
-
-          ASSERT(coarsener.get() != nullptr, "coarsener not found");
-          ASSERT(refiner.get() != nullptr, "refiner not found");
-
           if (current_hypergraph.initialNumNodes() > 0) {
-            multilevel::partition(current_hypergraph, *coarsener, *refiner, current_context);
+            if (current_context.partition.mode == Mode::acyclic) {
+              current_hypergraph.initializeNumCutHyperedges();
+              initial::partition(current_hypergraph, current_context);
+
+              // perform refinement
+              std::unique_ptr<IRefiner> refiner(RefinerFactory::getInstance().createObject(
+                  RefinementAlgorithm::acyclic_twoway_km1, current_hypergraph, current_context));
+              std::unique_ptr<ICoarsener> coarsener(CoarsenerFactory::getInstance().createObject(
+                  CoarseningAlgorithm::external, current_hypergraph, current_context, current_hypergraph.weightOfHeaviestNode()));
+              coarsener->coarsen(current_context.coarsening.contraction_limit);
+              current_hypergraph.initializeNumCutHyperedges();
+              coarsener->uncoarsen(*refiner);
+              refiner->printSummary();
+            } else {
+              std::unique_ptr<ICoarsener> coarsener(
+                  CoarsenerFactory::getInstance().createObject(
+                      current_context.coarsening.algorithm,
+                      current_hypergraph, current_context,
+                      current_hypergraph.weightOfHeaviestNode()));
+
+              std::unique_ptr<IRefiner> refiner(
+                  RefinerFactory::getInstance().createObject(
+                      current_context.local_search.algorithm,
+                      current_hypergraph, current_context));
+
+              ASSERT(coarsener.get() != nullptr, "coarsener not found");
+              ASSERT(refiner.get() != nullptr, "refiner not found");
+
+              multilevel::partition(current_hypergraph, *coarsener, *refiner, current_context);
+            }
           }
 
           auto extractedHypergraph_1 = ds::extractPartAsUnpartitionedHypergraphForBisection(

@@ -159,6 +159,7 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
                   const UncontractionGainChanges&,
                   Metrics& best_metrics) final {
     ASSERT(_hg.k() == 2, "2way refiner, but graph has more than 2 blocks:" << _hg.k());
+    DBG << "Refiner call with" << refinement_nodes;
 
     _timer.start(); // full refinement timer
 

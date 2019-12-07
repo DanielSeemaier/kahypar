@@ -103,6 +103,34 @@ class HgpInitialPartitioner : public IInitialPartitioner, private InitialPartiti
     }
   }
 
+//  static void runVCycle(Hypergraph& hg, Context context) {
+//    context.setupPartWeights(hg.totalWeight());
+//    context.coarsening.algorithm = CoarseningAlgorithm::external;
+//    context.coarsening.external_file = "rmlgp";
+//    context.coarsening.allow_mixed_contraction = true;
+//    context.coarsening.rating.acceptance_policy = AcceptancePolicy::best_prefer_unmatched;
+//    context.coarsening.rating.community_policy = CommunityPolicy::ignore_communities;
+//    context.coarsening.rating.fixed_vertex_acceptance_policy = FixVertexContractionAcceptancePolicy::fixed_vertex_allowed;
+//    context.coarsening.rating.heavy_node_penalty_policy = HeavyNodePenaltyPolicy::no_penalty;
+//    context.coarsening.rating.rating_function = RatingFunction::heavy_edge;
+//    context.local_search.fm.max_number_of_fruitless_moves = 350;
+//    context.local_search.iterations_per_level = 5;
+//
+//    std::unique_ptr<ICoarsener> coarsener(
+//        CoarsenerFactory::getInstance().createObject(
+//            context.coarsening.algorithm, hg, context,
+//            hg.weightOfHeaviestNode()));
+//    AcyclicTwoWayKMinusOneRefiner refiner(hg, context);
+//    LOG << context.local_search.iterations_per_level;
+//    LOG << "Coarsening with" << context.coarsening.algorithm;
+//    LOG << context.local_search.fm.max_number_of_fruitless_moves;
+//    coarsener->coarsen(context.coarsening.contraction_limit);
+//    LOG << hg.initialNumNodes() << "/" << hg.currentNumNodes();
+//    hg.initializeNumCutHyperedges();
+//    coarsener->uncoarsen(refiner);
+//    refiner.printSummary();
+//  }
+
   void performPartition(const PartitionID part, const PartitionID k) {
     if (k < 2) {
       return;
@@ -136,7 +164,8 @@ class HgpInitialPartitioner : public IInitialPartitioner, private InitialPartiti
     if (fix_ip) {
       dag::fixBipartitionAcyclicity(*hg_ptr, ctx);
     }
-    hg_ptr->initializeNumCutHyperedges();
+
+//    runVCycle(*hg_ptr, ctx); // TODO refactor
 
     DBG << "Bipartition KM1 after acyclicity fix + local search:" << metrics::km1(*hg_ptr);
     DBG << "Bipartition imbalance after acyclicity fix + local search:" << metrics::imbalance(*hg_ptr, ctx);
@@ -288,6 +317,7 @@ class HgpInitialPartitioner : public IInitialPartitioner, private InitialPartiti
 
   static Context createContext(const PartitionID k, const double epsilon) {
     Context ip_context;
+    ip_context.partition_evolutionary = false;
     ip_context.partition.time_limit = 0;
     ip_context.partition.current_v_cycle = 0;
     ip_context.partition.graph_partition_filename = "";

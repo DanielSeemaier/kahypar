@@ -55,7 +55,7 @@ static inline bool partitionVCycle(Hypergraph& hypergraph, ICoarsener& coarsener
     io::printHypergraphInfo(hypergraph, "Coarsened Hypergraph");
   }
 
-  // special meaing of use_parent1 that doesnt make any sense, this is ugly, refactor this
+  // special meaning of use_parent1 that doesnt make any sense, this is ugly, refactor this
   if ((context.partition_evolutionary && context.evolutionary.action.requires().evolutionary_parent_contraction) || use_parent1) {
     hypergraph.reset();
     hypergraph.setPartition(*context.evolutionary.parent1);
