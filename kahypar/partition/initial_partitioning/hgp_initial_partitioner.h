@@ -115,6 +115,7 @@ class HgpInitialPartitioner : public IInitialPartitioner, private InitialPartiti
     const auto& map = pair.second;
     hg_ptr->resetPartitioning();
     invokeHypergraphPartitioner(*hg_ptr, 2, 0.03);
+    const bool fix_ip = _context.initial_partitioning.partitioner != "rmlgp";
 
     Context ctx = createContext(2, 0.03);
     ctx.setupPartWeights(hg_ptr->totalWeight());
@@ -132,7 +133,9 @@ class HgpInitialPartitioner : public IInitialPartitioner, private InitialPartiti
     }
 
     ctx.initial_partitioning.balance_partition = _context.initial_partitioning.balance_partition;
-    dag::fixBipartitionAcyclicity(*hg_ptr, ctx);
+    if (fix_ip) {
+      dag::fixBipartitionAcyclicity(*hg_ptr, ctx);
+    }
     hg_ptr->initializeNumCutHyperedges();
 
     DBG << "Bipartition KM1 after acyclicity fix + local search:" << metrics::km1(*hg_ptr);
@@ -199,9 +202,44 @@ class HgpInitialPartitioner : public IInitialPartitioner, private InitialPartiti
       invokeKaHyPar(hg, k, epsilon);
     } else if (_context.initial_partitioning.partitioner == "patoh") {
       invokePaToH(hg, k, epsilon);
+    } else if (_context.initial_partitioning.partitioner == "rmlgp") {
+      invokeRMLGP(hg, k, epsilon);
     } else {
       throw std::invalid_argument("bad configuration for i-partitioner");
     }
+  }
+
+  void invokeRMLGP(Hypergraph& hg, const PartitionID k, const double epsilon) const {
+    if (epsilon > 0.03) {
+      throw std::runtime_error("unsupported");
+    }
+    if (k != 2) {
+      throw std::runtime_error("unsupported");
+    }
+
+    const std::string dot_filename = std::string(std::tmpnam(nullptr)) + ".dot";
+    const std::string ip_filename = std::string(std::tmpnam(nullptr));
+    io::writeHyperDAGForDotPartitioner(hg, dot_filename);
+
+    std::stringstream cmd_ss;
+    cmd_ss << _context.rmlgp_path
+      << " " << dot_filename
+      << " " << k
+      << " --inipart 11"
+      << " --ip " << ip_filename
+      << " --action ip";
+    const std::string cmd = cmd_ss.str();
+    LOG << "Calling rMLGP_interface:" << cmd;
+    const int rmlgp_exit_code = std::system(cmd.c_str());
+    if (rmlgp_exit_code != 0) {
+      throw std::runtime_error("rMLGP_interface returned a nonzero exit code");
+    }
+
+    std::vector<PartitionID> part;
+    io::readPartitionFile(ip_filename, part);
+    hg.setPartition(part);
+
+    LOG << "IP with KM1" << metrics::km1(hg) << "imbalance" << metrics::imbalance(hg, _context);
   }
 
   void invokeKaHyPar(Hypergraph& hg, const PartitionID k, const double epsilon) const {
