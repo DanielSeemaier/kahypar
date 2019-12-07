@@ -441,6 +441,7 @@ class Context {
   bool enable_hard_rebalance = false;
   bool refine_rebalance_moves = true;
   std::string patoh_path = "";
+  std::string rmlgp_path = "";
 
   Context() :
     stats(*this) { }
@@ -460,7 +461,8 @@ class Context {
     enable_hard_rebalance(other.enable_hard_rebalance),
     enable_soft_rebalance(other.enable_soft_rebalance),
     refine_rebalance_moves(other.refine_rebalance_moves),
-    patoh_path(other.patoh_path) { }
+    patoh_path(other.patoh_path),
+    rmlgp_path(other.rmlgp_path) { }
 
   Context& operator= (const Context&) = delete;
 

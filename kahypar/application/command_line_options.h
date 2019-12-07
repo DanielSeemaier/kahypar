@@ -139,7 +139,14 @@ po::options_description createGeneralOptionsDescription(Context& context, const 
     [&](const std::string& path) {
       context.patoh_path = path;
     }),
-    "Path to the PaToH executable");
+    "Path to the PaToH executable")
+    ("rmlgp",
+    po::value<std::string>()->value_name("<string>")->notifier(
+    [&](const std::string& path) {
+      context.rmlgp_path = path;
+    }),
+    "Path to the rMLGP_interface executable");
+  // rmlgp
   return options;
 }
 

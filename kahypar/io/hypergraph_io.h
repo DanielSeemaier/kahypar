@@ -381,6 +381,22 @@ static inline void writeHypergraphForPaToHPartitioning(const Hypergraph& hypergr
   out_stream.close();
 }
 
+static inline void writeHyperDAGForDotPartitioner(const Hypergraph& hypergraph, const std::string& filename) {
+  std::ofstream dot(filename);
+  dot << "digraph G {\n";
+  for (const HypernodeID& hn : hypergraph.nodes()) {
+    dot << hn << ";\n";
+  }
+  for (const HyperedgeID& he : hypergraph.edges()) {
+    for (const HypernodeID& tail : hypergraph.tails(he)) {
+      for (const HypernodeID& head : hypergraph.heads(he)) {
+        dot << tail << "->" << head << ";\n";
+      }
+    }
+  }
+  dot << "}\n";
+}
+
 
 static inline void readPartitionFile(const std::string& filename, std::vector<PartitionID>& partition) {
   ASSERT(!filename.empty(), "No filename for partition file specified");

@@ -35,6 +35,7 @@
 #include "kahypar/partition/coarsening/policies/rating_score_policy.h"
 #include "kahypar/partition/coarsening/policies/rating_tie_breaking_policy.h"
 #include "kahypar/partition/coarsening/vertex_pair_rater.h"
+#include "kahypar/io/hypergraph_io.h"
 
 namespace kahypar {
 template<class ScorePolicy = HeavyEdgeScore,
@@ -79,12 +80,38 @@ public:
 
 private:
   void coarsenImpl(const HypernodeID limit) override final {
-    std::ifstream file(_context.coarsening.external_file);
+    if (_context.coarsening.external_file == "rmlgp") {
+      fromRMLGP();
+    } else {
+      fromFile(_context.coarsening.external_file);
+    }
+  }
+
+  void fromRMLGP() {
+    const std::string dot_filename = std::string(std::tmpnam(nullptr)) + ".dot";
+    const std::string ip_filename = std::string(std::tmpnam(nullptr));
+    const std::string coarsening_filename = std::string(std::tmpnam(nullptr));
+    io::writeHyperDAGForDotPartitioner(_hg, dot_filename);
+    io::writePartitionFile(_hg, ip_filename);
+    std::stringstream cmd_ss;
+    cmd_ss << _context.rmlgp_path << " " << dot_filename << " 2 --ip " << ip_filename << " --coarsen " << coarsening_filename << " --action coarsen";
+    const std::string cmd = cmd_ss.str();
+    LOG << "Calling rMLGP_interface:" << cmd;
+    const int rmlgp_exit_code = system(cmd.c_str());
+    if (rmlgp_exit_code != 0) {
+      throw std::runtime_error("rMLGP_interface returned an exit code other than zero");
+    }
+    fromFile(coarsening_filename);
+  }
+
+  void fromFile(const std::string& filename) {
+    std::ifstream file(filename);
     if (!file) {
       throw std::runtime_error("External coarsening file does not exist");
     }
 
     int u = 0, v = 0;
+    int num_rejected = 0;
     LOG << "Using matching from" << _context.coarsening.external_file;
     LOG << "\t" << 0 << _hg.initialNumNodes();
     while (file >> u) {
@@ -105,6 +132,7 @@ private:
       }
 
       if (_hg.partID(u) != _hg.partID(v)) {
+        ++num_rejected;
         continue;
       }
 
@@ -114,7 +142,10 @@ private:
       );
     }
 
-    LOG << "Contracted" << _hg.initialNumNodes() - _hg.currentNumNodes() << "nodes";
+    LOG << "Contracted" << _hg.initialNumNodes() - _hg.currentNumNodes() << "nodes, rejected" << num_rejected;
+    if (!dag::isAcyclic(_hg)) {
+      throw std::runtime_error("DAG is cyclic");
+    }
     _context.stats.add(StatTag::Coarsening, "HnsAfterCoarsening", _hg.currentNumNodes());
   }
 
