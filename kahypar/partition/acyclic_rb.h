@@ -173,6 +173,7 @@ static inline void partition(Hypergraph &hypergraph, const Context &context) {
     if (!context.partition_evolutionary || context.evolutionary.action.requires().initial_partitioning) {
       if (context.initial_partitioning.level == InitialPartitioningLevel::finest) {
         hypergraph.resetPartitioning();
+        LOG << "(1)" << context.partition.epsilon;
         performInitialPartitioning(hypergraph, context);
       } else {
         throw std::runtime_error("check and uncomment code ...");

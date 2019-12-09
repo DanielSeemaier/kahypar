@@ -2,6 +2,7 @@
 
 #include <array>
 
+#include "kahypar/partition/refinement/policies/fm_improvement_policy.h"
 #include "kahypar/datastructure/fast_reset_array.h"
 #include "kahypar/datastructure/fast_reset_flag_array.h"
 #include "kahypar/datastructure/sparse_map.h"
@@ -159,6 +160,7 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
                   const UncontractionGainChanges&,
                   Metrics& best_metrics) final {
     ASSERT(_hg.k() == 2, "2way refiner, but graph has more than 2 blocks:" << _hg.k());
+    ASSERT(_context.local_search.fm.max_number_of_fruitless_moves > 0, "Bad configuration, number of fruitless moves is zero");
     DBG << "Refiner call with" << refinement_nodes;
 
     _timer.start(); // full refinement timer
@@ -199,7 +201,7 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
     int moves_since_improvement = 0;
     int min_cut_index = -1;
 
-    while (moves_since_improvement < _context.local_search.fm.max_number_of_fruitless_moves
+    while (moves_since_improvement < 350 // TODO
            && (!_pqs[0].empty() || !_pqs[1].empty())) {
       ASSERT(VALIDATE_PQS_STATE());
       ASSERT(VALIDATE_FIXTURES_STATE());

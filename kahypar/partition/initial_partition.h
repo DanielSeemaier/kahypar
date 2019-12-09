@@ -161,7 +161,7 @@ static inline void partition(Hypergraph& hg, const Context& context) {
   double init_alpha = context.initial_partitioning.init_alpha;
   if (context.initial_partitioning.algo == InitialPartitionerAlgorithm::partitioner) {
     // TODO ME
-    init_alpha = 0;
+    init_alpha = 1;
   }
   double best_imbalance = std::numeric_limits<double>::max();
   std::vector<PartitionID> best_balanced_partition(
@@ -214,7 +214,11 @@ static inline void partition(Hypergraph& hg, const Context& context) {
       }
       best_imbalance = imbalance;
     }
-    init_alpha -= 0.1;
+    if (context.initial_partitioning.algo == InitialPartitionerAlgorithm::partitioner) {
+      init_alpha -= 1.0;
+    } else {
+      init_alpha -= 0.1;
+    }
   } while (metrics::imbalance(*extracted_init_hypergraph.first, context)
            > context.partition.epsilon && init_alpha > 0.0);
 

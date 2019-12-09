@@ -191,6 +191,11 @@ void rebalancePartition(Hypergraph& hg, const Context& context, const bool refin
   }
 
   if (refine_km1) {
+//    LOG << "#fruitless:" << context.local_search.fm.max_number_of_fruitless_moves;
+//    LOG << "max0:" << context.partition.max_part_weights[0];
+//    LOG << "max1:" << context.partition.max_part_weights[1];
+//    LOG << "cur0:" << hg.partWeight(0);
+//    LOG << "cur1:" << hg.partWeight(1);
     HyperedgeWeight previous_km1 = current_metrics.km1;
     do {
       previous_km1 = current_metrics.km1;
@@ -207,7 +212,7 @@ void rebalancePartition(Hypergraph& hg, const Context& context, const bool refin
 
       local_search_refiner.refine(local_search_refinement_nodes, {0, 0}, changes, current_metrics);
       //local_search_refiner.printSummary();
-      //DBG << "Result of 2Way refinement:" << previous_km1 << "-->" << current_metrics.km1;
+      LOG << "Result of 2Way refinement:" << previous_km1 << "-->" << current_metrics.km1;
     } while (0.99 * previous_km1 > current_metrics.km1);
   }
 }
@@ -215,6 +220,7 @@ void rebalancePartition(Hypergraph& hg, const Context& context, const bool refin
 
 void fixBipartitionAcyclicity(Hypergraph& hg, const Context& context) {
   const auto original_partition = internal::createPartitionSnapshot(hg);
+  const auto km_initial = metrics::km1(hg);
 
   // variant 1
   internal::breakEdge(hg, 0, 1, false);
@@ -266,10 +272,10 @@ void fixBipartitionAcyclicity(Hypergraph& hg, const Context& context) {
   const auto km_101 = metrics::km1(hg);
   ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hg, context).isAcyclic());
 
-  LOG << V(km_010) << V(imbalance_010) << V(km_010_prime) << V(imbalance_010_prime);
-  LOG << V(km_011) << V(imbalance_011) << V(km_011_prime) << V(imbalance_011_prime);
-  LOG << V(km_100) << V(imbalance_100) << V(km_100_prime) << V(imbalance_100_prime);
-  LOG << V(km_101) << V(imbalance_101) << V(km_101_prime) << V(imbalance_101_prime);
+  LOG << V(km_initial) << V(km_010) << V(imbalance_010) << V(km_010_prime) << V(imbalance_010_prime);
+  LOG << V(km_initial) << V(km_011) << V(imbalance_011) << V(km_011_prime) << V(imbalance_011_prime);
+  LOG << V(km_initial) << V(km_100) << V(imbalance_100) << V(km_100_prime) << V(imbalance_100_prime);
+  LOG << V(km_initial) << V(km_101) << V(imbalance_101) << V(km_101_prime) << V(imbalance_101_prime);
 
   // apply best partition
   const auto best_km1 = std::min(km_010, std::min(km_011, std::min(km_100, km_101)));

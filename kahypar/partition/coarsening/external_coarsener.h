@@ -94,11 +94,12 @@ private:
     io::writeHyperDAGForDotPartitioner(_hg, dot_filename);
     io::writePartitionFile(_hg, ip_filename);
     std::stringstream cmd_ss;
-    cmd_ss << _context.rmlgp_path << " " << dot_filename << " 2 --ip " << ip_filename << " --coarsen " << coarsening_filename << " --action coarsen";
+    cmd_ss << _context.rmlgp_path << " " << dot_filename << " " << _context.partition.k << " --ip " << ip_filename << " --coarsen " << coarsening_filename << " --action coarsen";
     const std::string cmd = cmd_ss.str();
     LOG << "Calling rMLGP_interface:" << cmd;
     const int rmlgp_exit_code = system(cmd.c_str());
     if (rmlgp_exit_code != 0) {
+      LOG << "Exit code:" << rmlgp_exit_code << "of call" << cmd;
       throw std::runtime_error("rMLGP_interface returned an exit code other than zero");
     }
     fromFile(coarsening_filename);
