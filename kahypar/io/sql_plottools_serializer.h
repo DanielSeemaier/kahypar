@@ -278,6 +278,7 @@ static inline void serializeEvolutionary(const Context& context, const Hypergrap
   std::string truncated_graph_name = graph_name.substr(graph_name.find_last_of("/") + 1);
   oss << "RESULT "
       << "connectivity=" << metrics::km1(hg)
+      << " edge-cut=" << metrics::edgeCut(hg)
       << " action=" << context.evolutionary.action.decision()
       << " time-total=" << Timer::instance().evolutionaryResult().total_evolutionary
       << " iteration=" << context.evolutionary.iteration
