@@ -32,16 +32,21 @@ int main(int argc, char *argv[]) {
   context.imbalanced_intermediate_step = false;
   context.reduce_balance_during_uncoarsening = false;
 
-  if (context.shm) {
+  if (context.bin_kaffpaD) {
     LOG << "Reading input / writing output in kaffpaD shared memory format";
+    context.partition.write_partition_file = false;
   }
 
-  kahypar::Hypergraph hypergraph(context.shm
+  kahypar::Hypergraph hypergraph(context.bin_kaffpaD
     ? kahypar::io::createHypergraphFromSharedMemoryGraphFile(context.partition.graph_filename, context.partition.k)
     : kahypar::io::createHypergraphFromFile(context.partition.graph_filename, context.partition.k)
   );
 
   kahypar::PartitionerFacade().partition(hypergraph, context);
+
+  if (context.bin_kaffpaD) {
+    kahypar::io::writePartitionToSharedMemoryGraphFile(hypergraph, context.partition.graph_filename);
+  }
 
   return 0;
 }

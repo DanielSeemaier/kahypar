@@ -678,7 +678,7 @@ po::options_description createGenericOptionsDescription(Context& context,
     ("help", "show help message")
     ("verbose,v", po::value<bool>(&context.partition.verbose_output)->value_name("<bool>"),
     "Verbose main partitioning output")
-      ("shared-memory", po::value<bool>(&context.shm)->value_name("<bool>"),
+      ("binary-kaffpaD", po::value<bool>(&context.bin_kaffpaD)->value_name("<bool>"),
           "Thread input graph as shared memory graph file")
     ("vip", po::value<bool>(&context.initial_partitioning.verbose_output)->value_name("<bool>"),
     "Verbose initial partitioning output")

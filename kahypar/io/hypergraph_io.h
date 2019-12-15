@@ -182,24 +182,6 @@ static inline void readHypergraphFile(const std::string& filename,
   }
 }
 
-static inline Hypergraph createHypergraphFromSharedMemoryGraphFile(const std::string& filename,
-    const PartitionID num_parts) {
-  HypernodeID num_hypernodes;
-  HyperedgeID num_hyperedges;
-  HyperedgeIndexVector index_vector;
-  HyperedgeVector edge_vector;
-  HypernodeWeightVector hypernode_weights;
-  HyperedgeWeightVector hyperedge_weights;
-  NumHeadsVector num_heads_vector;
-  bool is_directed;
-  readHypergraphFile(filename, num_hypernodes, num_hyperedges,
-                     index_vector, edge_vector, is_directed, num_heads_vector,
-                     &hyperedge_weights, &hypernode_weights);
-  return Hypergraph(num_hypernodes, num_hyperedges, index_vector, edge_vector,
-                    is_directed, num_heads_vector, num_parts,
-                    &hyperedge_weights, &hypernode_weights);
-}
-
 static inline Hypergraph createHypergraphFromFile(const std::string& filename,
                                                   const PartitionID num_parts) {
   HypernodeID num_hypernodes;
@@ -470,6 +452,257 @@ static inline void writeFixedVertexFile(const Hypergraph& hypergraph, const std:
     out_stream << hypergraph.fixedVertexPartID(hn) << std::endl;
   }
   out_stream.close();
+}
+
+static inline void readBinaryKaffpaD(const std::string& filename,
+                       kaffpa::KaffpaHeader& out_header,
+                       std::vector<kaffpa::Node>& out_nodes,
+                       std::vector<kaffpa::Edge>& out_forward_edges,
+                       std::vector<kaffpa::InEdge>& out_backward_edges,
+                       kaffpa::PartitionConfig& out_config) {
+  std::FILE *shm = std::fopen(filename.c_str(), "r");
+  if (shm == nullptr) {
+    throw std::runtime_error("cannot open binary kaffpaD graph file");
+  }
+
+  std::fread(&out_header, sizeof (kaffpa::KaffpaHeader), 1, shm);
+  out_nodes.resize(out_header.numberOfNodes + 1);
+  out_forward_edges.resize(out_header.numberOfEdges);
+  out_backward_edges.resize(out_header.numberOfEdges);
+
+  const auto num_nodes_read = std::fread(out_nodes.data(), sizeof (kaffpa::Node), out_header.numberOfNodes + 1, shm);
+  const auto num_forward_edges_read = std::fread(out_forward_edges.data(), sizeof (kaffpa::Edge), out_header.numberOfEdges, shm);
+  const auto num_backward_edges_read = std::fread(out_backward_edges.data(), sizeof (kaffpa::InEdge), out_header.numberOfEdges, shm);
+  const auto num_configs_read = std::fread(&out_config, sizeof (kaffpa::PartitionConfig), 1, shm);
+  std::fclose(shm);
+
+  if (num_nodes_read != out_header.numberOfNodes + 1 ||
+      num_forward_edges_read != out_header.numberOfEdges ||
+      num_backward_edges_read != out_header.numberOfEdges ||
+      num_configs_read != 1) {
+    throw std::runtime_error("IO error");
+  }
+}
+
+static inline void buildBinaryKaffpaDHNMap(const std::vector<kaffpa::Node>& nodes,
+    const std::vector<kaffpa::Edge>& edges,
+    std::vector<HypernodeID>& to_hypergraph,
+    std::vector<HypernodeID>& to_graph) {
+
+  for (kaffpa::NodeID u = 0; u + 1 < nodes.size(); ++u) {
+    const auto &node = nodes[u];
+    const auto &next = nodes[u + 1];
+    const auto weight = node.weight + node.weight2;
+    const auto num_predecessors = next.firstInEdge - node.firstInEdge;
+    if (weight > 0) {
+      to_graph.push_back(u);
+    } else if (num_predecessors == 0) {
+      to_graph.push_back(u);
+    }
+  }
+
+  to_hypergraph.resize(nodes.size() - 1, Hypergraph::kInvalidHypernodeID);
+  for (std::size_t i = 0; i < to_graph.size(); ++i) {
+    to_hypergraph[to_graph[i]] = i;
+  }
+}
+
+static inline void updatePartitionTableAndResult(const std::string& filename,
+    const kaffpa::KaffpaHeader& header,
+    const std::vector<kaffpa::PartitionID>& table,
+    const kaffpa::KaffpaResult& result) {
+  FILE *shm = std::fopen(filename.c_str(), "r+");
+
+  std::size_t pos = sizeof (kaffpa::KaffpaHeader)
+      + (header.numberOfNodes + 1) * sizeof (kaffpa::Node)
+      + header.numberOfEdges * sizeof (kaffpa::Edge)
+      + header.numberOfEdges * sizeof (kaffpa::InEdge)
+      + sizeof (kaffpa::PartitionConfig);
+
+  std::fseek(shm, pos, SEEK_SET);
+
+  std::fwrite(table.data(), sizeof (kaffpa::PartitionID), header.numberOfNodes, shm);
+  std::fwrite(&result, sizeof (kaffpa::KaffpaResult), 1, shm);
+  std::fclose(shm);
+}
+
+static inline void writePartitionToSharedMemoryGraphFile(const Hypergraph& hg, const std::string& filename) {
+  // compute edge cut
+  kaffpa::EdgeWeight cut = 0;
+  for (const HypernodeID& u : hg.nodes()) {
+    for (const HyperedgeID& e : hg.incidentHeadEdges(u)) {
+      for (const HypernodeID& v : hg.tails(e)) {
+        if (hg.partID(u) != hg.partID(v)) {
+          cut += hg.edgeWeight(e);
+        }
+      }
+    }
+  }
+
+  kaffpa::KaffpaResult result{
+    .k =  hg.k(),
+    .edgeCut = cut,
+    .objective = cut,
+    .errorCount = 0,
+    .warningCount = 0,
+    .numRounds = 0
+  };
+
+  // build partition table for the original graph
+  kaffpa::KaffpaHeader header{};
+  std::vector<kaffpa::Node> nodes;
+  std::vector<kaffpa::Edge> forward_edges;
+  std::vector<kaffpa::InEdge> backward_edges;
+  kaffpa::PartitionConfig config{};
+  std::vector<HypernodeID> to_hypergraph;
+  std::vector<HypernodeID> to_graph;
+
+  kahypar::io::readBinaryKaffpaD(filename, header, nodes, forward_edges, backward_edges, config);
+  kahypar::io::buildBinaryKaffpaDHNMap(nodes, forward_edges, to_hypergraph, to_graph);
+
+  std::vector<kaffpa::PartitionID> table;
+  bool handled_input_out = false;
+
+  for (kaffpa::NodeID u = 0; u < header.numberOfNodes; ++u) {
+    ASSERT(u + 1 < nodes.size());
+
+    const auto& node = nodes[u];
+    const auto& next = nodes[u + 1];
+    const auto weight = node.weight + node.weight2;
+    const auto num_predecessors = next.firstInEdge - node.firstInEdge;
+
+    if (weight > 0) {
+      ASSERT(to_hypergraph[u] != Hypergraph::kInvalidHypernodeID);
+      table.push_back(hg.partID(to_hypergraph[u]));
+    } else if (!handled_input_out && num_predecessors == 0) {
+      ASSERT(to_hypergraph[u] != Hypergraph::kInvalidHypernodeID);
+      table.push_back(hg.partID(to_hypergraph[u]));
+      handled_input_out = true;
+    } else {
+      ASSERT(num_predecessors == 1);
+      const auto pred_id = backward_edges[node.firstInEdge].target;
+      ASSERT(nodes[pred_id].weight + nodes[pred_id].weight2 > 0);
+      ASSERT(to_hypergraph[pred_id] != Hypergraph::kInvalidHypernodeID);
+      table.push_back(hg.partID(to_hypergraph[pred_id]));
+    }
+  }
+
+  // validate edge cut
+  ASSERT([&](){
+    kaffpa::EdgeWeight _validate_cut = 0;
+    for (kaffpa::NodeID u = 0; u < header.numberOfNodes; ++u) {
+      const auto &node = nodes[u];
+      const auto &next = nodes[u + 1];
+      for (kaffpa::EdgeID e = node.firstOutEdge; e < next.firstOutEdge; ++e) {
+        kaffpa::NodeID v = forward_edges[e].target;
+        if (table[u] != table[v]) {
+          _validate_cut += forward_edges[e].weight;
+        }
+      }
+    }
+    return _validate_cut == cut;
+  }());
+
+  kahypar::io::updatePartitionTableAndResult(filename, header, table, result);
+}
+
+static inline Hypergraph createHypergraphFromSharedMemoryGraphFile(const std::string& filename,
+                                                                   const PartitionID num_parts) {
+  kaffpa::KaffpaHeader header{};
+  std::vector<kaffpa::Node> nodes;
+  std::vector<kaffpa::Edge> forward_edges;
+  std::vector<kaffpa::InEdge> backward_edges;
+  kaffpa::PartitionConfig config{};
+  kahypar::io::readBinaryKaffpaD(filename, header, nodes, forward_edges, backward_edges, config);
+
+  std::vector<HypernodeID> to_hypergraph;
+  std::vector<HypernodeID> to_graph;
+  buildBinaryKaffpaDHNMap(nodes, forward_edges, to_hypergraph, to_graph);
+
+  HypernodeID num_hypernodes = 0;
+  HyperedgeID num_hyperedges = 0;
+  for (kaffpa::NodeID u = 0; u < header.numberOfNodes; ++u) {
+    const auto& node = nodes[u];
+    const auto& next = nodes[u + 1];
+    const auto weight = node.weight + node.weight2;
+    const auto num_successors = next.firstOutEdge - node.firstOutEdge;
+    const auto num_predecessors = next.firstInEdge - node.firstInEdge;
+
+    if (weight > 0) {
+      ++num_hypernodes;
+
+      if (num_successors > 0) {
+        ++num_hyperedges;
+      }
+    } else if (num_predecessors == 0) { // input node
+      ++num_hypernodes;
+      ++num_hyperedges;
+    }
+  }
+
+  HyperedgeIndexVector index_vector;
+  HyperedgeVector edge_vector;
+  HypernodeWeightVector hypernode_weights;
+  HyperedgeWeightVector hyperedge_weights;
+  NumHeadsVector num_heads_vector;
+
+  index_vector.push_back(edge_vector.size());
+
+  for (kaffpa::NodeID u = 0; u < header.numberOfNodes; ++u) {
+    const auto &node = nodes[u];
+    const auto &next = nodes[u + 1];
+    const auto weight = node.weight + node.weight2;
+    const auto num_successors = next.firstOutEdge - node.firstOutEdge;
+    const auto num_predecessors = next.firstInEdge - node.firstInEdge;
+    if (weight == 0 && num_predecessors > 0) {
+      continue;
+    }
+    if (weight == 0 && num_predecessors == 0) {
+      edge_vector.push_back(to_hypergraph[u]);
+      const auto& edge = forward_edges[node.firstOutEdge];
+
+      for (kaffpa::NodeID e = node.firstOutEdge; e < next.firstOutEdge; ++e) {
+        ASSERT(forward_edges[e].weight == edge.weight);
+        const auto v = forward_edges[e].target;
+        ASSERT(to_hypergraph[v] != Hypergraph::kInvalidHypernodeID);
+        edge_vector.push_back(to_hypergraph[v]);
+      }
+
+      hyperedge_weights.push_back(edge.weight);
+      num_heads_vector.push_back(1);
+      index_vector.push_back(edge_vector.size());
+    } else if (num_successors > 0) {
+      ASSERT(num_successors == 1);
+
+      const auto& edge = forward_edges[node.firstOutEdge];
+      const auto& aux_node = nodes[edge.target];
+      const auto& next_aux_node = nodes[edge.target + 1];
+      ASSERT(aux_node.weight + aux_node.weight2 == 0);
+
+      hyperedge_weights.push_back(edge.weight);
+
+      ASSERT(to_hypergraph[u] != Hypergraph::kInvalidHypernodeID);
+      edge_vector.push_back(to_hypergraph[u]);
+
+      for (kaffpa::NodeID e = aux_node.firstOutEdge; e < next_aux_node.firstOutEdge; ++e) {
+        ASSERT(forward_edges[e].weight == edge.weight);
+        const auto v = forward_edges[e].target;
+        ASSERT(to_hypergraph[v] != Hypergraph::kInvalidHypernodeID);
+        edge_vector.push_back(to_hypergraph[v]);
+      }
+
+      num_heads_vector.push_back(1);
+      index_vector.push_back(edge_vector.size());
+    }
+
+    hypernode_weights.push_back(weight);
+  }
+
+  const bool is_directed = true;
+
+  return Hypergraph(num_hypernodes, num_hyperedges, index_vector, edge_vector,
+                    is_directed, num_heads_vector, num_parts,
+                    &hyperedge_weights, &hypernode_weights);
 }
 }  // namespace io
 }  // namespace kahypar

@@ -65,6 +65,12 @@ set_property(TARGET IspdToHgr PROPERTY CXX_STANDARD_REQUIRED ON)
 add_executable(DacToHgr dac_to_hgr_converter.cc)
 set_property(TARGET DacToHgr PROPERTY CXX_STANDARD 14)
 set_property(TARGET DacToHgr PROPERTY CXX_STANDARD_REQUIRED ON)
+add_executable(BinaryKaffpaDToHgr binary_kaffpad_to_hgr.cc)
+set_property(TARGET BinaryKaffpaDToHgr PROPERTY CXX_STANDARD 14)
+set_property(TARGET BinaryKaffpaDToHgr PROPERTY CXX_STANDARD_REQUIRED ON)
+add_executable(EvaluateBinaryKaffpaD evaluate_binary_kaffpad_graph.cc)
+set_property(TARGET EvaluateBinaryKaffpaD PROPERTY CXX_STANDARD 14)
+set_property(TARGET EvaluateBinaryKaffpaD PROPERTY CXX_STANDARD_REQUIRED ON)
 
 # This test needs test instance files, so we copy them to the corresponding build dir
 file(COPY test_instances DESTINATION ${CMAKE_CURRENT_BINARY_DIR})

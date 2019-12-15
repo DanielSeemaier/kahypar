@@ -19,4 +19,4 @@ GRAPH=$1
 K=$2
 EPS=0.03
 
-$KAHYPAR -h $GRAPH -k $K -e $EPS -o km1 -m acyclic -p $CONFIG --seed 0 --shared-memory=true
+$KAHYPAR -h $GRAPH -k $K -e $EPS -o km1 -m acyclic -p $CONFIG --seed 0 --binary-kaffpaD=true
