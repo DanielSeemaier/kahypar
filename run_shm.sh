@@ -1,5 +1,7 @@
 #!/bin/bash
 
+([ -z $1 ] || [ -z $2 ]) && echo "Usage: $0 filename num_parts" && exit
+
 # get directory of this shellscript
 pushd . > /dev/null
 SCRIPT_PATH="${BASH_SOURCE[0]}";
@@ -17,4 +19,4 @@ GRAPH=$1
 K=$2
 EPS=0.03
 
-$KAHYPAR -h $GRAPH -k $K -e $EPS -o km1 -m acyclic -p $CONFIG --seed 0 --shm
+$KAHYPAR -h $GRAPH -k $K -e $EPS -o km1 -m acyclic -p $CONFIG --seed 0 --shared-memory=true

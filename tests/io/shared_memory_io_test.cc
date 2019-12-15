@@ -1,5 +1,4 @@
 #include <sys/mman.h>
-#include <fcntl.h>
 #include "gmock/gmock.h"
 
 #include "kahypar/io/hypergraph_io.h"
