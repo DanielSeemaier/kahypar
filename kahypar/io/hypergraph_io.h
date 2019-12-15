@@ -477,8 +477,8 @@ static inline void readBinaryKaffpaD(const std::string& filename,
   std::fclose(shm);
 
   for (kaffpa::Node& node : out_nodes) {
-    node.weight /= 500;
-    node.weight2 /= 500;
+    node.weight /= 1000;
+    node.weight2 /= 1000;
   }
   for (kaffpa::Edge& edge : out_forward_edges) {
     edge.weight /= 1000;
