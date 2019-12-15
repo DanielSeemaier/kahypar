@@ -2,4 +2,4 @@
 file(COPY test_instances DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 
 add_gmock_test(hypergraph_io_test hypergraph_io_test.cc)
-
+add_gmock_test(shared_memory_io_test shared_memory_io_test.cc)

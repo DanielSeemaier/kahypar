@@ -30,6 +30,9 @@
 #include <vector>
 
 #include "kahypar/definitions.h"
+#include "kahypar/kaffpa/partition_config.h"
+#include "kahypar/kaffpa/definitions.h"
+#include "kahypar/kaffpa/graph_access.h"
 
 namespace kahypar {
 namespace io {
@@ -179,7 +182,24 @@ static inline void readHypergraphFile(const std::string& filename,
   }
 }
 
-// TODO we could integrate directed, num_heads_per_hyperedge into the file format ...
+static inline Hypergraph createHypergraphFromSharedMemoryGraphFile(const std::string& filename,
+    const PartitionID num_parts) {
+  HypernodeID num_hypernodes;
+  HyperedgeID num_hyperedges;
+  HyperedgeIndexVector index_vector;
+  HyperedgeVector edge_vector;
+  HypernodeWeightVector hypernode_weights;
+  HyperedgeWeightVector hyperedge_weights;
+  NumHeadsVector num_heads_vector;
+  bool is_directed;
+  readHypergraphFile(filename, num_hypernodes, num_hyperedges,
+                     index_vector, edge_vector, is_directed, num_heads_vector,
+                     &hyperedge_weights, &hypernode_weights);
+  return Hypergraph(num_hypernodes, num_hyperedges, index_vector, edge_vector,
+                    is_directed, num_heads_vector, num_parts,
+                    &hyperedge_weights, &hypernode_weights);
+}
+
 static inline Hypergraph createHypergraphFromFile(const std::string& filename,
                                                   const PartitionID num_parts) {
   HypernodeID num_hypernodes;

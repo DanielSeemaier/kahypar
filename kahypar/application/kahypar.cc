@@ -24,7 +24,7 @@
 #include "kahypar/io/hypergraph_io.h"
 #include "kahypar/partitioner_facade.h"
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[]) {
   kahypar::Context context;
 
   kahypar::processCommandLineInput(context, argc, argv);
@@ -32,12 +32,16 @@ int main(int argc, char* argv[]) {
   context.imbalanced_intermediate_step = false;
   context.reduce_balance_during_uncoarsening = false;
 
-  kahypar::Hypergraph hypergraph(
-    kahypar::io::createHypergraphFromFile(context.partition.graph_filename,
-                                          context.partition.k));
+  if (context.shm) {
+    LOG << "Reading input / writing output in kaffpaD shared memory format";
+  }
+
+  kahypar::Hypergraph hypergraph(context.shm
+    ? kahypar::io::createHypergraphFromSharedMemoryGraphFile(context.partition.graph_filename, context.partition.k)
+    : kahypar::io::createHypergraphFromFile(context.partition.graph_filename, context.partition.k)
+  );
 
   kahypar::PartitionerFacade().partition(hypergraph, context);
-
 
   return 0;
 }
