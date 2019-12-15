@@ -202,6 +202,7 @@ inline void printObjectives(const Hypergraph& hypergraph, const Context& context
   LOG << "(k-1)          (minimize) =" << metrics::km1(hypergraph);
   LOG << "Absorption     (maximize) =" << metrics::absorption(hypergraph);
   LOG << "Imbalance                 =" << metrics::imbalance(hypergraph, context);
+  LOG << "EdgeCut                   =" << metrics::edgeCut(hypergraph);
 }
 
 

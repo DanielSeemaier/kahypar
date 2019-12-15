@@ -84,6 +84,25 @@ static inline HyperedgeWeight hyperedgeCut(const Hypergraph& hg) {
   return cut;
 }
 
+static inline HyperedgeWeight edgeCut(const Hypergraph& hg) {
+  if (!hg.isDirected()) {
+    return -1;
+  }
+
+  HyperedgeWeight edge_cut = 0;
+  for (const HyperedgeID& he : hg.edges()) {
+    for (const HypernodeID& u : hg.heads(he)) {
+      for (const HypernodeID& v : hg.tails(he)) {
+        if (hg.partID(u) != hg.partID(v)) {
+          edge_cut += hg.edgeWeight(he);
+        }
+      }
+    }
+  }
+
+  return edge_cut;
+}
+
 static inline HyperedgeWeight soed(const Hypergraph& hg) {
   HyperedgeWeight soed = 0;
   for (const HyperedgeID& he : hg.edges()) {

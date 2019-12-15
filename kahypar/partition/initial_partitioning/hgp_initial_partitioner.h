@@ -142,7 +142,7 @@ class HgpInitialPartitioner : public IInitialPartitioner, private InitialPartiti
     const auto subgraph_size = hg_ptr->initialNumNodes();
     const auto& map = pair.second;
     hg_ptr->resetPartitioning();
-    invokeHypergraphPartitioner(*hg_ptr, 2, 0.03);
+    invokeHypergraphPartitioner(*hg_ptr, 2, _context.partition.epsilon);
     const bool fix_ip = _context.initial_partitioning.partitioner != "rmlgp";
 
     Context ctx = createContext(2, _context.partition.epsilon);

@@ -13,10 +13,11 @@ cd "`dirname "${SCRIPT_PATH}"`" > /dev/null
 SCRIPT_PATH="`pwd`";
 popd  > /dev/null
 
-KAHYPAR=${SCRIPT_PATH}/build/kahypar/application/KaHyPar
+KAHYPAR=${SCRIPT_PATH}/cmake-build-release/kahypar/application/KaHyPar
 CONFIG=${SCRIPT_PATH}/config/kaffpaD.ini
 GRAPH=$1
 K=$2
 EPS=0.03
 
+echo COMMAND: $KAHYPAR -h $GRAPH -k $K -e $EPS -o km1 -m acyclic -p $CONFIG --seed 0 --binary-kaffpaD=true
 $KAHYPAR -h $GRAPH -k $K -e $EPS -o km1 -m acyclic -p $CONFIG --seed 0 --binary-kaffpaD=true

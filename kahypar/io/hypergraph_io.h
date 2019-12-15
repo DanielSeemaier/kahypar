@@ -476,6 +476,14 @@ static inline void readBinaryKaffpaD(const std::string& filename,
   const auto num_configs_read = std::fread(&out_config, sizeof (kaffpa::PartitionConfig), 1, shm);
   std::fclose(shm);
 
+  for (kaffpa::Node& node : out_nodes) {
+    node.weight /= 500;
+    node.weight2 /= 500;
+  }
+  for (kaffpa::Edge& edge : out_forward_edges) {
+    edge.weight /= 1000;
+  }
+
   if (num_nodes_read != out_header.numberOfNodes + 1 ||
       num_forward_edges_read != out_header.numberOfEdges ||
       num_backward_edges_read != out_header.numberOfEdges ||
@@ -545,7 +553,7 @@ static inline void writePartitionToSharedMemoryGraphFile(const Hypergraph& hg, c
     .objective = cut,
     .errorCount = 0,
     .warningCount = 0,
-    .numRounds = 0
+    .numRounds = 1
   };
 
   // build partition table for the original graph

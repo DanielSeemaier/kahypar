@@ -44,6 +44,7 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
     _state_changes{ds::FastResetArray<std::size_t>(hypergraph.initialNumNodes(), 0),
                    ds::FastResetArray<std::size_t>(hypergraph.initialNumNodes(), 0)},
     _updated_neighbors(_hg.initialNumNodes(), false),
+    _moved(_hg.initialNumNodes(), false),
     _gain_manager(gain_manager),
     _moved_from(_hg.initialNumNodes()) {}
 
@@ -137,6 +138,8 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
     _refine_time = 0.0;
     _gain_time = 0.0;
     _path_time = 0.0;
+
+    _moved.resetUsedEntries();
   }
 
   void performMovesAndUpdateCacheImpl(const std::vector<Move>& moves,
@@ -175,6 +178,8 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
       ASSERT_THAT_HYPERNODES_CONTAINED_IN_PQS_ARE_CORRECT();
       return true;
     }());
+
+    _moved.resetUsedEntries();
   }
 
   bool refineImpl(std::vector<HypernodeID>& refinement_nodes,
@@ -187,6 +192,7 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
     ASSERT(best_metrics.km1 == metrics::km1(_hg));
     _hg.resetHypernodeState();
     _moves.clear();
+    _moved.resetUsedEntries();
 
     const auto& ordering = _qg.topologicalOrdering();
     if (_qg_changed || _qg.changed()) {
@@ -237,8 +243,8 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
         }
         ASSERT(_hg.partID(max_gain_hn) == from_part, V(max_gain_hn) << V(_hg.partID(max_gain_hn)) << V(from_part));
 
-        if (_moved_from[max_gain_hn] > _hg.initialNumNodes()) {
-          //stop_after_iteration = true;
+        if (_moved.get(max_gain_hn)) {
+          stop_after_iteration = true;
         }
 
         ++_num_moves;
@@ -282,6 +288,7 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
 
         move(max_gain_hn, from_part, to_part);
         _moves.emplace_back(max_gain_hn, from_part, to_part);
+        _moved.set(max_gain_hn, true);
       }
 
       const double new_imbalance = metrics::imbalance(_hg, _context);
@@ -853,6 +860,7 @@ class AcyclicHardRebalanceRefiner final : public IRefiner {
   std::vector<Move> _moves;
   std::vector<HypernodeID> _moved_hns;
   ds::FastResetArray<bool> _updated_neighbors;
+  ds::FastResetArray<bool> _moved;
   KMinusOneGainManager& _gain_manager;
   std::vector<std::size_t> _moved_from;
   std::vector<HypernodeID> _moved_from_entries{};
