@@ -148,6 +148,7 @@ class HgpInitialPartitioner : public IInitialPartitioner, private InitialPartiti
     const auto subgraph_size = hg_ptr->initialNumNodes();
     const auto& map = pair.second;
     hg_ptr->resetPartitioning();
+    hg_ptr->setDirected(false);
     invokeHypergraphPartitioner(*hg_ptr, 2, _context.partition.epsilon);
     const bool fix_ip = _context.initial_partitioning.partitioner != "rmlgp";
 
@@ -281,9 +282,18 @@ class HgpInitialPartitioner : public IInitialPartitioner, private InitialPartiti
   }
 
   void invokeKaHyPar(Hypergraph& hg, const PartitionID k, const double epsilon) const {
-//    io::writeHypergraphFile(hg, "gemver_undir.hgr", false);
+//    io::writeHypergraphFile(hg, "test.hgr", false);
+//    kahypar::Hypergraph hypergraph(
+//        kahypar::io::createHypergraphFromFile("test.hgr", _context.partition.k)
+//    );
     Context ctx = createContext(k, epsilon);
     kahypar::PartitionerFacade().partition(hg, ctx);
+//    hg.resetPartitioning();
+//    hg.changeK(k);
+//    for (const HypernodeID& hn : hypergraph.nodes()) {
+//      hg.setNodePart(hn, hypergraph.partID(hn));
+//    }
+//    hg.initializeNumCutHyperedges();
   }
 
   void invokePaToH(Hypergraph& hg, const PartitionID k, const double epsilon) const {
@@ -331,8 +341,8 @@ class HgpInitialPartitioner : public IInitialPartitioner, private InitialPartiti
     ip_context.partition.time_limit = 0;
     ip_context.partition.current_v_cycle = 0;
     ip_context.partition.graph_partition_filename = "";
-    ip_context.partition.quiet_mode = false;
-    ip_context.partition.verbose_output = true;
+    ip_context.partition.quiet_mode = true;
+    ip_context.partition.verbose_output = false;
     ip_context.partition.k = k;
     ip_context.partition.epsilon = epsilon;
     ip_context.partition.final_epsilon = epsilon;

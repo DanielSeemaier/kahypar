@@ -2290,6 +2290,10 @@ class GenericHypergraph {
     return _directed;
   }
 
+  void setDirected(const bool directed) {
+    _directed = directed;
+  }
+
  private:
   FRIEND_TEST(AHypergraph, DisconnectsHypernodeFromHyperedge);
 
