@@ -86,13 +86,17 @@ class CoarsenerBase {
   }
 
   void removeParallelHyperedges() {
-    //const HyperedgeID removed_parallel_hes =
-    //  _hypergraph_pruner.removeParallelHyperedges(_hg, _history.back());
-    //_context.stats.add(StatTag::Coarsening, "numRemovedParalellHEs", removed_parallel_hes);
+    if (!_hg.isDirected()) {
+      const HyperedgeID removed_parallel_hes =
+          _hypergraph_pruner.removeParallelHyperedges(_hg, _history.back());
+      _context.stats.add(StatTag::Coarsening, "numRemovedParalellHEs", removed_parallel_hes);
+    }
   }
 
   void restoreParallelHyperedges() {
-    //_hypergraph_pruner.restoreParallelHyperedges(_hg, _history.back());
+    if (!_hg.isDirected()) {
+      _hypergraph_pruner.restoreParallelHyperedges(_hg, _history.back());
+    }
   }
 
   void restoreSingleNodeHyperedges() {

@@ -118,6 +118,7 @@ class MLCoarsener final : public ICoarsener,
       }
 
       if (num_hns_before_pass == _hg.currentNumNodes()) {
+        DBG << "Break after no improvement";
         break;
       }
       ++pass_nr;

@@ -36,6 +36,9 @@ class HgpInitialPartitioner : public IInitialPartitioner, private InitialPartiti
 
   void initialPartition() {
     DBG << "initialPartition()";
+    _total_hgp_time = 0.0;
+    HTimer timer;
+    timer.start();
 
     _hg.resetPartitioning();
     _hg.changeK(_context.partition.k);
@@ -61,6 +64,9 @@ class HgpInitialPartitioner : public IInitialPartitioner, private InitialPartiti
           << _context.partition.final_epsilon << "," << _context.partition.epsilon << "}";
       rebalancePartition(_hg, _context);
     }
+
+    LOG << "Total time spend in blackbox Hypergraph partitioners:" << _total_hgp_time;
+    LOG << "Total time spend for initial partitioning:" << timer.stop();
   }
 
   static void rebalancePartition(Hypergraph& hg, const Context& context, const bool refine_km1 = false) {
@@ -226,7 +232,9 @@ class HgpInitialPartitioner : public IInitialPartitioner, private InitialPartiti
     performPartition(part + k_part_0, k_part_1);
   }
 
-  void invokeHypergraphPartitioner(Hypergraph& hg, const PartitionID k, const double epsilon) const {
+  void invokeHypergraphPartitioner(Hypergraph& hg, const PartitionID k, const double epsilon) {
+    HTimer timer;
+    timer.start();
     if (_context.initial_partitioning.partitioner == "kahypar") {
       invokeKaHyPar(hg, k, epsilon);
     } else if (_context.initial_partitioning.partitioner == "patoh") {
@@ -236,6 +244,7 @@ class HgpInitialPartitioner : public IInitialPartitioner, private InitialPartiti
     } else {
       throw std::invalid_argument("bad configuration for i-partitioner");
     }
+    _total_hgp_time += timer.stop();
   }
 
   void invokeRMLGP(Hypergraph& hg, const PartitionID k, const double epsilon) const {
@@ -272,6 +281,7 @@ class HgpInitialPartitioner : public IInitialPartitioner, private InitialPartiti
   }
 
   void invokeKaHyPar(Hypergraph& hg, const PartitionID k, const double epsilon) const {
+//    io::writeHypergraphFile(hg, "gemver_undir.hgr", false);
     Context ctx = createContext(k, epsilon);
     kahypar::PartitionerFacade().partition(hg, ctx);
   }
@@ -321,8 +331,8 @@ class HgpInitialPartitioner : public IInitialPartitioner, private InitialPartiti
     ip_context.partition.time_limit = 0;
     ip_context.partition.current_v_cycle = 0;
     ip_context.partition.graph_partition_filename = "";
-    ip_context.partition.quiet_mode = true;
-    ip_context.partition.verbose_output = false;
+    ip_context.partition.quiet_mode = false;
+    ip_context.partition.verbose_output = true;
     ip_context.partition.k = k;
     ip_context.partition.epsilon = epsilon;
     ip_context.partition.final_epsilon = epsilon;
@@ -331,14 +341,14 @@ class HgpInitialPartitioner : public IInitialPartitioner, private InitialPartiti
     ip_context.partition.seed = Randomize::instance().newRandomSeed();
     ip_context.partition.hyperedge_size_threshold = 1000;
     ip_context.partition.global_search_iterations = 0;
-    ip_context.preprocessing.enable_min_hash_sparsifier = false;
+    ip_context.preprocessing.enable_min_hash_sparsifier = true;
     ip_context.preprocessing.min_hash_sparsifier.min_median_he_size = 28;
     ip_context.preprocessing.min_hash_sparsifier.max_hyperedge_size = 1200;
     ip_context.preprocessing.min_hash_sparsifier.max_cluster_size = 10;
     ip_context.preprocessing.min_hash_sparsifier.min_cluster_size = 2;
     ip_context.preprocessing.min_hash_sparsifier.num_hash_functions = 5;
     ip_context.preprocessing.min_hash_sparsifier.combined_num_hash_functions = 100;
-    ip_context.preprocessing.enable_community_detection = false;
+    ip_context.preprocessing.enable_community_detection = true;
     ip_context.preprocessing.community_detection.enable_in_initial_partitioning = true;
     ip_context.preprocessing.community_detection.reuse_communities = false;
     ip_context.preprocessing.community_detection.max_pass_iterations = 100;
@@ -385,5 +395,7 @@ class HgpInitialPartitioner : public IInitialPartitioner, private InitialPartiti
     ip_context.partition.max_part_weights.clear();
     return ip_context;
   }
+
+  double _total_hgp_time{0.0};
 };
 } // namespace kahypar

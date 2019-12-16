@@ -203,7 +203,7 @@ static inline Hypergraph createHypergraphFromFile(const std::string& filename,
 
 static inline void writeHypernodeWeights(std::ofstream& out_stream, const Hypergraph& hypergraph) {
   for (const HypernodeID& hn : hypergraph.nodes()) {
-    out_stream << hypergraph.nodeWeight(hn) << std::endl;
+    out_stream << hypergraph.nodeWeight(hn) << "\n";
   }
 }
 
@@ -236,7 +236,7 @@ static inline void writeHypergraphFile(const Hypergraph& hypergraph, const std::
     for (const HypernodeID& pin : hypergraph.pins(he)) {
       out_stream << pin + 1 << " ";
     }
-    out_stream << std::endl;
+    out_stream << "\n";
   }
 
   if (hypergraph.type() == HypergraphType::NodeWeights ||
