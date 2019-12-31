@@ -27,53 +27,48 @@ bool detect_cycle(const Hypergraph &hg, const HypernodeID u, const HypernodeID v
   queue.push_back(u);
   bool detected_cycle = false;
 
-  const bool debug = u == 231 && v == 415; // DEBUG
-  //const bool debug = u == 0 && v == 0; // DEBUG
-
   while (!queue.empty() && !detected_cycle) {
     const HypernodeID w = queue.front();
     queue.pop_front();
     marker.set(w, true);
     const bool from_outside = (w != u && leader[w] != leader[v]);
 
-    for (const HyperedgeID &he : hg.incidentTailEdges(w)) {
-      for (const HypernodeID &y : hg.heads(he)) {
-        DBG << "Scanning successor y=" << y << "of w=" << w << "with top" << top[y] << "leader[y]=" << leader[y];
+    if (top[w] == t) { // up search
+      for (const HyperedgeID &he : hg.incidentTailEdges(w)) {
+        for (const HypernodeID &y : hg.heads(he)) {
+          if (!internal::matchable(top[y], top[w])) {
+            continue;
+          }
+          if (from_outside && leader[y] == leader[v]) {
+            detected_cycle = true;
+            goto loop_end;
+          }
+          if (marker[y]) {
+            continue;
+          }
 
-        if (!internal::matchable(top[y], top[w])) {
-          continue;
+          queue.push_back(y);
         }
-        if (from_outside && leader[y] == leader[v]) {
-          detected_cycle = true;
-          goto loop_end;
-        }
-        if (marker[y]) {
-          continue;
-        }
-
-        queue.push_back(y);
       }
-    }
+    } else if (top[w] == t + 1) { // down search
+      for (const HyperedgeID &he : hg.incidentHeadEdges(w)) {
+        for (const HypernodeID &x : hg.tails(he)) {
+          if (!internal::matchable(top[x], top[w])) {
+            continue;
+          }
+//          if (leader[x] != leader[w]) {
+//            continue;
+//          }
+          if (from_outside && leader[x] == leader[v]) {
+            detected_cycle = true;
+            goto loop_end;
+          }
+          if (marker[x]) {
+            continue;
+          }
 
-    for (const HyperedgeID &he : hg.incidentHeadEdges(w)) {
-      for (const HypernodeID &x : hg.tails(he)) {
-        DBG << "Scanning predecessor x=" << x << "of w=" << w << "with top" << top[x] << "marked" << marker[x]
-            << "leader[x]=" << leader[x];
-        if (!internal::matchable(top[x], top[w])) {
-          continue;
+          queue.push_back(x);
         }
-        if (leader[x] != leader[w]) {
-          continue;
-        }
-        if (from_outside && leader[x] == leader[v]) {
-          detected_cycle = true;
-          goto loop_end;
-        }
-        if (marker[x]) {
-          continue;
-        }
-
-        queue.push_back(x);
       }
     }
 
@@ -81,19 +76,14 @@ bool detect_cycle(const Hypergraph &hg, const HypernodeID u, const HypernodeID v
   }
 
   marker.reset();
-  DBG << "Result:" << detected_cycle;
-  DBG << u << v;
-  DBG << top[u] << top[v];
-  DBG << leader[u] << leader[v];
-  DBG << t;
   return detected_cycle;
 }
 } // namespace internal
 
 std::vector<PartitionID> findAcyclicClusteringWithCycleDetection(const Hypergraph &hg, const Context &context,
                                                                  double max_weight_fraction = 1.0) {
-  std::vector<bool> markup(hg.initialNumNodes());
-  std::vector<bool> markdown(hg.initialNumNodes());
+  std::vector<bool> markup(hg.initialNumNodes()); // in a cluster with higher toplevel nodes
+  std::vector<bool> markdown(hg.initialNumNodes()); // in a cluster with lower toplevel nodes
   std::vector<PartitionID> leader(hg.initialNumNodes());
   std::iota(leader.begin(), leader.end(), 0);
   const auto top = calculateToplevelValues(hg);
@@ -107,19 +97,9 @@ std::vector<PartitionID> findAcyclicClusteringWithCycleDetection(const Hypergrap
 
     // compute heavy edge rating for neighbors
     ratings.clear();
-    for (const HyperedgeID &he : hg.incidentTailEdges(u)) {
+    for (const HyperedgeID &he : hg.incidentEdges(u)) {
       const auto score = HeavyEdgeScore::score(hg, he, context);
-      for (const HypernodeID &v : hg.heads(he)) {
-        ASSERT(top[u] != top[v], V(u) << V(v) << V(top[u]) << V(top[v]));
-        if (v != u && NormalPartitionPolicy::accept(hg, context, u, v)) {
-          ratings[v] += score;
-        }
-      }
-    }
-    for (const HyperedgeID &he : hg.incidentHeadEdges(u)) {
-      const auto score = HeavyEdgeScore::score(hg, he, context);
-      for (const HypernodeID &v : hg.tails(he)) {
-        ASSERT(top[u] != top[v], V(u) << V(v) << V(top[u]) << V(top[v]));
+      for (const HypernodeID &v : hg.pins(he)) {
         if (v != u && NormalPartitionPolicy::accept(hg, context, u, v)) {
           ratings[v] += score;
         }
@@ -132,7 +112,6 @@ std::vector<PartitionID> findAcyclicClusteringWithCycleDetection(const Hypergrap
     for (auto it = ratings.end() - 1; it >= ratings.begin(); --it) {
       const HypernodeID v = it->key;
       const RatingType rating = it->value / MultiplicativePenalty::penalty(hg.nodeWeight(u), hg.nodeWeight(v));
-      ASSERT(top[u] != top[v], V(u) << V(v) << V(top[u]) << V(top[v]));
 
       if (hg.partID(v) != hg.partID(u)) {
         continue;
