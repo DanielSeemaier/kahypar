@@ -22,7 +22,7 @@ bool detect_cycle(const Hypergraph &hg, const HypernodeID u, const HypernodeID v
                   const std::vector<bool> &markdown,
                   ds::FastResetFlagArray<> &marker) {
   ASSERT(!markdown[v] || top[v] > 0);
-  const HypernodeID t = markdown[v] ? top[v] - 1 : top[v];
+  const HypernodeID t = (top[v] < top[u]) ? top[v] : top[u];
   std::deque<HypernodeID> queue;
   queue.push_back(u);
   bool detected_cycle = false;
@@ -97,9 +97,17 @@ std::vector<PartitionID> findAcyclicClusteringWithCycleDetection(const Hypergrap
 
     // compute heavy edge rating for neighbors
     ratings.clear();
-    for (const HyperedgeID &he : hg.incidentEdges(u)) {
+    for (const HyperedgeID &he : hg.incidentHeadEdges(u)) {
       const auto score = HeavyEdgeScore::score(hg, he, context);
-      for (const HypernodeID &v : hg.pins(he)) {
+      for (const HypernodeID &v : hg.tails(he)) {
+        if (v != u && NormalPartitionPolicy::accept(hg, context, u, v)) {
+          ratings[v] += score;
+        }
+      }
+    }
+    for (const HyperedgeID &he : hg.incidentTailEdges(u)) {
+      const auto score = HeavyEdgeScore::score(hg, he, context);
+      for (const HypernodeID &v : hg.heads(he)) {
         if (v != u && NormalPartitionPolicy::accept(hg, context, u, v)) {
           ratings[v] += score;
         }
