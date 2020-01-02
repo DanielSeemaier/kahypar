@@ -84,11 +84,17 @@ std::vector<PartitionID> findAcyclicClusteringWithCycleDetection(const Hypergrap
                                                                  double max_weight_fraction = 1.0) {
   std::vector<bool> markup(hg.initialNumNodes()); // in a cluster with higher toplevel nodes
   std::vector<bool> markdown(hg.initialNumNodes()); // in a cluster with lower toplevel nodes
+  std::vector<HypernodeWeight> weight(hg.initialNumNodes());
+  for (const HypernodeID& hn : hg.nodes()) {
+    weight[hn] = hg.nodeWeight(hn);
+  }
   std::vector<PartitionID> leader(hg.initialNumNodes());
   std::iota(leader.begin(), leader.end(), 0);
   const auto top = calculateToplevelValues(hg);
   ds::SparseMap<HypernodeID, RatingType> ratings(hg.initialNumNodes(), 0);
   ds::FastResetFlagArray<> marker(hg.initialNumNodes());
+
+  const auto max_weight = hg.totalWeight() * max_weight_fraction;
 
   for (const HypernodeID &u : hg.nodes()) {
     if (markup[u] || markdown[u]) { // u already in a cluster
@@ -140,8 +146,9 @@ std::vector<PartitionID> findAcyclicClusteringWithCycleDetection(const Hypergrap
       bool accept_rating = rating > best_rating;
       bool accept_successor = top[v] > top[u] && !markup[v];
       bool accept_predecessor = top[v] < top[u] && !markdown[v];
+      bool accept_weight = (weight[u] + weight[leader[v]]) < max_weight;
 
-      if (accept_rating && (accept_successor || accept_predecessor)) {
+      if (accept_rating && accept_weight && (accept_successor || accept_predecessor)) {
         best_rating = rating;
         best_v = v;
       }
@@ -153,6 +160,7 @@ std::vector<PartitionID> findAcyclicClusteringWithCycleDetection(const Hypergrap
       }
 
       leader[u] = leader[best_v];
+      weight[leader[best_v]] += weight[u];
       if (top[best_v] > top[u]) { // successor
         markup[u] = true;
         markdown[best_v] = true;

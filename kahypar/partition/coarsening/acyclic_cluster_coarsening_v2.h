@@ -81,8 +81,9 @@ private:
     while (_hg.currentNumNodes() > limit) {
       num_contractions = 0;
 
-      // TODO make fraction a config param
-      const auto clustering = dag::findAcyclicClusteringWithCycleDetection(_hg, _context, 0.1 / _context.partition.k);
+      const double max_weight_fraction = static_cast<double>(_context.coarsening.max_allowed_weight_multiplier)
+          / static_cast<double>(_context.coarsening.contraction_limit_multiplier * _context.partition.k);
+      const auto clustering = dag::findAcyclicClusteringWithCycleDetection(_hg, _context, max_weight_fraction);
       for (const HypernodeID& hn : _hg.nodes()) {
         if (clustering[hn] != hn) {
           performContraction(clustering[hn], hn);
@@ -90,16 +91,16 @@ private:
         }
       }
 
-      if (!dag::isAcyclic(_hg)) {
-        throw std::runtime_error("coarser graph is cyclic");
-      }
-
       if (num_contractions == 0) {
         break;
       }
     }
+
+    if (!dag::isAcyclic(_hg)) {
+      throw std::runtime_error("coarser graph is cyclic");
+    }
+
     _context.stats.add(StatTag::Coarsening, "HnsAfterCoarsening", _hg.currentNumNodes());
-    ASSERT(dag::isAcyclic(_hg));
   }
 
   bool uncoarsenImpl(IRefiner& refiner) override final {
