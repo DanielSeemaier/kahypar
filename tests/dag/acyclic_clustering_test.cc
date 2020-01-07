@@ -28,7 +28,7 @@ protected:
     }
   }
 
-  void contractClustering(const std::vector<PartitionID> &clustering) {
+  void contractClustering(const std::vector<HypernodeID> &clustering) {
     for (const HypernodeID &hn : hg.nodes()) {
       if (clustering[hn] != hn) {
         hg.contract(clustering[hn], hn);
@@ -36,16 +36,18 @@ protected:
     }
   }
 
-  void ASSERT_THAT_CLUSTERING_IS_CONTRACTIBLE(const std::vector<PartitionID> &clustering) {
+  void ASSERT_THAT_CLUSTERING_IS_CONTRACTIBLE(const std::vector<HypernodeID> &clustering) {
     std::vector<Hypergraph::Memento> contractions;
 
     for (const HypernodeID &hn : hg.nodes()) {
       if (clustering[hn] != hn) {
         contractions.push_back(hg.contract(clustering[hn], hn));
+//        LOG << "contractions.push_back(hg.contract(clustering[" << hn << "], " << hn << "));";
         const bool acyclic = isAcyclic(hg);
         if (!acyclic) {
           const auto cycle = _debug_findCycleContainingHN(hg, clustering[hn]);
           LOG << "Acyclic:" << cycle;
+//          std::exit(1);
         }
         ASSERT_TRUE(acyclic);
       }
@@ -54,6 +56,30 @@ protected:
     for (auto rit = contractions.crbegin(); rit != contractions.crend(); ++rit) {
       hg.uncontract(*rit);
     }
+  }
+
+  void ASSERT_THAT_CLUSTERING_IS_CONTRACTIBLE2(const std::vector<HypernodeID> &clustering) {
+    std::vector<Hypergraph::Memento> contractions;
+    const auto top = dag::calculateToplevelValues(hg);
+
+    hg.printDirectedHypergraphNode(475);
+    hg.printDirectedHypergraphNode(434);
+    hg.printDirectedHypergraphNode(443);
+    hg.printDirectedHypergraphNode(444);
+
+    LOG << clustering[434] << clustering[443];
+    LOG << top[434] << top[clustering[434]] << top[443] << top[clustering[443]];
+
+    contractions.push_back(hg.contract(clustering[ 434 ],  434 ));
+    contractions.push_back(hg.contract(clustering[ 443 ],  443 ));
+
+    const bool acyclic = isAcyclic(hg);
+    if (!acyclic) {
+      const auto cycle = _debug_findCycleContainingHN(hg, clustering[475]);
+      LOG << "Acyclic:" << cycle;
+    }
+    ASSERT_TRUE(acyclic);
+
   }
 
   std::vector<HypernodeID> _debug_findCycleContainingHN(const Hypergraph &hg, const HypernodeID hn) const {
@@ -106,13 +132,20 @@ TEST_P(AcyclicClusteringTest, SingleIterationOfClusteringWithCCIsContractible) {
 //  ASSERT_THAT_CLUSTERING_IS_CONTRACTIBLE(clustering_iter2);
 //}
 
-TEST_P(AcyclicClusteringTest, TwoIterationsOfClusteringWithCCAreContractible) {
+TEST_P(AcyclicClusteringTest, ThreeIterationsOfClusteringWithCCAreContractible) {
   const auto clustering_iter1 = findAcyclicClusteringWithCycleDetection(hg, context, 1.0);
   ASSERT_THAT_CLUSTERING_IS_CONTRACTIBLE(clustering_iter1);
   contractClustering(clustering_iter1);
+  LOG << "Level 1 OK";
 
   const auto clustering_iter2 = findAcyclicClusteringWithCycleDetection(hg, context, 1.0);
   ASSERT_THAT_CLUSTERING_IS_CONTRACTIBLE(clustering_iter2);
+  contractClustering(clustering_iter2);
+  LOG << "Level 2 OK";
+
+  const auto clustering_iter3 = findAcyclicClusteringWithCycleDetection(hg, context, 1.0);
+  ASSERT_THAT_CLUSTERING_IS_CONTRACTIBLE(clustering_iter3);
+  LOG << "Level 3 OK";
 }
 
 //TEST_P(AcyclicClusteringTest, MaxClusterWeightIsRespected) {
@@ -130,9 +163,9 @@ TEST_P(AcyclicClusteringTest, TwoIterationsOfClusteringWithCCAreContractible) {
 //  }
 //}
 
-INSTANTIATE_TEST_CASE_P(GRAPH_STAR, AcyclicClusteringTest, Values("test_instances/star.hgr"));
+//INSTANTIATE_TEST_CASE_P(GRAPH_STAR, AcyclicClusteringTest, Values("test_instances/star.hgr"));
 
-INSTANTIATE_TEST_CASE_P(GRAPH_C17, AcyclicClusteringTest, Values("test_instances/c17.hgr"));
+//INSTANTIATE_TEST_CASE_P(GRAPH_C17, AcyclicClusteringTest, Values("test_instances/c17.hgr"));
 
 INSTANTIATE_TEST_CASE_P(GRAPH_C880, AcyclicClusteringTest, Values("test_instances/c880.hgr"));
 

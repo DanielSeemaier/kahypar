@@ -24,7 +24,6 @@
 #include <string>
 #include <vector>
 
-
 #include "kahypar/definitions.h"
 #include "kahypar/macros.h"
 #include "kahypar/partition/coarsening/policies/fixed_vertex_acceptance_policy.h"
@@ -36,6 +35,7 @@
 #include "kahypar/partition/coarsening/policies/rating_tie_breaking_policy.h"
 #include "kahypar/partition/coarsening/vertex_pair_rater.h"
 #include "kahypar/dag/acyclic_clustering.h"
+#include "kahypar/utils/htimer.h"
 
 namespace kahypar {
 template <class ScorePolicy = HeavyEdgeScore,
@@ -78,6 +78,8 @@ public:
 private:
   void coarsenImpl(const HypernodeID limit) override final {
     std::size_t num_contractions = 0;
+    HTimer timer;
+    timer.start();
     while (_hg.currentNumNodes() > limit) {
       num_contractions = 0;
 
@@ -101,6 +103,7 @@ private:
     }
 
     _context.stats.add(StatTag::Coarsening, "HnsAfterCoarsening", _hg.currentNumNodes());
+    LOG << "Coarsened from" << _hg.initialNumNodes() << "to" << _hg.currentNumNodes() << "in" << timer.stop();
   }
 
   bool uncoarsenImpl(IRefiner& refiner) override final {
