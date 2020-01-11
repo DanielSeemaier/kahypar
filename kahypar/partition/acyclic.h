@@ -247,7 +247,7 @@ static inline void partition(Hypergraph& hypergraph, const Context& context) {
   }
   ctx_copy.setupPartWeights(hypergraph.totalWeight());
 
-  LOG << "Initial" << context.partition.objective << " before first Vcycle ="
+  LOG << "Initial" << context.partition.objective << "before first Vcycle ="
       << (context.partition.objective == Objective::cut
           ? metrics::hyperedgeCut(hypergraph)
           : metrics::km1(hypergraph));
@@ -259,36 +259,40 @@ static inline void partition(Hypergraph& hypergraph, const Context& context) {
   for (uint32_t vcycle = 1; vcycle <= context.partition.global_search_iterations; ++vcycle) {
     context.partition.current_v_cycle = vcycle;
     if (vcycle == 1) {
-      LOG << "Using Refiner:" << context.local_search.algorithm;
+      LOG << "Performing vCycle on already partitioned graph using the following configuration:";
+      LOG << "\t-refiner:" << context.local_search.algorithm;
+      LOG << "\t-coarsening:" << context.coarsening.algorithm;
       partitionVCycle(hypergraph, *coarsener, *km1_refiner, ctx_copy, recombine);
       ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hypergraph, context).isAcyclic(),
              "Vcycle" << vcycle << "produced a cyclic partition");
     } else {
-      LOG << "Using Refiner:" << context.local_search.algorithm_second;
+      LOG << "Performing vCycle on already partitioned graph using the following configuration:";
+      LOG << "\t-refiner:" << context.local_search.algorithm_second;
+      LOG << "\t-coarsening:" << context.coarsening.algorithm;
 
-      { // just for testing ...
-        std::unique_ptr<IRefiner> pre_refiner(
-          RefinerFactory::getInstance().createObject(
-            context.local_search.algorithm_second, hypergraph, context));
-
-        LOG << "Performing pre V-cycle refinement with all border nodes";
-        pre_refiner->initialize(0);
-        UncontractionGainChanges changes;
-        changes.representative.push_back(0);
-        changes.contraction_partner.push_back(0);
-        std::vector<HypernodeID> refinement_nodes;
-        for (const HypernodeID& hn : hypergraph.nodes()) {
-          if (hypergraph.isBorderNode(hn)) {
-            refinement_nodes.push_back(hn);
-          }
-        }
-        Metrics current_metrics = {metrics::hyperedgeCut(hypergraph),
-                                   metrics::km1(hypergraph),
-                                   metrics::imbalance(hypergraph, context)};
-        LOG << "Before: KM1 is" << current_metrics.km1 << "and imbalance is" << current_metrics.imbalance;
-        pre_refiner->refine(refinement_nodes, {0, 0}, changes, current_metrics);
-        LOG << "Changed KM1 to" << current_metrics.km1 << "and imbalance to" << current_metrics.imbalance;
-      }
+//      { // just for testing ...
+//        std::unique_ptr<IRefiner> pre_refiner(
+//          RefinerFactory::getInstance().createObject(
+//            context.local_search.algorithm_second, hypergraph, context));
+//
+//        LOG << "Performing pre V-cycle refinement with all border nodes";
+//        pre_refiner->initialize(0);
+//        UncontractionGainChanges changes;
+//        changes.representative.push_back(0);
+//        changes.contraction_partner.push_back(0);
+//        std::vector<HypernodeID> refinement_nodes;
+//        for (const HypernodeID& hn : hypergraph.nodes()) {
+//          if (hypergraph.isBorderNode(hn)) {
+//            refinement_nodes.push_back(hn);
+//          }
+//        }
+//        Metrics current_metrics = {metrics::hyperedgeCut(hypergraph),
+//                                   metrics::km1(hypergraph),
+//                                   metrics::imbalance(hypergraph, context)};
+//        LOG << "Before: KM1 is" << current_metrics.km1 << "and imbalance is" << current_metrics.imbalance;
+//        pre_refiner->refine(refinement_nodes, {0, 0}, changes, current_metrics);
+//        LOG << "Changed KM1 to" << current_metrics.km1 << "and imbalance to" << current_metrics.imbalance;
+//      }
 
       partitionVCycle(hypergraph, *coarsener, *km1_refiner_second, context);
       ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hypergraph, context).isAcyclic(),

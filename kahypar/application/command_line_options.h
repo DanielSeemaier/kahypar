@@ -243,10 +243,29 @@ po::options_description createCoarseningOptionsDescription(Context& context,
         context.coarsening.algorithm = kahypar::coarseningAlgorithmFromString(ctype);
       }
     }),
-    "Algorithm:\n"
-    " - ml_style\n"
-    " - heavy_full\n"
-    " - heavy_lazy")
+     "Algorithm:\n"
+     " - ml_style\n"
+     " - heavy_full\n"
+     " - heavy_lazy\n"
+     " - external (legacy)\n"
+     " - acyclic_cluster_coarsening_v1 (legacy)\n"
+     " - acyclic_cluster_coarsening_v2")
+      ((initial_partitioning ? "i-c-type-initial" : "c-type-initial"),
+       po::value<std::string>()->value_name("<string>")->notifier(
+           [&context, initial_partitioning](const std::string& ctype) {
+             if (initial_partitioning) {
+               context.initial_partitioning.coarsening.initial_algorithm = kahypar::coarseningAlgorithmFromString(ctype);
+             } else {
+               context.coarsening.initial_algorithm = kahypar::coarseningAlgorithmFromString(ctype);
+             }
+           }),
+       "Algorithm:\n"
+       " - ml_style\n"
+       " - heavy_full\n"
+       " - heavy_lazy\n"
+       " - external (legacy)\n"
+       " - acyclic_cluster_coarsening_v1 (legacy)\n"
+       " - acyclic_cluster_coarsening_v2")
     ((initial_partitioning ? "i-c-mixed-contraction" : "c-mixed-contraction"),
     po::value<bool>(&context.coarsening.allow_mixed_contraction)->value_name("<bool>"),
     "Allow (tail, head) or (head, tail) contraction (for hypergraphs with only one head per edge)")

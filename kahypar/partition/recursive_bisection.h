@@ -284,10 +284,14 @@ static inline void partition(Hypergraph& input_hypergraph,
               initial::partition(current_hypergraph, current_context);
 
               // perform refinement
+              LOG << "Performing refinement of initial partitioner with configuration:";
+              LOG << "\t-refinement algorithm:" << RefinementAlgorithm::acyclic_twoway_km1;
+              LOG << "\t-coarsening algorithm:" << current_context.coarsening.initial_algorithm;
+
               std::unique_ptr<IRefiner> refiner(RefinerFactory::getInstance().createObject(
                   RefinementAlgorithm::acyclic_twoway_km1, current_hypergraph, current_context));
               std::unique_ptr<ICoarsener> coarsener(CoarsenerFactory::getInstance().createObject(
-                  CoarseningAlgorithm::acyclic_cluster_coarsening_v2, current_hypergraph, current_context, current_hypergraph.weightOfHeaviestNode()));
+                  current_context.coarsening.initial_algorithm, current_hypergraph, current_context, current_hypergraph.weightOfHeaviestNode()));
 
               double current_km1 = metrics::km1(current_hypergraph);
               double previous_km1 = current_km1;
