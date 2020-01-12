@@ -156,7 +156,17 @@ std::vector<HypernodeID> findAcyclicClusteringWithCycleDetection(const Hypergrap
           / static_cast<RatingType>(MultiplicativePenalty::penalty(hg.nodeWeight(u), hg.nodeWeight(v)));
 
       if (!internal::matchable(top[u], top[v])) continue;
-      if (hg.partID(v) != hg.partID(u)) continue;
+      if (context.coarsening.rating.partition_policy == RatingPartitionPolicy::evolutionary) {
+        ASSERT(context.evolutionary.parent1 != nullptr);
+        ASSERT(context.evolutionary.parent2 != nullptr);
+
+        if ((*context.evolutionary.parent1)[u] != (*context.evolutionary.parent1)[v] ||
+            (*context.evolutionary.parent2)[u] != (*context.evolutionary.parent2)[v]) {
+          continue;
+        }
+      } else if (hg.partID(v) != hg.partID(u)) {
+        continue;
+      }
       if (top[v] > top[u] && internal::isMarkup(v, top, leader, markup, markdown)) continue;
       if (top[v] < top[u] && internal::isMarkdown(v, top, leader, markup, markdown)) continue;
 
@@ -164,6 +174,9 @@ std::vector<HypernodeID> findAcyclicClusteringWithCycleDetection(const Hypergrap
       bool accept_successor = top[v] > top[u] && !internal::isMarkup(v, top, leader, markup, markdown);
       bool accept_predecessor = top[v] < top[u] && !internal::isMarkdown(v, top, leader, markup, markdown);
       bool accept_weight = (weight[u] + weight[leader[v]]) < max_weight;
+
+
+
 
       if (accept_rating && accept_weight && (accept_successor || accept_predecessor)) {
         best_rating = rating;
