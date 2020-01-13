@@ -42,7 +42,8 @@ bool detectCycle(const Hypergraph &hg, const HypernodeID u, const HypernodeID v,
 
   marker.reset();
 
- //const bool debug = (u == 106 || u == 365 || u == 231 || u == 415);
+ //const bool debug = (u == 1944 || u == 31602 || u == 31583 || u == 1969 || u == 31606 || u == 31576);
+// const bool debug = u == 31606;
  const bool debug = false;
 
  HypernodeID t = top[u] < top[v] ? top[u] : top[v]; // internal::isMarkdown(v, top, leader, markup, markdown) ? top[v] - 1 : top[v];
@@ -50,7 +51,7 @@ bool detectCycle(const Hypergraph &hg, const HypernodeID u, const HypernodeID v,
    t -= 1;
  }
 
-  DBG << V(u) << V(v) << V(t);
+  DBG << V(u) << V(v) << V(t) << V(top[u]) << V(top[v]);
 
   std::deque<HypernodeID> queue;
   queue.push_back(u);
@@ -81,6 +82,25 @@ bool detectCycle(const Hypergraph &hg, const HypernodeID u, const HypernodeID v,
           queue.push_back(y);
         }
       }
+
+      // new
+      for (const HyperedgeID &he : hg.incidentEdges(w)) {
+        for (const HypernodeID &x : hg.pins(he)) {
+          DBG << "\tConsidering" << x << leader[x] << leader[w];
+          if (x == w) {
+            continue;
+          }
+          if (leader[x] != leader[w]) {
+            continue;
+          }
+          if (marker[x]) {
+            continue;
+          }
+
+          DBG << "\tQueue" << x;
+          queue.push_back(x);
+        }
+      }
     } else if (top[w] == t + 1) { // down search
       DBG << "->Tail from" << w;
       for (const HyperedgeID &he : hg.incidentEdges(w)) {
@@ -108,6 +128,8 @@ bool detectCycle(const Hypergraph &hg, const HypernodeID u, const HypernodeID v,
 
     loop_end:;
   }
+
+  DBG << "Result:" << detected_cycle;
   return detected_cycle;
 }
 } // namespace internal
@@ -185,16 +207,22 @@ std::vector<HypernodeID> findAcyclicClusteringWithCycleDetection(const Hypergrap
     }
 
     if (best_v != Hypergraph::kInvalidHypernodeID) {
+//      const bool debug = (u == 1944 || u == 31602 || u == 31583 || u == 1969 || u == 31606 || u == 31576);
+      const bool debug = false;
+
       leader[u] = leader[best_v];
 
       if (!internal::isMarkup(best_v, top, leader, markup, markdown)
           && !internal::isMarkdown(best_v, top, leader, markup, markdown)
           && top[u] == top[best_v]) {
+        DBG << "For" << u << "and" << best_v << "--> no need for CC";
         // no cycle detection required
       } else if (internal::detectCycle(hg, u, best_v, top, leader, markup, markdown, marker)) { // resets marker
         leader[u] = u;
         continue; // contraction induces a cycle, thus abort
       }
+
+      DBG << "Add" << u << "to" << best_v << " cluster ==" << leader[best_v];
 
       // graph stays acyclic, add u to the cluster of best_v
       weight[leader[best_v]] += weight[u];

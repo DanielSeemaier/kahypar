@@ -29,3 +29,4 @@ test.sh
 .idea/
 cmake-build-debug/
 cmake-build-release/
+tmp/

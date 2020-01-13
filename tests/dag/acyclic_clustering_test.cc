@@ -47,7 +47,7 @@ protected:
         if (!acyclic) {
           const auto cycle = _debug_findCycleContainingHN(hg, clustering[hn]);
           LOG << "Acyclic:" << cycle;
-//          std::exit(1);
+          std::exit(1);
         }
         ASSERT_TRUE(acyclic);
       }
@@ -62,20 +62,38 @@ protected:
     std::vector<Hypergraph::Memento> contractions;
     const auto top = dag::calculateToplevelValues(hg);
 
-    hg.printDirectedHypergraphNode(475);
-    hg.printDirectedHypergraphNode(434);
-    hg.printDirectedHypergraphNode(443);
-    hg.printDirectedHypergraphNode(444);
+//    hg.printDirectedHypergraphNode(31583);
+//    hg.printDirectedHypergraphNode(1944);
+//    hg.printDirectedHypergraphNode(31576);
+//    hg.printDirectedHypergraphNode(1969);
+//    hg.printDirectedHypergraphNode(31602);
+//    hg.printDirectedHypergraphNode(31606);
 
-    LOG << clustering[434] << clustering[443];
-    LOG << top[434] << top[clustering[434]] << top[443] << top[clustering[443]];
+    LOG << V(top[31583]);
+    LOG << V(top[1944]);
+    LOG << V(top[31576]);
+    LOG << V(top[1969]);
+    LOG << V(top[31602]);
+    LOG << V(top[31606]);
+//
+//    LOG << clustering[434] << clustering[443];
+//    LOG << top[434] << top[clustering[434]] << top[443] << top[clustering[443]];
 
-    contractions.push_back(hg.contract(clustering[ 434 ],  434 ));
-    contractions.push_back(hg.contract(clustering[ 443 ],  443 ));
+    LOG << "Contract" << clustering[1944] << 1944;
+    contractions.push_back(hg.contract(clustering[1944], 1944));
+
+    LOG << "Contract" << clustering[1969] << 1969;
+    contractions.push_back(hg.contract(clustering[1969], 1969));
+
+    LOG << "Contract" << clustering[31602] << 31602;
+    LOG << "Contract" << clustering[31606] << 31606;
+    contractions.push_back(hg.contract(clustering[31602], 31602));
+    contractions.push_back(hg.contract(clustering[31606], 31606));
+
 
     const bool acyclic = isAcyclic(hg);
     if (!acyclic) {
-      const auto cycle = _debug_findCycleContainingHN(hg, clustering[475]);
+      const auto cycle = _debug_findCycleContainingHN(hg, 31583);
       LOG << "Acyclic:" << cycle;
     }
     ASSERT_TRUE(acyclic);
@@ -120,10 +138,10 @@ protected:
 //  ASSERT_THAT_CLUSTERING_IS_CONTRACTIBLE(clustering);
 //}
 
-TEST_P(AcyclicClusteringTest, SingleIterationOfClusteringWithCCIsContractible) {
-  const auto clustering = findAcyclicClusteringWithCycleDetection(hg, context, 1.0);
-  ASSERT_THAT_CLUSTERING_IS_CONTRACTIBLE(clustering);
-}
+//TEST_P(AcyclicClusteringTest, SingleIterationOfClusteringWithCCIsContractible) {
+//  const auto clustering = findAcyclicClusteringWithCycleDetection(hg, context, 1.0);
+//  ASSERT_THAT_CLUSTERING_IS_CONTRACTIBLE(clustering);
+//}
 
 //TEST_P(AcyclicClusteringTest, TwoIterationsOfClusteringAreContractible) {
 //  const auto clustering_iter1 = findAcyclicClustering(hg, context, 1.0);
@@ -148,6 +166,21 @@ TEST_P(AcyclicClusteringTest, ThreeIterationsOfClusteringWithCCAreContractible) 
   LOG << "Level 3 OK";
 }
 
+//TEST_P(AcyclicClusteringTest, Debug__RemoveMe) {
+//  std::vector<PartitionID> ip;
+//  io::readPartitionFile("/Users/danielseemaier/Projects/kahypar/tmp/ibm04.ip", ip);
+//  hg.setPartition(ip);
+//
+//  auto clustering_iter1 = findAcyclicClusteringWithCycleDetection(hg, context, 1.0);
+////  for (HypernodeID hn = 0; hn < 1940; ++hn) {
+////    clustering_iter1[hn] = hn;
+////  }
+////  for (HypernodeID hn = 1970; hn < 31600; ++hn) {
+////    clustering_iter1[hn] = hn;
+////  }
+//  ASSERT_THAT_CLUSTERING_IS_CONTRACTIBLE(clustering_iter1);
+//}
+
 //TEST_P(AcyclicClusteringTest, MaxClusterWeightIsRespected) {
 //  const double max_weight_fraction = 0.01;
 //  const auto max_weight = static_cast<HypernodeWeight>(max_weight_fraction * hg.totalWeight()) + 1;
@@ -167,12 +200,13 @@ TEST_P(AcyclicClusteringTest, ThreeIterationsOfClusteringWithCCAreContractible) 
 
 //INSTANTIATE_TEST_CASE_P(GRAPH_C17, AcyclicClusteringTest, Values("test_instances/c17.hgr"));
 
-INSTANTIATE_TEST_CASE_P(GRAPH_C880, AcyclicClusteringTest, Values("test_instances/c880.hgr"));
-
-INSTANTIATE_TEST_CASE_P(GRAPH_C7552, AcyclicClusteringTest, Values("test_instances/c7552.hgr"));
-
+//INSTANTIATE_TEST_CASE_P(GRAPH_C880, AcyclicClusteringTest, Values("test_instances/c880.hgr"));
+//
+//INSTANTIATE_TEST_CASE_P(GRAPH_C7552, AcyclicClusteringTest, Values("test_instances/c7552.hgr"));
+//
 INSTANTIATE_TEST_CASE_P(GRAPH_VIBROBOX, AcyclicClusteringTest, Values("test_instances/vibrobox.hgr"));
-
 INSTANTIATE_TEST_CASE_P(GRAPH_2MM, AcyclicClusteringTest, Values("test_instances/2mm_graph.hgr"));
+INSTANTIATE_TEST_CASE_P(HYPERGRAPH_IBM01, AcyclicClusteringTest, Values("test_instances/ibm01_hypergraph.hgr"));
+INSTANTIATE_TEST_CASE_P(HYPERGRAPH_IBM04, AcyclicClusteringTest, Values("test_instances/ibm04_hypergraph.hgr"));
 } // namespace dag
 } // namespace kahypar
