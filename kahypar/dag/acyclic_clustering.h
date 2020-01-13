@@ -195,13 +195,10 @@ std::vector<HypernodeID> findAcyclicClusteringWithCycleDetection(const Hypergrap
       if (top[v] > top[u] && internal::isMarkup(v, top, leader, markup, markdown)) continue;
       if (top[v] < top[u] && internal::isMarkdown(v, top, leader, markup, markdown)) continue;
 
-      bool accept_rating = rating > best_rating;
+      bool accept_rating = rating > best_rating || (rating == best_rating && Randomize::instance().flipCoin());
       bool accept_successor = top[v] > top[u] && !internal::isMarkup(v, top, leader, markup, markdown);
       bool accept_predecessor = top[v] < top[u] && !internal::isMarkdown(v, top, leader, markup, markdown);
       bool accept_weight = (weight[u] + weight[leader[v]]) < max_weight;
-
-
-
 
       if (accept_rating && accept_weight && (accept_successor || accept_predecessor)) {
         best_rating = rating;
