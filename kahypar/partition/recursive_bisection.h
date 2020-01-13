@@ -282,7 +282,6 @@ static inline void partition(Hypergraph& input_hypergraph,
             if (current_context.partition.mode == Mode::acyclic) {
               current_hypergraph.initializeNumCutHyperedges();
               initial::partition(current_hypergraph, current_context);
-              io::writePartitionFile(current_hypergraph, "tmp.ip");
 
               // perform refinement
               LOG << "Performing refinement of initial partitioner with configuration:";
