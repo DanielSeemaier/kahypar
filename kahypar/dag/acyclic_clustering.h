@@ -55,12 +55,12 @@ bool detectCycle(const Hypergraph &hg, const HypernodeID u, const HypernodeID v,
 
   std::deque<HypernodeID> queue;
   queue.push_back(u);
+  marker.set(u, true);
   bool detected_cycle = false;
 
   while (!queue.empty() && !detected_cycle) {
     const HypernodeID w = queue.front();
     queue.pop_front();
-    marker.set(w, true);
     const bool from_outside = (w != u && leader[w] != leader[v]);
 
     if (top[w] == t) { // up search
@@ -79,6 +79,7 @@ bool detectCycle(const Hypergraph &hg, const HypernodeID u, const HypernodeID v,
           }
 
           DBG << "\tQueue" << y;
+          marker.set(y, true);
           queue.push_back(y);
         }
       }
@@ -98,6 +99,7 @@ bool detectCycle(const Hypergraph &hg, const HypernodeID u, const HypernodeID v,
           }
 
           DBG << "\tQueue" << x;
+          marker.set(x, true);
           queue.push_back(x);
         }
       }
@@ -121,6 +123,7 @@ bool detectCycle(const Hypergraph &hg, const HypernodeID u, const HypernodeID v,
           }
 
           DBG << "\tQueue" << x;
+          marker.set(x, true);
           queue.push_back(x);
         }
       }
