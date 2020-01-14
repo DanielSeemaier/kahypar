@@ -121,7 +121,7 @@ class EvoPartitioner {
     const double epsilon_prime = 0.3; // TODO make this a config parameter, maximum imbalanced
 
     while (_population.size() < context.evolutionary.population_size &&
-           Timer::instance().evolutionaryResult().total_evolutionary <= _timelimit) {
+        (Timer::instance().evolutionaryResult().total_evolutionary <= _timelimit || context.evolutionary.force_population_size)) {
       ++context.evolutionary.iteration;
       HighResClockTimepoint start = std::chrono::high_resolution_clock::now();
       LOG << "Generating normal individual ...";

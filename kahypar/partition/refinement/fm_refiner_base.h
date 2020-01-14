@@ -109,7 +109,7 @@ class FMRefinerBase {
 
   bool moveIsFeasible(const HypernodeID max_gain_node, const PartitionID from_part,
                       const PartitionID to_part) const {
-    ASSERT(_context.partition.mode == Mode::direct_kway || _context.partition.mode == Mode::acyclic,
+    ASSERT(_context.partition.mode == Mode::direct_kway || _context.partition.mode == Mode::acyclic || _context.partition.mode == Mode::acyclic_kway,
            "Method should only be called in direct partitioning");
     return (_hg.partWeight(to_part) + _hg.nodeWeight(max_gain_node)
             <= _context.partition.max_part_weights[to_part]) && (_hg.partSize(from_part) - 1 != 0);

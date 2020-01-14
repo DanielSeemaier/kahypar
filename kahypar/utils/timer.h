@@ -175,7 +175,7 @@ class Timer {
             break;
         }
 
-        if (timing.mode == Mode::direct_kway || timing.mode == Mode::acyclic) {
+        if (timing.mode == Mode::direct_kway || timing.mode == Mode::acyclic || timing.mode == Mode::acyclic_kway) {
           if (timing.v_cycle == 0) {
             switch (timing.timepoint) {
               case Timepoint::coarsening:

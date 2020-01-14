@@ -77,6 +77,9 @@ static inline void partition(Hypergraph& hypergraph, const Context& context) {
     case Mode::acyclic:
       acyclic_rb::partition(hypergraph, context);
       break;
+    case Mode::acyclic_kway:
+      acyclic::partition(hypergraph, context);
+      break;
     case Mode::UNDEFINED:
       LOG << "Partitioning Mode undefined!";
       std::exit(-1);

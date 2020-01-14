@@ -186,7 +186,8 @@ static inline void partition(Hypergraph& hg, const Context& context) {
           << init_context.partition.epsilon << ")";
     }
     if ((context.initial_partitioning.technique == InitialPartitioningTechnique::flat &&
-        (context.initial_partitioning.mode == Mode::direct_kway || context.initial_partitioning.mode == Mode::acyclic)) ||
+        (context.initial_partitioning.mode == Mode::direct_kway || context.initial_partitioning.mode == Mode::acyclic
+          || context.initial_partitioning.mode == Mode::acyclic_kway)) ||
         fixed_vertex_subgraph_imbalance > context.partition.epsilon) {
       // NOTE: If the fixed vertex subgraph is imbalanced, we cannot guarantee
       //       a balanced initial partition with recursive bisection. Therefore,

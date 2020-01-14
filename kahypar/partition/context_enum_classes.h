@@ -33,6 +33,7 @@ enum class Mode : uint8_t {
   recursive_bisection,
   direct_kway,
   acyclic,
+  acyclic_kway,
   UNDEFINED
 };
 
@@ -278,6 +279,7 @@ std::ostream& operator<< (std::ostream& os, const Mode& mode) {
     case Mode::recursive_bisection: return os << "recursive";
     case Mode::direct_kway: return os << "direct";
     case Mode::acyclic: return os << "acyclic";
+    case Mode::acyclic_kway: return os << "acyclic_kway";
     case Mode::UNDEFINED: return os << "UNDEFINED";
       // omit default case to trigger compiler warning for missing cases
   }
@@ -733,6 +735,8 @@ static Mode modeFromString(const std::string& mode) {
     return Mode::direct_kway;
   } else if (mode == "acyclic") {
     return Mode::acyclic;
+  } else if (mode == "acyclic_kway") {
+    return Mode::acyclic_kway;
   }
   LOG << "Illegal option:" << mode;
   exit(0);

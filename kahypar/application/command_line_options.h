@@ -626,6 +626,12 @@ po::options_description createEvolutionaryOptionsDescription(Context& context,
     }),
     "Whether the population size should be determined by runtime\n"
     "default: on)")
+      ("force-population-size",
+          po::value<bool>()->value_name("<bool>")->notifier(
+              [&](const bool& force_size) {
+                context.evolutionary.force_population_size = force_size;
+              }),
+              "Whether the population size should always be generated regardless of time")
     ("dynamic-population-time",
     po::value<float>()->value_name("<float>")->notifier(
       [&](const float& dynamic_pop_time) {
