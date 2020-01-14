@@ -74,6 +74,11 @@ bool detectCycle(const Hypergraph &hg, const HypernodeID u, const HypernodeID v,
             detected_cycle = true;
             goto loop_end;
           }
+          // do not search single-level clusters
+          if (!isMarkdown(y, top, leader, markup, markdown)
+            && !isMarkup(y, top, leader, markup, markdown)) {
+            continue;
+          }
           if (marker[y]) {
             continue;
           }
