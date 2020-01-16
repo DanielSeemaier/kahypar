@@ -110,20 +110,27 @@ static inline void performInitialPartitioning(Hypergraph& hypergraph, const Cont
 
   if (context.partition.refine_initial_partition) {
     LOG << "Performing initial refinement with configured refiner";
-    ip_refiner->initialize(0);
+    Metrics current_metrics = {metrics::hyperedgeCut(hypergraph),
+                               metrics::km1(hypergraph),
+                               metrics::imbalance(hypergraph, ctx_copy)};
+    HyperedgeWeight previous_km1 = current_metrics.km1;
     UncontractionGainChanges changes;
     changes.representative.push_back(0);
     changes.contraction_partner.push_back(0);
-    std::vector<HypernodeID> refinement_nodes;
-    for (const HypernodeID& hn : hypergraph.nodes()) {
-      refinement_nodes.push_back(hn);
-    }
-    Metrics current_metrics = {metrics::hyperedgeCut(hypergraph),
-                               metrics::km1(hypergraph),
-                               metrics::imbalance(hypergraph, context)};
-    ip_refiner->refine(refinement_nodes, {0, 0}, changes, current_metrics);
-    ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hypergraph, context).isAcyclic(),
-           "Initial partition is not acyclic!");
+
+    do {
+      previous_km1 = current_metrics.km1;
+
+      ip_refiner->initialize(0);
+      std::vector<HypernodeID> refinement_nodes;
+      for (const HypernodeID &hn : hypergraph.nodes()) {
+        refinement_nodes.push_back(hn);
+      }
+      ip_refiner->refine(refinement_nodes, {0, 0}, changes, current_metrics);
+      ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hypergraph, context).isAcyclic(),
+             "Initial partition is not acyclic!");
+      LOG << "Result of k-way refinement:" << previous_km1 << "-->" << current_metrics.km1;
+    } while (0.99 * previous_km1 > current_metrics.km1);
   } else {
     LOG << "Initial refinement disabled";
   }

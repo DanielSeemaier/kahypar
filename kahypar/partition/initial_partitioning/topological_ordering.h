@@ -42,7 +42,7 @@ class TopologicalOrderingInitialPartitioner : public IInitialPartitioner,
     // assign nodes to the lowest non-overloaded block in topological order
     PartitionID p = 0;
     for (const HypernodeID& hn : topological_ordering) {
-      if (_hg.partWeight(p) >= _context.initial_partitioning.perfect_balance_partition_weight[p]) {
+      if (_hg.partWeight(p) > _context.initial_partitioning.perfect_balance_partition_weight[p]) {
         ++p;
       }
       ASSERT(p < _context.partition.k, "Could not find a non-overloaded partition for node" << hn);
