@@ -297,6 +297,7 @@ static inline void serializeEvolutionary(const Context& context, const Hypergrap
       << " absorption=" << metrics::absorption(hg)
       << " imbalance=" << metrics::imbalance(hg, context)
       << " k=" << context.partition.k
+      << " acyclic=" << AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hg, context).isAcyclic()
       << std::endl;
 
   std::cout << oss.str() << std::endl;
