@@ -37,7 +37,7 @@ namespace serializer {
 static inline void serialize(const Context& context, const Hypergraph& hypergraph,
                              const std::chrono::duration<double>& elapsed_seconds,
                              const size_t iteration = 0) {
-  if (context.partition.sp_process_output) {
+//  if (context.partition.sp_process_output) {
     const auto& timings = Timer::instance().result();
     std::ostringstream oss;
     oss << "RESULT"
@@ -252,7 +252,7 @@ static inline void serialize(const Context& context, const Hypergraph& hypergrap
         << std::endl;
 
     std::cout << oss.str() << std::endl;
-  }
+//  }
 }
 
 static inline void serializeEvolutionary(const Context& context, const Hypergraph& hg) {
