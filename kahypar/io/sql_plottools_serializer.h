@@ -60,7 +60,8 @@ static inline void serialize(const Context& context, const Hypergraph& hypergrap
         << " seed=" << context.partition.seed
         << " num_v_cycles=" << context.partition.global_search_iterations
         << " he_size_threshold=" << context.partition.hyperedge_size_threshold
-        << " total_graph_weight=" << hypergraph.totalWeight();
+        << " total_graph_weight=" << hypergraph.totalWeight()
+        << " acyclic=" << AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hypergraph, context).isAcyclic();
     if (context.partition.use_individual_part_weights) {
       for (PartitionID i = 0; i != hypergraph.k(); ++i) {
         oss << " L_opt" << i << "=" << context.partition.perfect_balance_part_weights[i];
@@ -285,6 +286,39 @@ static inline void serializeEvolutionary(const Context& context, const Hypergrap
       << " replace-strategy=" << context.evolutionary.replace_strategy
       << " combine-strategy=" << combine_strat
       << " mutate-strategy=" << mutate_strat
+      << " population-size=" << context.evolutionary.population_size
+      << " mutation-chance=" << context.evolutionary.mutation_chance
+      << " diversify-interval=" << context.evolutionary.diversify_interval
+      << " dynamic-pop-size=" << context.evolutionary.dynamic_population_size
+      << " dynamic-pop-percentile=" << context.evolutionary.dynamic_population_amount_of_time
+      << " seed=" << context.partition.seed
+      << " graph-name=" << truncated_graph_name
+      << " SOED=" << metrics::soed(hg)
+      << " cut=" << metrics::hyperedgeCut(hg)
+      << " absorption=" << metrics::absorption(hg)
+      << " imbalance=" << metrics::imbalance(hg, context)
+      << " k=" << context.partition.k
+      << " acyclic=" << AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hg, context).isAcyclic()
+      << std::endl;
+
+  std::cout << oss.str() << std::endl;
+}
+
+static inline void serializeResult(const Context& context, const Hypergraph& hg) {
+  std::ostringstream oss;
+  if (context.partition.quiet_mode) {
+    return;
+  }
+
+  std::string graph_name = context.partition.graph_filename;
+  std::string truncated_graph_name = graph_name.substr(graph_name.find_last_of("/") + 1);
+  oss << "RESULT "
+      << "connectivity=" << metrics::km1(hg)
+      << " edge-cut=" << metrics::edgeCut(hg)
+      << " action=" << context.evolutionary.action.decision()
+      << " time-total=" << Timer::instance().evolutionaryResult().total_evolutionary
+      << " iteration=" << context.evolutionary.iteration
+      << " replace-strategy=" << context.evolutionary.replace_strategy
       << " population-size=" << context.evolutionary.population_size
       << " mutation-chance=" << context.evolutionary.mutation_chance
       << " diversify-interval=" << context.evolutionary.diversify_interval
