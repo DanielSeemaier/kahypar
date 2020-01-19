@@ -23,7 +23,7 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
   using KWayRefinementPQ = ds::KWayPriorityQueue<HypernodeID, Gain, std::numeric_limits<Gain>>;
 
   static constexpr bool debug = false;
-  static constexpr HypernodeID hn_to_debug = 0;
+  static constexpr HypernodeID hn_to_debug = 10111;
 
   static constexpr std::size_t SUCCESSORS = 0;
   static constexpr std::size_t PREDECESSORS = 1;
@@ -243,9 +243,12 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
 
         // perform actual hypernode movement
         current_km1 -= max_gain;
+        if (_hg.nodeIsEnabled(hn_to_debug)) DBG << "Before move:" << isTailPartition(0) << isHeadPartition(0) << isTailPartition(1) << isHeadPartition(1) << isMovable(hn_to_debug) << fixtures(hn_to_debug) << _fixtures[0][hn_to_debug] << _fixtures[1][hn_to_debug];
         DBG << "Move HN" << max_gain_hn << ":" << from_part << "-->" << to_part << "for" << max_gain << ","
             << initial_km1 << "-->" << best_metrics.km1 << "-->" << current_km1;
         move(max_gain_hn, from_part, to_part);
+        if (_hg.nodeIsEnabled(hn_to_debug)) DBG << "After move:" << isTailPartition(0) << isHeadPartition(0) << isTailPartition(1) << isHeadPartition(1) << isMovable(hn_to_debug) << fixtures(hn_to_debug) << _fixtures[0][hn_to_debug] << _fixtures[1][hn_to_debug];
+
         ++moves_since_improvement;
         ASSERT(current_km1 == metrics::km1(_hg));
 
@@ -442,6 +445,7 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
     }
 #endif // KAHYPAR_USE_ASSERTIONS
     for (const HypernodeID& hn_to_deactivate : _hns_to_deactivate) {
+      DBGC(hn_to_deactivate == hn_to_debug) << "Deactivate" << hn_to_deactivate << _hg.active(hn_to_deactivate);
       if (!_hg.active(hn_to_deactivate)) { // hn might be contained multiple times in _hns_to_deactivate
         continue;
       }
@@ -519,6 +523,7 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
     for (const HyperedgeID& he : _hg.incidentTailEdges(hn)) {
       for (const HypernodeID& head : _hg.heads(he)) {
         if (_hg.partID(head) == _hg.partID(hn)) {
+          DBGC(head == hn_to_debug) << "Increment _fixtures[" << 1 << "][" << head << "]";
           ++_fixtures[PREDECESSORS][head];
 
           if (_hg.active(head) && !isMovable(head)) {
@@ -531,6 +536,7 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
     for (const HyperedgeID& he : _hg.incidentHeadEdges(hn)) {
       for (const HypernodeID& tail : _hg.tails(he)) {
         if (_hg.partID(tail) == _hg.partID(hn)) {
+          DBGC(tail == hn_to_debug) << "Increment _fixtures[" << 0 << "][" << tail << "]";
           ++_fixtures[SUCCESSORS][tail];
 
           if (_hg.active(tail) && !isMovable(tail)) {
@@ -554,7 +560,12 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
     for (const HyperedgeID& he : _hg.incidentTailEdges(hn)) {
       for (const HypernodeID& head : _hg.heads(he)) {
         if (_hg.partID(head) == _hg.partID(hn)) {
+          DBGC(hn == hn_to_debug) << "Increment _fixtures[" << 0 << "][" << hn << "]";
           ++_fixtures[SUCCESSORS][hn];
+
+          if (_hg.active(hn) && !isMovable(hn)) {
+            _hns_to_deactivate.push_back(hn);
+          }
         }
       }
     }
@@ -562,7 +573,12 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
     for (const HyperedgeID& he : _hg.incidentHeadEdges(hn)) {
       for (const HypernodeID& tail : _hg.tails(he)) {
         if (_hg.partID(tail) == _hg.partID(hn)) {
+          DBGC(hn == hn_to_debug) << "Increment _fixtures[" << 1 << "][" << hn << "]";
           ++_fixtures[PREDECESSORS][hn];
+
+          if (_hg.active(hn) && !isMovable(hn)) {
+            _hns_to_deactivate.push_back(hn);
+          }
         }
       }
     }
@@ -580,8 +596,12 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
   }
 
   bool isTailPartition(const PartitionID part) const {
-    for (const QNodeID& target : _qg->outs(part)) {
+    if (_qg->connected(part, 1 - part)) {
       return true;
+    } else if (!_qg->connected(1 - part, part)) {
+      // catch edge case where there are no edges in the quotient graph: is this case,
+      // make part 0 the tail and part 1 the head
+      return part == 0;
     }
     return false;
   }
@@ -656,6 +676,7 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
         ASSERT(!_pqs[target_part].contains(hn));
         ASSERT(_pqs[source_part].getKey(hn) == _gain_manager->gain(hn, target_part));
         ASSERT(_pqs[source_part].getKey(hn) == gainInducedByHypergraph(hn, target_part));
+        ASSERT(isMovable(hn));
         continue;
       }
 

@@ -272,10 +272,10 @@ void fixBipartitionAcyclicity(Hypergraph& hg, const Context& context) {
   const auto km_101 = metrics::km1(hg);
   ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hg, context).isAcyclic());
 
-  LOG << V(km_initial) << V(km_010) << V(imbalance_010) << V(km_010_prime) << V(imbalance_010_prime);
-  LOG << V(km_initial) << V(km_011) << V(imbalance_011) << V(km_011_prime) << V(imbalance_011_prime);
-  LOG << V(km_initial) << V(km_100) << V(imbalance_100) << V(km_100_prime) << V(imbalance_100_prime);
-  LOG << V(km_initial) << V(km_101) << V(imbalance_101) << V(km_101_prime) << V(imbalance_101_prime);
+//  LOG << V(km_initial) << V(km_010) << V(imbalance_010) << V(km_010_prime) << V(imbalance_010_prime);
+//  LOG << V(km_initial) << V(km_011) << V(imbalance_011) << V(km_011_prime) << V(imbalance_011_prime);
+//  LOG << V(km_initial) << V(km_100) << V(imbalance_100) << V(km_100_prime) << V(imbalance_100_prime);
+//  LOG << V(km_initial) << V(km_101) << V(imbalance_101) << V(km_101_prime) << V(imbalance_101_prime);
 
   // apply best partition
   const auto best_km1 = std::min(km_010, std::min(km_011, std::min(km_100, km_101)));

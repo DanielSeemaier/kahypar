@@ -307,17 +307,6 @@ static inline void partition(Hypergraph& input_hypergraph,
 
                 LOG << "Result of refinement:" << previous_km1 << "-->" << current_km1;
               } while (0.99 * previous_km1 > current_km1 && improved);
-
-              // TODO refactor
-              for (int i = 0; i < 5; ++i) {
-                coarsener->coarsen(current_context.coarsening.contraction_limit);
-                current_hypergraph.initializeNumCutHyperedges();
-                bool improved = coarsener->uncoarsen(*refiner);
-                refiner->printSummary();
-                if (!improved) {
-                  break;
-                }
-              }
             } else {
               std::unique_ptr<ICoarsener> coarsener(
                   CoarsenerFactory::getInstance().createObject(

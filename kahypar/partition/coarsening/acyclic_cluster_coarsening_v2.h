@@ -95,8 +95,6 @@ private:
 
       if (!dag::isAcyclic(_hg)) {
         throw std::runtime_error("coarser graph is cyclic");
-      } else {
-        LOG << "Iteration OK, got" << _hg.currentNumNodes() << "/" << limit << "/" << _hg.initialNumNodes();
       }
 
       if (num_contractions == 0) {
