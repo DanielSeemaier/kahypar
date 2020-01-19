@@ -69,7 +69,6 @@ static inline bool partitionVCycle(Hypergraph &hypergraph, ICoarsener &coarsener
   io::printLocalSearchBanner(context);
   const bool improved_quality = coarsener.uncoarsen(refiner);
   io::printLocalSearchResults(context, hypergraph);
-  refiner.printSummary();
   return improved_quality;
 }
 
@@ -155,7 +154,6 @@ static inline std::vector<PartitionID> createPartitionSnapshot(const Hypergraph 
 
 static inline void partition(Hypergraph &hypergraph, const Context &context) {
   ASSERT(hypergraph.isDirected());
-  LOG << "Path to rMLGP from acyclic_rb:" << context.rmlgp_path;
 
   Context ctx_copy(context);
   const bool recombine = context.partition_evolutionary && context.evolutionary.action.requires().initial_partitioning;
