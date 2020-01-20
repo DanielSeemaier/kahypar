@@ -60,41 +60,27 @@ protected:
 
   void ASSERT_THAT_CLUSTERING_IS_CONTRACTIBLE2(const std::vector<HypernodeID> &clustering) {
     std::vector<Hypergraph::Memento> contractions;
-    const auto top = dag::calculateToplevelValues(hg);
+    const auto levels = dag::calculateBottomLevelValues(hg);
 
-//    hg.printDirectedHypergraphNode(31583);
-//    hg.printDirectedHypergraphNode(1944);
-//    hg.printDirectedHypergraphNode(31576);
-//    hg.printDirectedHypergraphNode(1969);
-//    hg.printDirectedHypergraphNode(31602);
-//    hg.printDirectedHypergraphNode(31606);
+    LOG << clustering[19] << 19;
+    LOG << clustering[20] << 20;
 
-    LOG << V(top[31583]);
-    LOG << V(top[1944]);
-    LOG << V(top[31576]);
-    LOG << V(top[1969]);
-    LOG << V(top[31602]);
-    LOG << V(top[31606]);
-//
-//    LOG << clustering[434] << clustering[443];
-//    LOG << top[434] << top[clustering[434]] << top[443] << top[clustering[443]];
+    LOG << V(levels[219]) << V(levels[19]) << V(levels[20]) << V(levels[96]);
 
-    LOG << "Contract" << clustering[1944] << 1944;
-    contractions.push_back(hg.contract(clustering[1944], 1944));
+    hg.printDirectedHypergraphNode(219);
+    hg.printDirectedHypergraphNode(19);
+    hg.printDirectedHypergraphNode(96);
+    hg.printDirectedHypergraphNode(20);
 
-    LOG << "Contract" << clustering[1969] << 1969;
-    contractions.push_back(hg.contract(clustering[1969], 1969));
-
-    LOG << "Contract" << clustering[31602] << 31602;
-    LOG << "Contract" << clustering[31606] << 31606;
-    contractions.push_back(hg.contract(clustering[31602], 31602));
-    contractions.push_back(hg.contract(clustering[31606], 31606));
+    contractions.push_back(hg.contract(clustering[ 19 ],  19 ));
+    contractions.push_back(hg.contract(clustering[ 20 ],  20 ));
 
 
     const bool acyclic = isAcyclic(hg);
     if (!acyclic) {
       const auto cycle = _debug_findCycleContainingHN(hg, 31583);
       LOG << "Acyclic:" << cycle;
+      std::exit(-1);
     }
     ASSERT_TRUE(acyclic);
 
@@ -151,17 +137,17 @@ protected:
 //}
 
 TEST_P(AcyclicClusteringTest, ThreeIterationsOfClusteringWithCCAreContractible) {
-  const auto clustering_iter1 = findAcyclicClusteringWithCycleDetection(hg, context, 1.0);
+  const auto clustering_iter1 = findAcyclicClusteringWithCycleDetection(hg, context, 1.0, false);
   ASSERT_THAT_CLUSTERING_IS_CONTRACTIBLE(clustering_iter1);
   contractClustering(clustering_iter1);
   LOG << "Level 1 OK";
 
-  const auto clustering_iter2 = findAcyclicClusteringWithCycleDetection(hg, context, 1.0);
+  const auto clustering_iter2 = findAcyclicClusteringWithCycleDetection(hg, context, 1.0, false);
   ASSERT_THAT_CLUSTERING_IS_CONTRACTIBLE(clustering_iter2);
   contractClustering(clustering_iter2);
   LOG << "Level 2 OK";
 
-  const auto clustering_iter3 = findAcyclicClusteringWithCycleDetection(hg, context, 1.0);
+  const auto clustering_iter3 = findAcyclicClusteringWithCycleDetection(hg, context, 1.0, true);
   ASSERT_THAT_CLUSTERING_IS_CONTRACTIBLE(clustering_iter3);
   LOG << "Level 3 OK";
 }
@@ -197,13 +183,13 @@ TEST_P(AcyclicClusteringTest, ThreeIterationsOfClusteringWithCCAreContractible) 
 //}
 
 //INSTANTIATE_TEST_CASE_P(GRAPH_STAR, AcyclicClusteringTest, Values("test_instances/star.hgr"));
-
+//
 //INSTANTIATE_TEST_CASE_P(GRAPH_C17, AcyclicClusteringTest, Values("test_instances/c17.hgr"));
+//
+INSTANTIATE_TEST_CASE_P(GRAPH_C880, AcyclicClusteringTest, Values("test_instances/c880.hgr"));
 
-//INSTANTIATE_TEST_CASE_P(GRAPH_C880, AcyclicClusteringTest, Values("test_instances/c880.hgr"));
-//
-//INSTANTIATE_TEST_CASE_P(GRAPH_C7552, AcyclicClusteringTest, Values("test_instances/c7552.hgr"));
-//
+INSTANTIATE_TEST_CASE_P(GRAPH_C7552, AcyclicClusteringTest, Values("test_instances/c7552.hgr"));
+
 INSTANTIATE_TEST_CASE_P(GRAPH_VIBROBOX, AcyclicClusteringTest, Values("test_instances/vibrobox.hgr"));
 INSTANTIATE_TEST_CASE_P(GRAPH_2MM, AcyclicClusteringTest, Values("test_instances/2mm_graph.hgr"));
 INSTANTIATE_TEST_CASE_P(HYPERGRAPH_IBM01, AcyclicClusteringTest, Values("test_instances/ibm01_hypergraph.hgr"));

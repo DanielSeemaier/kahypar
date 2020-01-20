@@ -143,7 +143,8 @@ bool detectCycle(const Hypergraph &hg, const HypernodeID u, const HypernodeID v,
 } // namespace internal
 
 std::vector<HypernodeID> findAcyclicClusteringWithCycleDetection(const Hypergraph &hg, const Context &context,
-                                                                 double max_weight_fraction = 1.0) {
+                                                                 const double max_weight_fraction = 1.0,
+                                                                 const bool top_or_bottom = true) {
   std::vector<bool> markup(hg.initialNumNodes()); // in a cluster with higher toplevel nodes
   std::vector<bool> markdown(hg.initialNumNodes()); // in a cluster with lower toplevel nodes
   std::vector<HypernodeWeight> weight(hg.initialNumNodes());
@@ -152,7 +153,7 @@ std::vector<HypernodeID> findAcyclicClusteringWithCycleDetection(const Hypergrap
   }
   std::vector<HypernodeID> leader(hg.initialNumNodes());
   std::iota(leader.begin(), leader.end(), 0);
-  const auto top = calculateToplevelValues(hg);
+  const auto top = top_or_bottom ? calculateToplevelValues(hg) : calculateBottomLevelValues(hg);
   ds::SparseMap<HypernodeID, RatingType> ratings(hg.initialNumNodes(), 0);
   ds::FastResetFlagArray<> marker(hg.initialNumNodes());
   std::vector<bool> member(hg.initialNumNodes());

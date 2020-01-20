@@ -122,6 +122,28 @@ bool isAcyclic(const Hypergraph& hg) {
   }
 }
 
+std::vector<HypernodeID> calculateBottomLevelValues(const Hypergraph& hg) {
+  auto topological_order = calculateTopologicalOrdering(hg);
+  std::reverse(topological_order.begin(), topological_order.end());
+
+  std::vector<HypernodeID> bottom(hg.initialNumNodes());
+  HypernodeID max_level = 0;
+  for (const HypernodeID& tail : topological_order) {
+    for (const HyperedgeID& he : hg.incidentTailEdges(tail)) {
+      for (const HypernodeID& head : hg.heads(he)) {
+        bottom[tail] = std::max(bottom[tail], bottom[head] + 1);
+      }
+    }
+    max_level = std::max(max_level, bottom[tail]);
+  }
+
+  for (auto& level : bottom) {
+    level = max_level - level;
+  }
+
+  return bottom;
+}
+
 std::vector<HypernodeID> calculateToplevelValues(const Hypergraph& hg) {
   std::deque<HypernodeID> queue;
   std::vector<HypernodeID> top(hg.initialNumNodes());

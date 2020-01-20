@@ -80,12 +80,13 @@ private:
     std::size_t num_contractions = 0;
     HTimer timer;
     timer.start();
+    int it = 0;
     while (_hg.currentNumNodes() > limit) {
       num_contractions = 0;
 
       const double max_weight_fraction = static_cast<double>(_context.coarsening.max_allowed_weight_multiplier)
           / static_cast<double>(_context.coarsening.contraction_limit_multiplier * _context.partition.k);
-      const auto clustering = dag::findAcyclicClusteringWithCycleDetection(_hg, _context, max_weight_fraction);
+      const auto clustering = dag::findAcyclicClusteringWithCycleDetection(_hg, _context, max_weight_fraction, it % 2 == 0);
       for (const HypernodeID& hn : _hg.nodes()) {
         if (clustering[hn] != hn) {
           performContraction(clustering[hn], hn);
@@ -97,6 +98,7 @@ private:
         throw std::runtime_error("coarser graph is cyclic");
       }
 
+      ++it;
       if (num_contractions == 0) {
         break;
       }
@@ -107,7 +109,7 @@ private:
     }
 
     _context.stats.add(StatTag::Coarsening, "HnsAfterCoarsening", _hg.currentNumNodes());
-    LOG << "Coarsened from" << _hg.initialNumNodes() << "to" << _hg.currentNumNodes() << "in" << timer.stop();
+    LOG << "Coarsened from" << _hg.initialNumNodes() << "to" << _hg.currentNumNodes() << "in" << timer.stop() << "s /" << it << "iterations";
   }
 
   bool uncoarsenImpl(IRefiner& refiner) override final {
