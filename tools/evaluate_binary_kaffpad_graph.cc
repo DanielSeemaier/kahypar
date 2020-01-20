@@ -4,9 +4,13 @@ static inline bool scan(const std::vector<std::vector<bool>>& Q, std::vector<boo
   for (std::size_t v = 0; v < Q.size(); ++v) {
     if (u == v) continue;
     if (!Q[u][v]) continue;
-    if (marked[v]) return false;
+    if (marked[v]) {
+      return false;
+    }
     marked[v] = true;
-    scan(Q, marked, v);
+    if (!scan(Q, marked, v)) {
+      return false;
+    }
     marked[v] = false;
   }
   return true;
@@ -15,9 +19,10 @@ static inline bool scan(const std::vector<std::vector<bool>>& Q, std::vector<boo
 static inline bool checkAcyclic(const std::vector<std::vector<bool>>& Q) {
   std::vector<bool> marked(Q.size());
 
-  for (std::size_t u = 0; u < Q.size(); ++u) {
+  for (std::size_t u = 0; u < 1; ++u) {
     marked[u] = true;
-    if (!scan(Q, marked, u)) {
+    const bool result = scan(Q, marked, u);
+    if (!result) {
       return false;
     }
     marked[u] = false;
@@ -115,13 +120,11 @@ int main(int argc, char *argv[]) {
   for (kaffpa::NodeID u = 0; u < header.numberOfNodes; ++u) {
     const auto &node = nodes[u];
     const auto &next = nodes[u + 1];
-
     const auto part_u = table[u];
 
     for (kaffpa::EdgeID e = node.firstOutEdge; e < next.firstOutEdge; ++e) {
       const kaffpa::NodeID v = forward_edges[e].target;
       const auto part_v = table[v];
-
       if (part_u != part_v) {
         Q[part_u][part_v] = true;
       }
