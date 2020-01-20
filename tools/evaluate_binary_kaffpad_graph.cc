@@ -1,5 +1,31 @@
 #include "kahypar/io/hypergraph_io.h"
 
+static inline bool scan(const std::vector<std::vector<bool>>& Q, std::vector<bool>& marked, const std::size_t u) {
+  for (std::size_t v = 0; v < Q.size(); ++v) {
+    if (u == v) continue;
+    if (!Q[u][v]) continue;
+    if (marked[v]) return false;
+    marked[v] = true;
+    scan(Q, marked, v);
+    marked[v] = false;
+  }
+  return true;
+}
+
+static inline bool checkAcyclic(const std::vector<std::vector<bool>>& Q) {
+  std::vector<bool> marked(Q.size());
+
+  for (std::size_t u = 0; u < Q.size(); ++u) {
+    marked[u] = true;
+    if (!scan(Q, marked, u)) {
+      return false;
+    }
+    marked[u] = false;
+  }
+
+  return true;
+}
+
 static inline void readBinaryKaffpaD(const std::string& filename,
                                      kaffpa::KaffpaHeader& out_header,
                                      std::vector<kaffpa::Node>& out_nodes,
@@ -85,12 +111,29 @@ int main(int argc, char *argv[]) {
   std::cout << "EdgeCut based on the partition table: " << cut << std::endl;
 
   // check acyclicity
-  kaffpa::NodeID num_ok = 0;
-  std::vector<kaffpa::NodeID> queue;
+  std::vector<std::vector<bool>> Q(result.k, std::vector<bool>(result.k));
   for (kaffpa::NodeID u = 0; u < header.numberOfNodes; ++u) {
-    const auto& node = nodes[u];
+    const auto &node = nodes[u];
+    const auto &next = nodes[u + 1];
 
+    const auto part_u = table[u];
 
+    for (kaffpa::EdgeID e = node.firstOutEdge; e < next.firstOutEdge; ++e) {
+      const kaffpa::NodeID v = forward_edges[e].target;
+      const auto part_v = table[v];
+
+      if (part_u != part_v) {
+        Q[part_u][part_v] = true;
+      }
+    }
   }
+
+  if (!checkAcyclic(Q)) {
+    std::cout << "Error!! Quotient graph is cyclic!" << std::endl;
+    return 1;
+  } else {
+    std::cout << "Quotient graph should be acyclic" << std::endl;
+  }
+
   return 0;
 }
