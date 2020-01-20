@@ -46,7 +46,7 @@ int main(int argc, char *argv[]) {
   kahypar::PartitionerFacade().partition(hypergraph, context);
 
   if (context.partition.mode == kahypar::Mode::acyclic || context.partition.mode == kahypar::Mode::acyclic_kway) {
-    if (!kahypar::dag::isAcyclic(hypergraph)) {
+    if (!kahypar::AdjacencyMatrixQuotientGraph<kahypar::DFSCycleDetector>(hypergraph, context).isAcyclic()) {
       throw std::runtime_error("final partition is cyclic!");
     }
   }

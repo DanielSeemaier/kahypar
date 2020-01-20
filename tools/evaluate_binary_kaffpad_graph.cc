@@ -83,5 +83,14 @@ int main(int argc, char *argv[]) {
   }
 
   std::cout << "EdgeCut based on the partition table: " << cut << std::endl;
+
+  // check acyclicity
+  kaffpa::NodeID num_ok = 0;
+  std::vector<kaffpa::NodeID> queue;
+  for (kaffpa::NodeID u = 0; u < header.numberOfNodes; ++u) {
+    const auto& node = nodes[u];
+
+
+  }
   return 0;
 }
