@@ -36,6 +36,7 @@ class HgpInitialPartitioner : public IInitialPartitioner, private InitialPartiti
 
   void initialPartition() {
     DBG << "initialPartition()";
+
     _total_hgp_time = 0.0;
     HTimer timer;
     timer.start();
@@ -46,7 +47,12 @@ class HgpInitialPartitioner : public IInitialPartitioner, private InitialPartiti
       _hg.setNodePart(hn, 0);
     }
 
-    performPartition(0, _context.partition.k);
+    if (_hg.initialNumEdges() <= 16) { // catch special case where the graph is too small
+      TopologicalOrderingInitialPartitioner topo_ip(_hg, _context);
+      topo_ip.partition();
+    } else {
+      performPartition(0, _context.partition.k);
+    }
 
     const bool acyclic = AdjacencyMatrixQuotientGraph<DFSCycleDetector>(_hg, _context).isAcyclic();
     if (!acyclic) {
@@ -146,10 +152,12 @@ class HgpInitialPartitioner : public IInitialPartitioner, private InitialPartiti
     const auto pair = extractPartAsUnpartitionedHypergraphForBisection(_hg, part, Objective::km1);
     const auto& hg_ptr = pair.first;
     const auto subgraph_size = hg_ptr->initialNumNodes();
+
     const auto& map = pair.second;
     hg_ptr->resetPartitioning();
     hg_ptr->setDirected(false);
     invokeHypergraphPartitioner(*hg_ptr, 2, _context.partition.epsilon);
+    hg_ptr->setDirected(true);
     const bool fix_ip = _context.initial_partitioning.partitioner != "rmlgp";
 
     Context ctx = createContext(2, _context.partition.epsilon);

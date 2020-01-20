@@ -23,7 +23,7 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
   using KWayRefinementPQ = ds::KWayPriorityQueue<HypernodeID, Gain, std::numeric_limits<Gain>>;
 
   static constexpr bool debug = false;
-  static constexpr HypernodeID hn_to_debug = 10111;
+  static constexpr HypernodeID hn_to_debug = 0;
 
   static constexpr std::size_t SUCCESSORS = 0;
   static constexpr std::size_t PREDECESSORS = 1;
@@ -243,11 +243,9 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
 
         // perform actual hypernode movement
         current_km1 -= max_gain;
-        if (_hg.nodeIsEnabled(hn_to_debug)) DBG << "Before move:" << isTailPartition(0) << isHeadPartition(0) << isTailPartition(1) << isHeadPartition(1) << isMovable(hn_to_debug) << fixtures(hn_to_debug) << _fixtures[0][hn_to_debug] << _fixtures[1][hn_to_debug];
         DBG << "Move HN" << max_gain_hn << ":" << from_part << "-->" << to_part << "for" << max_gain << ","
             << initial_km1 << "-->" << best_metrics.km1 << "-->" << current_km1;
         move(max_gain_hn, from_part, to_part);
-        if (_hg.nodeIsEnabled(hn_to_debug)) DBG << "After move:" << isTailPartition(0) << isHeadPartition(0) << isTailPartition(1) << isHeadPartition(1) << isMovable(hn_to_debug) << fixtures(hn_to_debug) << _fixtures[0][hn_to_debug] << _fixtures[1][hn_to_debug];
 
         ++moves_since_improvement;
         ASSERT(current_km1 == metrics::km1(_hg));

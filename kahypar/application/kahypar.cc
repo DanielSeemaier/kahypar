@@ -23,6 +23,7 @@
 #include "kahypar/definitions.h"
 #include "kahypar/io/hypergraph_io.h"
 #include "kahypar/partitioner_facade.h"
+#include "kahypar/partition/context_enum_classes.h"
 
 int main(int argc, char *argv[]) {
   kahypar::Context context;
@@ -43,6 +44,12 @@ int main(int argc, char *argv[]) {
   );
 
   kahypar::PartitionerFacade().partition(hypergraph, context);
+
+  if (context.partition.mode == kahypar::Mode::acyclic || context.partition.mode == kahypar::Mode::acyclic_kway) {
+    if (!kahypar::dag::isAcyclic(hypergraph)) {
+      throw std::runtime_error("final partition is cyclic!");
+    }
+  }
 
   if (context.bin_kaffpaD) {
     kahypar::io::writePartitionToSharedMemoryGraphFile(hypergraph, context.partition.graph_filename);
