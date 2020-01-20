@@ -38,9 +38,9 @@ namespace kahypar {
 namespace io {
 using Mapping = std::unordered_map<HypernodeID, HypernodeID>;
 
-static inline void readHGRHeader(std::ifstream& file, HyperedgeID& num_hyperedges,
-                                 HypernodeID& num_hypernodes, HypergraphType& hypergraph_type,
-                                 bool& is_directed) {
+static inline void readHGRHeader(std::ifstream &file, HyperedgeID &num_hyperedges,
+                                 HypernodeID &num_hypernodes, HypergraphType &hypergraph_type,
+                                 bool &is_directed) {
   std::string line;
   std::getline(file, line);
 
@@ -55,14 +55,14 @@ static inline void readHGRHeader(std::ifstream& file, HyperedgeID& num_hyperedge
   hypergraph_type = static_cast<HypergraphType>(i);
 }
 
-static inline void readHypergraphFile(const std::string& filename, HypernodeID& num_hypernodes,
-                                      HyperedgeID& num_hyperedges,
-                                      HyperedgeIndexVector& index_vector,
-                                      HyperedgeVector& edge_vector,
-                                      bool& is_directed,
-                                      NumHeadsVector& num_heads_vector,
-                                      HyperedgeWeightVector* hyperedge_weights = nullptr,
-                                      HypernodeWeightVector* hypernode_weights = nullptr) {
+static inline void readHypergraphFile(const std::string &filename, HypernodeID &num_hypernodes,
+                                      HyperedgeID &num_hyperedges,
+                                      HyperedgeIndexVector &index_vector,
+                                      HyperedgeVector &edge_vector,
+                                      bool &is_directed,
+                                      NumHeadsVector &num_heads_vector,
+                                      HyperedgeWeightVector *hyperedge_weights = nullptr,
+                                      HypernodeWeightVector *hypernode_weights = nullptr) {
   ASSERT(!filename.empty(), "No filename for hypergraph file specified");
   HypergraphType hypergraph_type = HypergraphType::Unweighted;
   std::ifstream file(filename);
@@ -138,15 +138,15 @@ static inline void readHypergraphFile(const std::string& filename, HypernodeID& 
   }
 }
 
-static inline void readHypergraphFile(const std::string& filename,
-                                      HypernodeID& num_hypernodes,
-                                      HyperedgeID& num_hyperedges,
-                                      std::unique_ptr<size_t[]>& index_vector,
-                                      std::unique_ptr<HypernodeID[]>& edge_vector,
-                                      bool& is_directed,
-                                      std::unique_ptr<HypernodeID[]>& num_heads_vector,
-                                      std::unique_ptr<HyperedgeWeight[]>& hyperedge_weights,
-                                      std::unique_ptr<HypernodeWeight[]>& hypernode_weights) {
+static inline void readHypergraphFile(const std::string &filename,
+                                      HypernodeID &num_hypernodes,
+                                      HyperedgeID &num_hyperedges,
+                                      std::unique_ptr<size_t[]> &index_vector,
+                                      std::unique_ptr<HypernodeID[]> &edge_vector,
+                                      bool &is_directed,
+                                      std::unique_ptr<HypernodeID[]> &num_heads_vector,
+                                      std::unique_ptr<HyperedgeWeight[]> &hyperedge_weights,
+                                      std::unique_ptr<HypernodeWeight[]> &hypernode_weights) {
   HyperedgeIndexVector index_vec;
   HyperedgeVector edge_vec;
   NumHeadsVector num_heads_vec;
@@ -182,7 +182,7 @@ static inline void readHypergraphFile(const std::string& filename,
   }
 }
 
-static inline Hypergraph createHypergraphFromFile(const std::string& filename,
+static inline Hypergraph createHypergraphFromFile(const std::string &filename,
                                                   const PartitionID num_parts) {
   HypernodeID num_hypernodes;
   HyperedgeID num_hyperedges;
@@ -201,13 +201,14 @@ static inline Hypergraph createHypergraphFromFile(const std::string& filename,
 }
 
 
-static inline void writeHypernodeWeights(std::ofstream& out_stream, const Hypergraph& hypergraph) {
-  for (const HypernodeID& hn : hypergraph.nodes()) {
+static inline void writeHypernodeWeights(std::ofstream &out_stream, const Hypergraph &hypergraph) {
+  for (const HypernodeID &hn : hypergraph.nodes()) {
     out_stream << hypergraph.nodeWeight(hn) << "\n";
   }
 }
 
-static inline void writeHGRHeader(std::ofstream& out_stream, const Hypergraph& hypergraph, const bool respect_directed = true) {
+static inline void
+writeHGRHeader(std::ofstream &out_stream, const Hypergraph &hypergraph, const bool respect_directed = true) {
   out_stream << hypergraph.initialNumEdges() << " " << hypergraph.initialNumNodes() << " ";
   if (hypergraph.type() != HypergraphType::Unweighted) {
     out_stream << static_cast<int>(hypergraph.type());
@@ -218,14 +219,15 @@ static inline void writeHGRHeader(std::ofstream& out_stream, const Hypergraph& h
   out_stream << std::endl;
 }
 
-static inline void writeHypergraphFile(const Hypergraph& hypergraph, const std::string& filename, const bool respect_directed = true) {
+static inline void
+writeHypergraphFile(const Hypergraph &hypergraph, const std::string &filename, const bool respect_directed = true) {
   ASSERT(!filename.empty(), "No filename for hypergraph file specified");
   ALWAYS_ASSERT(!hypergraph.isModified(), "Hypergraph is modified. Reindexing HNs/HEs necessary.");
 
   std::ofstream out_stream(filename.c_str());
   writeHGRHeader(out_stream, hypergraph, respect_directed);
 
-  for (const HyperedgeID& he : hypergraph.edges()) {
+  for (const HyperedgeID &he : hypergraph.edges()) {
     if (hypergraph.type() == HypergraphType::EdgeWeights ||
         hypergraph.type() == HypergraphType::EdgeAndNodeWeights) {
       out_stream << hypergraph.edgeWeight(he) << " ";
@@ -233,7 +235,7 @@ static inline void writeHypergraphFile(const Hypergraph& hypergraph, const std::
     if (respect_directed && hypergraph.isDirected()) {
       out_stream << hypergraph.edgeNumHeads(he) << " ";
     }
-    for (const HypernodeID& pin : hypergraph.pins(he)) {
+    for (const HypernodeID &pin : hypergraph.pins(he)) {
       out_stream << pin + 1 << " ";
     }
     out_stream << "\n";
@@ -247,10 +249,10 @@ static inline void writeHypergraphFile(const Hypergraph& hypergraph, const std::
 }
 
 
-static inline void writeHypergraphToGraphMLFile(const Hypergraph& hypergraph,
-                                                const std::string& filename,
-                                                const std::vector<PartitionID>* hn_cluster_ids = nullptr,
-                                                const std::vector<PartitionID>* he_cluster_ids = nullptr) {
+static inline void writeHypergraphToGraphMLFile(const Hypergraph &hypergraph,
+                                                const std::string &filename,
+                                                const std::vector<PartitionID> *hn_cluster_ids = nullptr,
+                                                const std::vector<PartitionID> *he_cluster_ids = nullptr) {
   std::ofstream out_stream(filename.c_str());
 
   out_stream << R"(<?xml version="1.0" encoding="UTF-8" standalone="no"?>)"
@@ -271,7 +273,7 @@ static inline void writeHypergraphToGraphMLFile(const Hypergraph& hypergraph,
   out_stream << R"(<key id="d7" for="node" attr.name="modclass" attr.type="int"/>)" << std::endl;
   out_stream << R"(<key id="d8" for="node" attr.name="color" attr.type="string"/>)" << std::endl;
   out_stream << R"(<graph id="G" edgedefault="undirected">)" << std::endl;
-  for (const HypernodeID& hn : hypergraph.nodes()) {
+  for (const HypernodeID &hn : hypergraph.nodes()) {
     out_stream << R"(<node id="n)" << hn << R"(">)" << std::endl;
     out_stream << R"(<data key="d0">)" << hypergraph.nodeWeight(hn) << "</data>" << std::endl;
     if (hn_cluster_ids != nullptr) {
@@ -286,7 +288,7 @@ static inline void writeHypergraphToGraphMLFile(const Hypergraph& hypergraph,
   }
 
   HyperedgeID edge_id = 0;
-  for (const HyperedgeID& he : hypergraph.edges()) {
+  for (const HyperedgeID &he : hypergraph.edges()) {
     // const HyperedgeID he_id = hypergraph.initialNumNodes() + he;
     out_stream << R"(<node id="h)" << he << R"(">)" << std::endl;
     out_stream << R"(<data key="d0">)" << hypergraph.edgeWeight(he) << "</data>" << std::endl;
@@ -298,7 +300,7 @@ static inline void writeHypergraphToGraphMLFile(const Hypergraph& hypergraph,
     out_stream << R"(<data key="d2">)" << (hypergraph.connectivity(he) > 1) << "</data>" << std::endl;
     out_stream << R"(<data key="d8">)" << "red" << "</data>" << std::endl;
     out_stream << "</node>" << std::endl;
-    for (const HypernodeID& pin : hypergraph.pins(he)) {
+    for (const HypernodeID &pin : hypergraph.pins(he)) {
       out_stream << R"(<edge id="e)" << edge_id++ << R"(" source="n)" << pin << R"(" target="h)"
                  << he << R"("/>)" << std::endl;
     }
@@ -310,9 +312,9 @@ static inline void writeHypergraphToGraphMLFile(const Hypergraph& hypergraph,
 }
 
 
-static inline void writeHypergraphForhMetisPartitioning(const Hypergraph& hypergraph,
-                                                        const std::string& filename,
-                                                        const Mapping& mapping) {
+static inline void writeHypergraphForhMetisPartitioning(const Hypergraph &hypergraph,
+                                                        const std::string &filename,
+                                                        const Mapping &mapping) {
   ASSERT(!filename.empty(), "No filename for hMetis initial partitioning file specified");
   std::ofstream out_stream(filename.c_str());
 
@@ -321,9 +323,9 @@ static inline void writeHypergraphForhMetisPartitioning(const Hypergraph& hyperg
   out_stream << static_cast<int>(HypergraphType::EdgeAndNodeWeights);
   out_stream << std::endl;
 
-  for (const HyperedgeID& he : hypergraph.edges()) {
+  for (const HyperedgeID &he : hypergraph.edges()) {
     out_stream << hypergraph.edgeWeight(he) << " ";
-    for (const HypernodeID& pin : hypergraph.pins(he)) {
+    for (const HypernodeID &pin : hypergraph.pins(he)) {
       ASSERT(mapping.find(pin) != mapping.end(), "No mapping found for pin " << pin);
       out_stream << mapping.find(pin)->second + 1 << " ";
     }
@@ -334,64 +336,66 @@ static inline void writeHypergraphForhMetisPartitioning(const Hypergraph& hyperg
   out_stream.close();
 }
 
-static inline void writeHypergraphForPaToHPartitioning(const Hypergraph& hypergraph,
-                                                       const std::string& filename,
-                                                       const Mapping& mapping) {
+static inline void writeHypergraphForPaToHPartitioning(const Hypergraph &hypergraph,
+                                                       const std::string &filename,
+                                                       const Mapping &mapping) {
   ASSERT(!filename.empty(), "No filename for PaToH initial partitioning file specified");
   std::ofstream out_stream(filename.c_str());
   out_stream << 1;                     // 1-based indexing
-  out_stream << " " << hypergraph.currentNumNodes() << " " << hypergraph.currentNumEdges() << " " << hypergraph.currentNumPins();
+  out_stream << " " << hypergraph.currentNumNodes() << " " << hypergraph.currentNumEdges() << " "
+             << hypergraph.currentNumPins();
   out_stream << " " << 3 << std::endl;  // weighting scheme: both edge and node weights
 
-  for (const HyperedgeID& he : hypergraph.edges()) {
+  for (const HyperedgeID &he : hypergraph.edges()) {
     out_stream << hypergraph.edgeWeight(he) << " ";
-    for (const HypernodeID& pin : hypergraph.pins(he)) {
+    for (const HypernodeID &pin : hypergraph.pins(he)) {
       ASSERT(mapping.find(pin) != mapping.end(), "No mapping found for pin " << pin);
       out_stream << mapping.find(pin)->second + 1 << " ";
     }
     out_stream << std::endl;
   }
 
-  for (const HypernodeID& hn : hypergraph.nodes()) {
+  for (const HypernodeID &hn : hypergraph.nodes()) {
     out_stream << hypergraph.nodeWeight(hn) << " ";
   }
   out_stream << std::endl;
   out_stream.close();
 }
 
-static inline void writeHypergraphForPaToHPartitioning(const Hypergraph& hypergraph,
-                                                       const std::string& filename) {
+static inline void writeHypergraphForPaToHPartitioning(const Hypergraph &hypergraph,
+                                                       const std::string &filename) {
   ASSERT(!filename.empty(), "No filename for PaToH initial partitioning file specified");
   std::ofstream out_stream(filename.c_str());
   out_stream << 0;                     // 0-based indexing
-  out_stream << " " << hypergraph.currentNumNodes() << " " << hypergraph.currentNumEdges() << " " << hypergraph.currentNumPins();
+  out_stream << " " << hypergraph.currentNumNodes() << " " << hypergraph.currentNumEdges() << " "
+             << hypergraph.currentNumPins();
   out_stream << " " << 3 << std::endl;  // weighting scheme: both edge and node weights
 
-  for (const HyperedgeID& he : hypergraph.edges()) {
+  for (const HyperedgeID &he : hypergraph.edges()) {
     out_stream << hypergraph.edgeWeight(he) << " ";
-    for (const HypernodeID& pin : hypergraph.pins(he)) {
+    for (const HypernodeID &pin : hypergraph.pins(he)) {
       // ASSERT(mapping.find(pin) != mapping.end(), "No mapping found for pin " << pin);
       out_stream << pin << " ";
     }
     out_stream << std::endl;
   }
 
-  for (const HypernodeID& hn : hypergraph.nodes()) {
+  for (const HypernodeID &hn : hypergraph.nodes()) {
     out_stream << hypergraph.nodeWeight(hn) << " ";
   }
   out_stream << std::endl;
   out_stream.close();
 }
 
-static inline void writeHyperDAGForDotPartitioner(const Hypergraph& hypergraph, const std::string& filename) {
+static inline void writeHyperDAGForDotPartitioner(const Hypergraph &hypergraph, const std::string &filename) {
   std::ofstream dot(filename);
   dot << "digraph G {\n";
-  for (const HypernodeID& hn : hypergraph.nodes()) {
+  for (const HypernodeID &hn : hypergraph.nodes()) {
     dot << hn << ";\n";
   }
-  for (const HyperedgeID& he : hypergraph.edges()) {
-    for (const HypernodeID& tail : hypergraph.tails(he)) {
-      for (const HypernodeID& head : hypergraph.heads(he)) {
+  for (const HyperedgeID &he : hypergraph.edges()) {
+    for (const HypernodeID &tail : hypergraph.tails(he)) {
+      for (const HypernodeID &head : hypergraph.heads(he)) {
         dot << tail << "->" << head << ";\n";
       }
     }
@@ -400,7 +404,7 @@ static inline void writeHyperDAGForDotPartitioner(const Hypergraph& hypergraph, 
 }
 
 
-static inline void readPartitionFile(const std::string& filename, std::vector<PartitionID>& partition) {
+static inline void readPartitionFile(const std::string &filename, std::vector<PartitionID> &partition) {
   ASSERT(!filename.empty(), "No filename for partition file specified");
   ASSERT(partition.empty(), "Partition vector is not empty");
   std::ifstream file(filename);
@@ -415,19 +419,19 @@ static inline void readPartitionFile(const std::string& filename, std::vector<Pa
   }
 }
 
-static inline void writePartitionFile(const Hypergraph& hypergraph, const std::string& filename) {
+static inline void writePartitionFile(const Hypergraph &hypergraph, const std::string &filename) {
   if (filename.empty()) {
     LOG << "No filename for partition file specified";
   } else {
     std::ofstream out_stream(filename.c_str());
-    for (const HypernodeID& hn : hypergraph.nodes()) {
+    for (const HypernodeID &hn : hypergraph.nodes()) {
       out_stream << hypergraph.partID(hn) << std::endl;
     }
     out_stream.close();
   }
 }
 
-static inline void readFixedVertexFile(Hypergraph& hypergraph, const std::string& filename) {
+static inline void readFixedVertexFile(Hypergraph &hypergraph, const std::string &filename) {
   ASSERT(!filename.empty(), "No filename for partition file specified");
   std::ifstream file(filename);
   if (file) {
@@ -445,42 +449,44 @@ static inline void readFixedVertexFile(Hypergraph& hypergraph, const std::string
   }
 }
 
-static inline void writeFixedVertexFile(const Hypergraph& hypergraph, const std::string& filename) {
+static inline void writeFixedVertexFile(const Hypergraph &hypergraph, const std::string &filename) {
   ASSERT(!filename.empty(), "No filename for partition file specified");
   std::ofstream out_stream(filename.c_str());
-  for (const HypernodeID& hn : hypergraph.nodes()) {
+  for (const HypernodeID &hn : hypergraph.nodes()) {
     out_stream << hypergraph.fixedVertexPartID(hn) << std::endl;
   }
   out_stream.close();
 }
 
-static inline void readBinaryKaffpaD(const std::string& filename,
-                       kaffpa::KaffpaHeader& out_header,
-                       std::vector<kaffpa::Node>& out_nodes,
-                       std::vector<kaffpa::Edge>& out_forward_edges,
-                       std::vector<kaffpa::InEdge>& out_backward_edges,
-                       kaffpa::PartitionConfig& out_config) {
+static inline void readBinaryKaffpaD(const std::string &filename,
+                                     kaffpa::KaffpaHeader &out_header,
+                                     std::vector<kaffpa::Node> &out_nodes,
+                                     std::vector<kaffpa::Edge> &out_forward_edges,
+                                     std::vector<kaffpa::InEdge> &out_backward_edges,
+                                     kaffpa::PartitionConfig &out_config) {
   std::FILE *shm = std::fopen(filename.c_str(), "r");
   if (shm == nullptr) {
     throw std::runtime_error("cannot open binary kaffpaD graph file");
   }
 
-  std::fread(&out_header, sizeof (kaffpa::KaffpaHeader), 1, shm);
+  std::fread(&out_header, sizeof(kaffpa::KaffpaHeader), 1, shm);
   out_nodes.resize(out_header.numberOfNodes + 1);
   out_forward_edges.resize(out_header.numberOfEdges);
   out_backward_edges.resize(out_header.numberOfEdges);
 
-  const auto num_nodes_read = std::fread(out_nodes.data(), sizeof (kaffpa::Node), out_header.numberOfNodes + 1, shm);
-  const auto num_forward_edges_read = std::fread(out_forward_edges.data(), sizeof (kaffpa::Edge), out_header.numberOfEdges, shm);
-  const auto num_backward_edges_read = std::fread(out_backward_edges.data(), sizeof (kaffpa::InEdge), out_header.numberOfEdges, shm);
-  const auto num_configs_read = std::fread(&out_config, sizeof (kaffpa::PartitionConfig), 1, shm);
+  const auto num_nodes_read = std::fread(out_nodes.data(), sizeof(kaffpa::Node), out_header.numberOfNodes + 1, shm);
+  const auto num_forward_edges_read = std::fread(out_forward_edges.data(), sizeof(kaffpa::Edge),
+                                                 out_header.numberOfEdges, shm);
+  const auto num_backward_edges_read = std::fread(out_backward_edges.data(), sizeof(kaffpa::InEdge),
+                                                  out_header.numberOfEdges, shm);
+  const auto num_configs_read = std::fread(&out_config, sizeof(kaffpa::PartitionConfig), 1, shm);
   std::fclose(shm);
 
-  for (kaffpa::Node& node : out_nodes) {
+  for (kaffpa::Node &node : out_nodes) {
     node.weight /= 1000;
     node.weight2 /= 1000;
   }
-  for (kaffpa::Edge& edge : out_forward_edges) {
+  for (kaffpa::Edge &edge : out_forward_edges) {
     edge.weight /= 1000;
   }
 
@@ -492,10 +498,10 @@ static inline void readBinaryKaffpaD(const std::string& filename,
   }
 }
 
-static inline void buildBinaryKaffpaDHNMap(const std::vector<kaffpa::Node>& nodes,
-    const std::vector<kaffpa::Edge>& edges,
-    std::vector<HypernodeID>& to_hypergraph,
-    std::vector<HypernodeID>& to_graph) {
+static inline void buildBinaryKaffpaDHNMap(const std::vector<kaffpa::Node> &nodes,
+                                           const std::vector<kaffpa::Edge> &edges,
+                                           std::vector<HypernodeID> &to_hypergraph,
+                                           std::vector<HypernodeID> &to_graph) {
 
   for (kaffpa::NodeID u = 0; u + 1 < nodes.size(); ++u) {
     const auto &node = nodes[u];
@@ -515,31 +521,31 @@ static inline void buildBinaryKaffpaDHNMap(const std::vector<kaffpa::Node>& node
   }
 }
 
-static inline void updatePartitionTableAndResult(const std::string& filename,
-    const kaffpa::KaffpaHeader& header,
-    const std::vector<kaffpa::PartitionID>& table,
-    const kaffpa::KaffpaResult& result) {
+static inline void updatePartitionTableAndResult(const std::string &filename,
+                                                 const kaffpa::KaffpaHeader &header,
+                                                 const std::vector<kaffpa::PartitionID> &table,
+                                                 const kaffpa::KaffpaResult &result) {
   FILE *shm = std::fopen(filename.c_str(), "r+");
 
-  std::size_t pos = sizeof (kaffpa::KaffpaHeader)
-      + (header.numberOfNodes + 1) * sizeof (kaffpa::Node)
-      + header.numberOfEdges * sizeof (kaffpa::Edge)
-      + header.numberOfEdges * sizeof (kaffpa::InEdge)
-      + sizeof (kaffpa::PartitionConfig);
+  std::size_t pos = sizeof(kaffpa::KaffpaHeader)
+                    + (header.numberOfNodes + 1) * sizeof(kaffpa::Node)
+                    + header.numberOfEdges * sizeof(kaffpa::Edge)
+                    + header.numberOfEdges * sizeof(kaffpa::InEdge)
+                    + sizeof(kaffpa::PartitionConfig);
 
   std::fseek(shm, pos, SEEK_SET);
 
-  std::fwrite(table.data(), sizeof (kaffpa::PartitionID), header.numberOfNodes, shm);
-  std::fwrite(&result, sizeof (kaffpa::KaffpaResult), 1, shm);
+  std::fwrite(table.data(), sizeof(kaffpa::PartitionID), header.numberOfNodes, shm);
+  std::fwrite(&result, sizeof(kaffpa::KaffpaResult), 1, shm);
   std::fclose(shm);
 }
 
-static inline void writePartitionToSharedMemoryGraphFile(const Hypergraph& hg, const std::string& filename) {
+static inline void writePartitionToSharedMemoryGraphFile(const Hypergraph &hg, const std::string &filename) {
   // compute edge cut
   kaffpa::EdgeWeight cut = 0;
-  for (const HypernodeID& u : hg.nodes()) {
-    for (const HyperedgeID& e : hg.incidentHeadEdges(u)) {
-      for (const HypernodeID& v : hg.tails(e)) {
+  for (const HypernodeID &u : hg.nodes()) {
+    for (const HyperedgeID &e : hg.incidentHeadEdges(u)) {
+      for (const HypernodeID &v : hg.tails(e)) {
         if (hg.partID(u) != hg.partID(v)) {
           cut += hg.edgeWeight(e);
         }
@@ -548,12 +554,12 @@ static inline void writePartitionToSharedMemoryGraphFile(const Hypergraph& hg, c
   }
 
   kaffpa::KaffpaResult result{
-    .k =  hg.k(),
-    .edgeCut = cut,
-    .objective = cut,
-    .errorCount = 0,
-    .warningCount = 0,
-    .numRounds = 1
+      .k =  hg.k(),
+      .edgeCut = cut,
+      .objective = cut,
+      .errorCount = 0,
+      .warningCount = 0,
+      .numRounds = 1
   };
 
   // build partition table for the original graph
@@ -574,8 +580,8 @@ static inline void writePartitionToSharedMemoryGraphFile(const Hypergraph& hg, c
   for (kaffpa::NodeID u = 0; u < header.numberOfNodes; ++u) {
     ASSERT(u + 1 < nodes.size());
 
-    const auto& node = nodes[u];
-    const auto& next = nodes[u + 1];
+    const auto &node = nodes[u];
+    const auto &next = nodes[u + 1];
     const auto weight = node.weight + node.weight2;
     const auto num_predecessors = next.firstInEdge - node.firstInEdge;
 
@@ -596,7 +602,7 @@ static inline void writePartitionToSharedMemoryGraphFile(const Hypergraph& hg, c
   }
 
   // validate edge cut
-  ASSERT([&](){
+  ASSERT([&]() {
     kaffpa::EdgeWeight _validate_cut = 0;
     for (kaffpa::NodeID u = 0; u < header.numberOfNodes; ++u) {
       const auto &node = nodes[u];
@@ -611,10 +617,65 @@ static inline void writePartitionToSharedMemoryGraphFile(const Hypergraph& hg, c
     return _validate_cut == cut;
   }());
 
+  // permute block ids so that they're in topological order
+  std::vector<std::vector<bool>> Q(result.k, std::vector<bool>(result.k));
+  for (kaffpa::NodeID u = 0; u < header.numberOfNodes; ++u) {
+    const auto &node = nodes[u];
+    const auto &next = nodes[u + 1];
+    const auto part_u = table[u];
+
+    for (kaffpa::EdgeID e = node.firstOutEdge; e < next.firstOutEdge; ++e) {
+      const kaffpa::NodeID v = forward_edges[e].target;
+      const auto part_v = table[v];
+      if (part_u != part_v) {
+        Q[part_u][part_v] = true;
+      }
+    }
+  }
+
+  std::vector<kaffpa::NodeID> queue;
+  std::vector<std::size_t> permutation(result.k);
+  std::vector<std::size_t> in(result.k);
+  for (kaffpa::NodeID u = 0; u < result.k; ++u) {
+    for (kaffpa::NodeID v = 0; v < result.k; ++v) {
+      if (Q[u][v]) {
+        ++in[v];
+      }
+    }
+  }
+  for (kaffpa::NodeID u = 0; u < result.k; ++u) {
+    if (in[u] == 0) {
+      queue.push_back(u);
+    }
+  }
+  std::size_t num_popped = 0;
+  while (!queue.empty()) {
+    const auto u = queue.back();
+    queue.pop_back();
+    permutation[u] = num_popped;
+    ++num_popped;
+
+    for (kaffpa::NodeID v = 0; v < result.k; ++v) {
+      if (Q[u][v]) {
+        --in[v];
+        if (in[v] == 0) {
+          queue.push_back(v);
+        }
+      }
+    }
+  }
+  if (num_popped != result.k) {
+    throw std::runtime_error("cannot permute block ids into topological order because the partition is cyclic!");
+  }
+
+  for (kaffpa::NodeID u = 0; u < header.numberOfNodes; ++u) {
+    table[u] = permutation[table[u]];
+  }
+
   kahypar::io::updatePartitionTableAndResult(filename, header, table, result);
 }
 
-static inline Hypergraph createHypergraphFromSharedMemoryGraphFile(const std::string& filename,
+static inline Hypergraph createHypergraphFromSharedMemoryGraphFile(const std::string &filename,
                                                                    const PartitionID num_parts) {
   kaffpa::KaffpaHeader header{};
   std::vector<kaffpa::Node> nodes;
@@ -630,8 +691,8 @@ static inline Hypergraph createHypergraphFromSharedMemoryGraphFile(const std::st
   HypernodeID num_hypernodes = 0;
   HyperedgeID num_hyperedges = 0;
   for (kaffpa::NodeID u = 0; u < header.numberOfNodes; ++u) {
-    const auto& node = nodes[u];
-    const auto& next = nodes[u + 1];
+    const auto &node = nodes[u];
+    const auto &next = nodes[u + 1];
     const auto weight = node.weight + node.weight2;
     const auto num_successors = next.firstOutEdge - node.firstOutEdge;
     const auto num_predecessors = next.firstInEdge - node.firstInEdge;
@@ -667,7 +728,7 @@ static inline Hypergraph createHypergraphFromSharedMemoryGraphFile(const std::st
     }
     if (weight == 0 && num_predecessors == 0) {
       edge_vector.push_back(to_hypergraph[u]);
-      const auto& edge = forward_edges[node.firstOutEdge];
+      const auto &edge = forward_edges[node.firstOutEdge];
 
       for (kaffpa::NodeID e = node.firstOutEdge; e < next.firstOutEdge; ++e) {
         ASSERT(forward_edges[e].weight == edge.weight);
@@ -682,9 +743,9 @@ static inline Hypergraph createHypergraphFromSharedMemoryGraphFile(const std::st
     } else if (num_successors > 0) {
       ASSERT(num_successors == 1);
 
-      const auto& edge = forward_edges[node.firstOutEdge];
-      const auto& aux_node = nodes[edge.target];
-      const auto& next_aux_node = nodes[edge.target + 1];
+      const auto &edge = forward_edges[node.firstOutEdge];
+      const auto &aux_node = nodes[edge.target];
+      const auto &next_aux_node = nodes[edge.target + 1];
       ASSERT(aux_node.weight + aux_node.weight2 == 0);
 
       hyperedge_weights.push_back(edge.weight);

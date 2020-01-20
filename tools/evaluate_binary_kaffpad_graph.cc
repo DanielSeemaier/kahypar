@@ -1,6 +1,6 @@
 #include "kahypar/io/hypergraph_io.h"
 
-static inline bool scan(const std::vector<std::vector<bool>>& Q, std::vector<bool>& marked, const std::size_t u) {
+static inline bool scan(const std::vector<std::vector<bool>> &Q, std::vector<bool> &marked, const std::size_t u) {
   for (std::size_t v = 0; v < Q.size(); ++v) {
     if (u == v) continue;
     if (!Q[u][v]) continue;
@@ -16,7 +16,7 @@ static inline bool scan(const std::vector<std::vector<bool>>& Q, std::vector<boo
   return true;
 }
 
-static inline bool checkAcyclic(const std::vector<std::vector<bool>>& Q) {
+static inline bool checkAcyclic(const std::vector<std::vector<bool>> &Q) {
   std::vector<bool> marked(Q.size());
 
   for (std::size_t u = 0; u < 1; ++u) {
@@ -31,31 +31,34 @@ static inline bool checkAcyclic(const std::vector<std::vector<bool>>& Q) {
   return true;
 }
 
-static inline void readBinaryKaffpaD(const std::string& filename,
-                                     kaffpa::KaffpaHeader& out_header,
-                                     std::vector<kaffpa::Node>& out_nodes,
-                                     std::vector<kaffpa::Edge>& out_forward_edges,
-                                     std::vector<kaffpa::InEdge>& out_backward_edges,
-                                     kaffpa::PartitionConfig& out_config,
-                                     std::vector<kaffpa::PartitionID>& out_table,
-                                     kaffpa::KaffpaResult& out_result) {
+static inline void readBinaryKaffpaD(const std::string &filename,
+                                     kaffpa::KaffpaHeader &out_header,
+                                     std::vector<kaffpa::Node> &out_nodes,
+                                     std::vector<kaffpa::Edge> &out_forward_edges,
+                                     std::vector<kaffpa::InEdge> &out_backward_edges,
+                                     kaffpa::PartitionConfig &out_config,
+                                     std::vector<kaffpa::PartitionID> &out_table,
+                                     kaffpa::KaffpaResult &out_result) {
   std::FILE *shm = std::fopen(filename.c_str(), "r");
   if (shm == nullptr) {
     throw std::runtime_error("cannot open binary kaffpaD graph file");
   }
 
-  std::fread(&out_header, sizeof (kaffpa::KaffpaHeader), 1, shm);
+  std::fread(&out_header, sizeof(kaffpa::KaffpaHeader), 1, shm);
   out_nodes.resize(out_header.numberOfNodes + 1);
   out_forward_edges.resize(out_header.numberOfEdges);
   out_backward_edges.resize(out_header.numberOfEdges);
   out_table.resize(out_header.numberOfNodes);
 
-  const auto num_nodes_read = std::fread(out_nodes.data(), sizeof (kaffpa::Node), out_header.numberOfNodes + 1, shm);
-  const auto num_forward_edges_read = std::fread(out_forward_edges.data(), sizeof (kaffpa::Edge), out_header.numberOfEdges, shm);
-  const auto num_backward_edges_read = std::fread(out_backward_edges.data(), sizeof (kaffpa::InEdge), out_header.numberOfEdges, shm);
-  const auto num_configs_read = std::fread(&out_config, sizeof (kaffpa::PartitionConfig), 1, shm);
-  const auto num_table_entries_read = std::fread(out_table.data(), sizeof (kaffpa::PartitionID), out_header.numberOfNodes, shm);
-  const auto num_results_read = std::fread(&out_result, sizeof (kaffpa::KaffpaResult), 1, shm);
+  const auto num_nodes_read = std::fread(out_nodes.data(), sizeof(kaffpa::Node), out_header.numberOfNodes + 1, shm);
+  const auto num_forward_edges_read = std::fread(out_forward_edges.data(), sizeof(kaffpa::Edge),
+                                                 out_header.numberOfEdges, shm);
+  const auto num_backward_edges_read = std::fread(out_backward_edges.data(), sizeof(kaffpa::InEdge),
+                                                  out_header.numberOfEdges, shm);
+  const auto num_configs_read = std::fread(&out_config, sizeof(kaffpa::PartitionConfig), 1, shm);
+  const auto num_table_entries_read = std::fread(out_table.data(), sizeof(kaffpa::PartitionID),
+                                                 out_header.numberOfNodes, shm);
+  const auto num_results_read = std::fread(&out_result, sizeof(kaffpa::KaffpaResult), 1, shm);
 
   std::fclose(shm);
 
@@ -94,8 +97,8 @@ int main(int argc, char *argv[]) {
   // compute cut using table
   kaffpa::EdgeWeight cut = 0;
   for (kaffpa::NodeID u = 0; u < header.numberOfNodes; ++u) {
-    const auto& node = nodes[u];
-    const auto& next = nodes[u + 1];
+    const auto &node = nodes[u];
+    const auto &next = nodes[u + 1];
 
     const auto part_u = table[u];
     if (part_u >= result.k) {
@@ -131,12 +134,25 @@ int main(int argc, char *argv[]) {
     }
   }
 
+  LOG << "Quotient graph adjacency matrix:";
+  for (auto& row : Q) LOG << row;
+
   if (!checkAcyclic(Q)) {
     std::cout << "Error!! Quotient graph is cyclic!" << std::endl;
     return 1;
-  } else {
-    std::cout << "Quotient graph should be acyclic" << std::endl;
   }
+  std::cout << "Quotient graph should be acyclic" << std::endl;
+
+
+  for (std::size_t i = 0; i < Q.size(); ++i) {
+    for (std::size_t j = 0; j < Q.size(); ++j) {
+      if (j <= i && Q[i][j]) {
+        std::cout << "Error!! Block numbers are not in topological order" << std::endl;
+        return 1;
+      }
+    }
+  }
+  std::cout << "Block numbers should be in topological order" << std::endl;
 
   return 0;
 }
