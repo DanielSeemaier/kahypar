@@ -498,7 +498,7 @@ static inline void buildBinaryKaffpaDHNMap(const std::vector<kaffpa::Node> &node
   for (kaffpa::NodeID u = 0; u + 1 < nodes.size(); ++u) {
     const auto &node = nodes[u];
     const auto &next = nodes[u + 1];
-    const auto weight = node.weight + node.weight2;
+    const auto weight = node.weight;
     const auto num_predecessors = next.firstInEdge - node.firstInEdge;
     if (weight > 0) {
       to_graph.push_back(u);
@@ -572,10 +572,16 @@ static inline void writePartitionToSharedMemoryGraphFile(const Hypergraph &hg, c
   for (kaffpa::NodeID u = 0; u < header.numberOfNodes; ++u) {
     ASSERT(u + 1 < nodes.size());
 
+
+
     const auto &node = nodes[u];
     const auto &next = nodes[u + 1];
-    const auto weight = node.weight + node.weight2;
+    const auto weight = node.weight;
     const auto num_predecessors = next.firstInEdge - node.firstInEdge;
+
+    if (node.weight2 != 0) {
+      throw std::runtime_error("bad kaffpaD format: weight2 is not null for some node");
+    }
 
     if (weight > 0) {
       ASSERT(to_hypergraph[u] != Hypergraph::kInvalidHypernodeID);
@@ -685,7 +691,7 @@ static inline Hypergraph createHypergraphFromSharedMemoryGraphFile(const std::st
   for (kaffpa::NodeID u = 0; u < header.numberOfNodes; ++u) {
     const auto &node = nodes[u];
     const auto &next = nodes[u + 1];
-    const auto weight = node.weight + node.weight2;
+    const auto weight = node.weight;
     const auto num_successors = next.firstOutEdge - node.firstOutEdge;
     const auto num_predecessors = next.firstInEdge - node.firstInEdge;
 
@@ -709,7 +715,7 @@ static inline Hypergraph createHypergraphFromSharedMemoryGraphFile(const std::st
   for (kaffpa::NodeID u = 0; u < header.numberOfNodes; ++u) {
     const auto &node = nodes[u];
     const auto &next = nodes[u + 1];
-    const auto weight = node.weight + node.weight2;
+    const auto weight = node.weight;
     const auto num_successors = next.firstOutEdge - node.firstOutEdge;
     const auto num_predecessors = next.firstInEdge - node.firstInEdge;
     if (weight == 0 && num_predecessors > 0) {
