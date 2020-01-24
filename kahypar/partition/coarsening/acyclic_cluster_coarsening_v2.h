@@ -81,6 +81,7 @@ private:
     HTimer timer;
     timer.start();
     int it = 0;
+    int bad_it = 0;
     while (_hg.currentNumNodes() > limit) {
       num_contractions = 0;
 
@@ -100,7 +101,13 @@ private:
 
       ++it;
       if (num_contractions == 0) {
-        break;
+        bad_it++;
+        if (bad_it == 2) {
+          --it;
+          break;
+        }
+      } else {
+        bad_it = 0;
       }
     }
 
