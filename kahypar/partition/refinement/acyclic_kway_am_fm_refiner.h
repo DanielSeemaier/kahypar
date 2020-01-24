@@ -142,8 +142,16 @@ private:
 
     ASSERT(ASSERT_THAT_MAX_PREDECESSOR_MIN_SUCCESSOR_IS_CORRECT());
     Randomize::instance().shuffleVector(refinement_nodes, refinement_nodes.size());
-    for (const HypernodeID &ref_hn : refinement_nodes) {
-      activate(ref_hn);
+    for (const HypernodeID &hn : refinement_nodes) {
+      activate(hn);
+
+      for (const HyperedgeID& he : _hg.incidentEdges(hn)) {
+        for (const HypernodeID& pin : _hg.pins(he)) {
+          if (!_hg.active(pin) && _hg.isBorderNode(pin) && isMovable(pin)) {
+            activate(pin);
+          }
+        }
+      }
     }
 
     _stopping_policy.resetStatistics();

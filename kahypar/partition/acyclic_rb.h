@@ -75,77 +75,9 @@ static inline bool partitionVCycle(Hypergraph &hypergraph, ICoarsener &coarsener
   return improved_quality;
 }
 
-static inline void performInitialBisection(Hypergraph &hypergraph, const Context &context, const PartitionID part,
-                                           const PartitionID k) {
-  if (k <= 1) {
-    return;
-  }
-
-  const auto pair = extractPartAsUnpartitionedHypergraphForBisection(hypergraph, part, Objective::km1);
-  auto &subhypergraph = *pair.first;
-  const auto &map = pair.second;
-
-  subhypergraph.resetPartitioning();
-  subhypergraph.changeK(2);
-
-  Context current_context(context);
-  current_context.setupPartWeights(subhypergraph.totalWeight());
-
-  // perform initial partitioning
-  subhypergraph.initializeNumCutHyperedges();
-  initial::partition(subhypergraph, current_context);
-
-  // perform refinement
-  std::unique_ptr<IRefiner> refiner(RefinerFactory::getInstance().createObject(
-      RefinementAlgorithm::acyclic_twoway_km1, hypergraph, current_context));
-  std::unique_ptr<ICoarsener> coarsener(CoarsenerFactory::getInstance().createObject(
-      CoarseningAlgorithm::external, hypergraph, current_context, hypergraph.weightOfHeaviestNode()));
-  coarsener->coarsen(current_context.coarsening.contraction_limit);
-  hypergraph.initializeNumCutHyperedges();
-  coarsener->uncoarsen(*refiner);
-  refiner->printSummary();
-
-
-}
-
 static inline void performInitialPartitioning(Hypergraph &hypergraph, const Context &context) {
   recursive_bisection::partition(hypergraph, context);
 }
-
-//static inline void performMultilevelInitialPartitioning(Hypergraph &hypergraph, const Context &context,
-//                                                        ICoarsener &coarsener, IRefiner &refiner) {
-//  multilevel::partition(hypergraph, coarsener, refiner, context);
-//
-//  Context ctx_copy = context;
-//  std::unique_ptr<IRefiner> ip_refiner(
-//      RefinerFactory::getInstance().createObject(
-//          context.initial_partitioning.local_search.algorithm, hypergraph, ctx_copy));
-//  if (metrics::imbalance(hypergraph, context) > context.partition.epsilon) {
-//    ctx_copy.partition.epsilon = metrics::imbalance(hypergraph, context);
-//  }
-//  ctx_copy.setupPartWeights(hypergraph.totalWeight());
-//
-//  if (context.partition.refine_initial_partition) {
-//    LOG << "Performing initial refinement on finest level with configured refiner";
-//    ip_refiner->initialize(0);
-//    UncontractionGainChanges changes;
-//    changes.representative.push_back(0);
-//    changes.contraction_partner.push_back(0);
-//    std::vector<HypernodeID> refinement_nodes;
-//    for (const HypernodeID &hn : hypergraph.nodes()) {
-//      refinement_nodes.push_back(hn);
-//    }
-//    Metrics current_metrics = {metrics::hyperedgeCut(hypergraph),
-//                               metrics::km1(hypergraph),
-//                               metrics::imbalance(hypergraph, context)};
-//    ip_refiner->refine(refinement_nodes, {0, 0}, changes, current_metrics);
-//    ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hypergraph, context).isAcyclic(),
-//           "Initial partition is not acyclic!");
-//    LOG << "Final KM1 after IP:" << current_metrics.km1;
-//  } else {
-//    LOG << "Initial refinement on finest level disabled";
-//  }
-//}
 
 static inline std::vector<PartitionID> createPartitionSnapshot(const Hypergraph &hg) {
   std::vector<PartitionID> partition(hg.initialNumNodes());
@@ -169,14 +101,13 @@ static inline void partition(Hypergraph &hypergraph, const Context &context) {
     ctx_copy.evolutionary.parent2 = &parent2;
   }
 
-  if (!context.partition.vcycle_refinement_for_input_partition) {
-    if (!context.partition_evolutionary || context.evolutionary.action.requires().initial_partitioning) {
-      if (context.initial_partitioning.level == InitialPartitioningLevel::finest) {
-        hypergraph.resetPartitioning();
-        performInitialPartitioning(hypergraph, context);
-      } else {
-        throw std::runtime_error("check and uncomment code ...");
-      }
+  // perform initial partitioning
+  if (!context.partition_evolutionary || context.evolutionary.action.requires().initial_partitioning) {
+    if (context.initial_partitioning.level == InitialPartitioningLevel::finest) {
+      hypergraph.resetPartitioning();
+      performInitialPartitioning(hypergraph, context);
+    } else {
+      throw std::runtime_error("not implemented");
     }
   }
 
@@ -207,8 +138,6 @@ static inline void partition(Hypergraph &hypergraph, const Context &context) {
   bool achieved_imbalance = metrics::imbalance(hypergraph, ctx_copy) < context.partition.final_epsilon;
   HyperedgeWeight best_km1 = metrics::km1(hypergraph);
   std::vector<PartitionID> best_partition = createPartitionSnapshot(hypergraph);
-
-//  io::writePartitionFile(hypergraph, "/Users/danielseemaier/Projects/kahypar/test.ip");
 
   for (uint32_t vcycle = 1; vcycle <= context.partition.global_search_iterations; ++vcycle) {
     LOG << "Performing vCycle on already partitioned graph using the following configuration:";
