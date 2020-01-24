@@ -75,6 +75,10 @@ REGISTER_DISPATCHED_REFINER(RefinementAlgorithm::acyclic_kway_fm_km1,
                             AcyclicKWayKMinusOneFactoryDispatcher,
                             meta::PolicyRegistry<RefinementStoppingRule>::getInstance().getPolicy(
                               context.local_search.fm.stopping_rule));
+REGISTER_DISPATCHED_REFINER(RefinementAlgorithm::acyclic_km1,
+                            AcyclicKMinusOneRefinerFactoryDispatcher,
+                            meta::PolicyRegistry<RefinementStoppingRule>::getInstance().getPolicy(
+                                context.local_search.fm.stopping_rule));
 REGISTER_DISPATCHED_REFINER(RefinementAlgorithm::twoway_flow,
                             TwoWayFlowFactoryDispatcher,
                             meta::PolicyRegistry<FlowNetworkType>::getInstance().getPolicy(
@@ -87,10 +91,10 @@ REGISTER_DISPATCHED_REFINER(RefinementAlgorithm::kway_flow,
                               context.local_search.flow.network),
                             meta::PolicyRegistry<FlowExecutionMode>::getInstance().getPolicy(
                               context.local_search.flow.execution_policy));
+
 REGISTER_REFINER(RefinementAlgorithm::twoway_fm_flow, TwoWayFMFlowRefiner);
 REGISTER_REFINER(RefinementAlgorithm::kway_fm_flow_km1, KWayFMFlowRefiner);
 REREGISTER_REFINER(RefinementAlgorithm::kway_fm_flow, KWayFMFlowRefiner, 2);
 REGISTER_REFINER(RefinementAlgorithm::do_nothing, DoNothingRefiner);
-REGISTER_REFINER(RefinementAlgorithm::acyclic_km1, AcyclicKMinusOneRefiner);
 REGISTER_REFINER(RefinementAlgorithm::acyclic_twoway_km1, AcyclicTwoWayKMinusOneRefiner); //TODO + WIP refiner
 }  // namespace kahypar

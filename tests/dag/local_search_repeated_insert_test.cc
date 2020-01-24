@@ -3,7 +3,7 @@
 #include "dag.h"
 
 #include "kahypar/partition/refinement/policies/fm_improvement_policy.h"
-#include "kahypar/partition/refinement/acyclic_kway_am_fm_refiner.h"
+#include "kahypar/partition/refinement/acyclic_local_search_repeated_refiner.h"
 #include "kahypar/partition/refinement/policies/fm_stop_policy.h"
 
 using ::testing::TestWithParam;
@@ -13,10 +13,10 @@ using ::testing::Eq;
 
 namespace kahypar {
 namespace dag {
-using LocalSearchRefiner = AcyclicKWayAdvancedMovesFMRefiner<NumberOfFruitlessMovesStopsSearch,
+using LocalSearchRefiner = AcyclicLocalSearchRepeatedRefiner<NumberOfFruitlessMovesStopsSearch,
     CutDecreasedOrInfeasibleImbalanceDecreased>;
 
-class LocalSearchAMTest : public BaseDAGTest, public TestWithParam<const char*> {
+class LocalSearchRepeatedInsertTest : public BaseDAGTest, public TestWithParam<const char*> {
  protected:
   void SetUp() override {
     std::string filename;
@@ -62,14 +62,14 @@ class LocalSearchAMTest : public BaseDAGTest, public TestWithParam<const char*> 
   std::unique_ptr<LocalSearchRefiner> refiner{};
 };
 
-TEST_P(LocalSearchAMTest, CanRefineAllBorderNodes) {
+TEST_P(LocalSearchRepeatedInsertTest, CanRefineAllBorderNodes) {
   gain_manager->initialize();
   qg->rebuild();
   refiner->initialize(0);
   runRefiner(0.03, borderNodes());
 }
 
-//TEST_P(LocalSearchAMTest, OnlyUsesBorderNodes) {
+//TEST_P(LocalSearchRepeatedInsertTest, OnlyUsesBorderNodes) {
 //  // partition using all nodes
 //  gain_manager->initialize();
 //  qg->rebuild();
@@ -90,11 +90,7 @@ TEST_P(LocalSearchAMTest, CanRefineAllBorderNodes) {
 //  ASSERT_THAT(metrics::imbalance(hg, context), Eq(expected_imbalance));
 //}
 
-TEST_P(LocalSearchAMTest, CanRefineDuringUncoarsening) {
-  std::vector<PartitionID> part;
-  io::readPartitionFile("/Users/danielseemaier/Projects/kahypar/test.ip", part);
-  hg.setPartition(part);
-
+TEST_P(LocalSearchRepeatedInsertTest, CanRefineDuringUncoarsening) {
   auto contractions = contractArbitrarily(3, 250, true);
 
   qg->rebuild();
@@ -116,16 +112,16 @@ TEST_P(LocalSearchAMTest, CanRefineDuringUncoarsening) {
   refiner->printSummary();
 }
 
-//INSTANTIATE_TEST_CASE_P(GRAPH_C17_K_2, LocalSearchAMTest, Values("test_instances/c17.hgr 2"));
+INSTANTIATE_TEST_CASE_P(GRAPH_C17_K_2, LocalSearchRepeatedInsertTest, Values("test_instances/c17.hgr 2"));
 
-//INSTANTIATE_TEST_CASE_P(GRAPH_C17_K_4, LocalSearchAMTest, Values("test_instances/c17.hgr 4"));
+INSTANTIATE_TEST_CASE_P(GRAPH_C17_K_4, LocalSearchRepeatedInsertTest, Values("test_instances/c17.hgr 4"));
 
-//INSTANTIATE_TEST_CASE_P(GRAPH_C3540_K_4, LocalSearchAMTest, Values("test_instances/c3540.hgr 4"));
+INSTANTIATE_TEST_CASE_P(GRAPH_C3540_K_4, LocalSearchRepeatedInsertTest, Values("test_instances/c3540.hgr 4"));
 
-//INSTANTIATE_TEST_CASE_P(GRAPH_C3540_K_32, LocalSearchAMTest, Values("test_instances/c3540.hgr 32"));
-//
-//INSTANTIATE_TEST_CASE_P(GRAPH_C3540_K_64, LocalSearchAMTest, Values("test_instances/c3540.hgr 64"));
+INSTANTIATE_TEST_CASE_P(GRAPH_C3540_K_32, LocalSearchRepeatedInsertTest, Values("test_instances/c3540.hgr 32"));
 
-INSTANTIATE_TEST_CASE_P(GRAPH_2MM_K_16, LocalSearchAMTest, Values("test_instances/2mm_graph.hgr 16"));
+INSTANTIATE_TEST_CASE_P(GRAPH_C3540_K_64, LocalSearchRepeatedInsertTest, Values("test_instances/c3540.hgr 64"));
+
+//INSTANTIATE_TEST_CASE_P(GRAPH_2MM_K_16, LocalSearchRepeatedInsertTest, Values("test_instances/2mm_graph.hgr 16"));
 } // namespace dag
 } // namespace kahypar

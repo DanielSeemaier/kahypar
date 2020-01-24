@@ -141,7 +141,7 @@ private:
     }
 
     ASSERT(ASSERT_THAT_MAX_PREDECESSOR_MIN_SUCCESSOR_IS_CORRECT());
-
+    Randomize::instance().shuffleVector(refinement_nodes, refinement_nodes.size());
     for (const HypernodeID &ref_hn : refinement_nodes) {
       activate(ref_hn);
     }
@@ -192,7 +192,7 @@ private:
       _hg.mark(max_gain_hn);
       ++touched_hns_since_improvement;
       const bool weight_ok =
-          _hg.partWeight(to_part) + _hg.nodeWeight(max_gain_hn) <= _context.partition.max_part_weights[to_part];
+          _hg.partWeight(to_part) + _hg.nodeWeight(max_gain_hn) <= _context.partition.max_part_weights[0];
       const bool size_ok = _hg.partSize(from_part) > 1;
       const bool move_ok = weight_ok && size_ok;
 

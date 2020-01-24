@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <kahypar/partition/coarsening/acyclic_cluster_coarsening_v2.h>
 
 #include "kahypar/dag/topological_ordering.h"
 #include "kahypar/datastructure/hypergraph.h"

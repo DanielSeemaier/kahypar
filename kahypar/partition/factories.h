@@ -99,6 +99,10 @@ using AcyclicKWayKMinusOneFactoryDispatcher = meta::StaticMultiDispatchFactory<A
                                                                                IRefiner,
                                                                                meta::Typelist<StoppingPolicyClasses> >;
 
+using AcyclicKMinusOneRefinerFactoryDispatcher = meta::StaticMultiDispatchFactory<AcyclicKMinusOneRefiner,
+                                                                               IRefiner,
+                                                                               meta::Typelist<StoppingPolicyClasses> >;
+
 using TwoWayFlowFactoryDispatcher = meta::StaticMultiDispatchFactory<TwoWayFlowRefiner,
                                                                      IRefiner,
                                                                      meta::Typelist<FlowNetworkPolicyClasses,

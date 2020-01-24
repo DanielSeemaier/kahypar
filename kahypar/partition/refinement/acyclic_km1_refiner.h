@@ -3,6 +3,7 @@
 #include "kahypar/datastructure/hypergraph.h"
 #include "kahypar/partition/refinement/i_refiner.h"
 #include "kahypar/partition/refinement/acyclic_local_search_refiner.h"
+#include "kahypar/partition/refinement/acyclic_local_search_repeated_refiner.h"
 #include "kahypar/partition/refinement/acyclic_hard_rebalance_refiner.h"
 #include "kahypar/partition/refinement/acyclic_soft_rebalance_refiner.h"
 #include "kahypar/partition/refinement/acyclic_kway_am_fm_refiner.h"
@@ -12,29 +13,33 @@
 #include "kahypar/partition/refinement/km1_gain_manager.h"
 
 namespace kahypar {
+template<class StoppingPolicy = Mandatory,
+    class FMImprovementPolicy = CutDecreasedOrInfeasibleImbalanceDecreased>
 class AcyclicKMinusOneRefiner final : public IRefiner {
- private:
+private:
   constexpr static bool debug = false;
 
- public:
-  AcyclicKMinusOneRefiner(Hypergraph& hypergraph, const Context& context) :
-    _hg(hypergraph),
-    _original_context(context),
-    _context(context),
-    _qg(hypergraph, context),
-    _gain_manager(hypergraph, context),
-    _local_search_refiner(hypergraph, _context, _qg, _gain_manager),
-    _local_search_refiner_am(hypergraph, _context, _qg, _gain_manager),
-    _hard_rebalance_refiner(hypergraph, _context, _qg, _gain_manager),
-    _soft_rebalance_refiner(hypergraph, _context, _qg, _gain_manager) {}
+public:
+  AcyclicKMinusOneRefiner(Hypergraph &hypergraph, const Context &context) :
+      _hg(hypergraph),
+      _original_context(context),
+      _context(context),
+      _qg(hypergraph, context),
+      _gain_manager(hypergraph, context),
+      _local_search_refiner(hypergraph, _context, _qg, _gain_manager),
+      _local_search_refiner_am(hypergraph, _context, _qg, _gain_manager),
+      _hard_rebalance_refiner(hypergraph, _context, _qg, _gain_manager),
+      _soft_rebalance_refiner(hypergraph, _context, _qg, _gain_manager) {}
 
   ~AcyclicKMinusOneRefiner() override = default;
 
-  AcyclicKMinusOneRefiner(const AcyclicKMinusOneRefiner&) = delete;
-  AcyclicKMinusOneRefiner& operator=(const AcyclicKMinusOneRefiner&) = delete;
+  AcyclicKMinusOneRefiner(const AcyclicKMinusOneRefiner &) = delete;
 
-  AcyclicKMinusOneRefiner(AcyclicKMinusOneRefiner&&) = delete;
-  AcyclicKMinusOneRefiner& operator=(AcyclicKMinusOneRefiner&&) = delete;
+  AcyclicKMinusOneRefiner &operator=(const AcyclicKMinusOneRefiner &) = delete;
+
+  AcyclicKMinusOneRefiner(AcyclicKMinusOneRefiner &&) = delete;
+
+  AcyclicKMinusOneRefiner &operator=(AcyclicKMinusOneRefiner &&) = delete;
 
   void preUncontraction(const HypernodeID representant) override {
     if (_context.only_do_advanced_moves) {
@@ -52,7 +57,7 @@ class AcyclicKMinusOneRefiner final : public IRefiner {
     _qg.preUncontraction(representant);
   }
 
-  void postUncontraction(const HypernodeID representant, const std::vector<HypernodeID>&& partners) override {
+  void postUncontraction(const HypernodeID representant, const std::vector<HypernodeID> &&partners) override {
     _qg.postUncontraction(representant, std::forward<const std::vector<HypernodeID>>(partners));
     _gain_manager.postUncontraction(representant, std::forward<const std::vector<HypernodeID>>(partners));
     if (_context.enable_hard_rebalance) {
@@ -91,7 +96,7 @@ class AcyclicKMinusOneRefiner final : public IRefiner {
     LOG << "Running with extra refinement nodes:" << _context.refine_rebalance_moves;
   }
 
- private:
+private:
   void initializeImpl(const HyperedgeWeight max_gain) final {
     _qg.rebuild();
     _gain_manager.initialize();
@@ -112,11 +117,25 @@ class AcyclicKMinusOneRefiner final : public IRefiner {
     // relax balance constrain until initial partition is initially within the bound
     _context.partition.epsilon = std::max(metrics::imbalance(_hg, _context), _context.partition.epsilon);
     _context.setupPartWeights(_hg.totalWeight());
+
+    _context.only_do_advanced_moves = false;
+    _context.repeated_insert = false;
+    if (_context.only_do_advanced_moves) {
+      LOG << "\t-move heuristic: advanced moves";
+    } else {
+      if (_context.repeated_insert) {
+        LOG << "\t-move heuristic: global moves with repeated insert";
+      } else {
+        LOG << "\t-move heuristic: global moves";
+      }
+    }
+    LOG << "\t-extra refinement nodes:" << _context.refine_rebalance_moves;
+    LOG << "\t-epsilon:" << _context.partition.epsilon;
   }
 
-  void performMovesAndUpdateCacheImpl(const std::vector<Move>& moves,
-                                      std::vector<HypernodeID>& refinement_nodes,
-                                      const UncontractionGainChanges& changes) final {
+  void performMovesAndUpdateCacheImpl(const std::vector<Move> &moves,
+                                      std::vector<HypernodeID> &refinement_nodes,
+                                      const UncontractionGainChanges &changes) final {
     ASSERT(false, "Currently not implemented.");
   }
 
@@ -136,10 +155,10 @@ class AcyclicKMinusOneRefiner final : public IRefiner {
     _context.setupPartWeights(_hg.totalWeight());
   }
 
-  bool refineImpl(std::vector<HypernodeID>& refinement_nodes,
-                  const std::array<HypernodeWeight, 2>& max_allowed_part_weights,
-                  const UncontractionGainChanges& uncontraction_changes,
-                  Metrics& best_metrics) final {
+  bool refineImpl(std::vector<HypernodeID> &refinement_nodes,
+                  const std::array<HypernodeWeight, 2> &max_allowed_part_weights,
+                  const UncontractionGainChanges &uncontraction_changes,
+                  Metrics &best_metrics) final {
     ASSERT(best_metrics.km1 == metrics::km1(_hg));
     ASSERT(best_metrics.imbalance == metrics::imbalance(_hg, _context));
 
@@ -155,7 +174,7 @@ class AcyclicKMinusOneRefiner final : public IRefiner {
       _soft_rebalance_refiner.refine(refinement_nodes, max_allowed_part_weights, uncontraction_changes, best_metrics);
       ASSERT(!_gain_manager.hasDelta());
 
-      const auto& moves = _soft_rebalance_refiner.moves();
+      const auto &moves = _soft_rebalance_refiner.moves();
       if (_context.enable_hard_rebalance) {
         _hard_rebalance_refiner.performMovesAndUpdateCache(moves, refinement_nodes, uncontraction_changes);
       }
@@ -166,8 +185,9 @@ class AcyclicKMinusOneRefiner final : public IRefiner {
       }
 
       if (_context.refine_rebalance_moves) {
-        for (const auto& move : moves) {
-          if (std::find(more_refinement_nodes.begin(), more_refinement_nodes.end(), move.hn) == more_refinement_nodes.end()) {
+        for (const auto &move : moves) {
+          if (std::find(more_refinement_nodes.begin(), more_refinement_nodes.end(), move.hn) ==
+              more_refinement_nodes.end()) {
             more_refinement_nodes.push_back(move.hn);
           }
         }
@@ -180,7 +200,7 @@ class AcyclicKMinusOneRefiner final : public IRefiner {
       _hard_rebalance_refiner.refine(refinement_nodes, max_allowed_part_weights, uncontraction_changes, best_metrics);
       ASSERT(!_gain_manager.hasDelta());
 
-      const auto& moves = _hard_rebalance_refiner.moves();
+      const auto &moves = _hard_rebalance_refiner.moves();
       if (_context.enable_soft_rebalance) {
         _soft_rebalance_refiner.performMovesAndUpdateCache(moves, refinement_nodes, uncontraction_changes);
       }
@@ -191,8 +211,9 @@ class AcyclicKMinusOneRefiner final : public IRefiner {
       }
 
       if (_context.refine_rebalance_moves) {
-        for (const auto& move : moves) {
-          if (std::find(more_refinement_nodes.begin(), more_refinement_nodes.end(), move.hn) == more_refinement_nodes.end()) {
+        for (const auto &move : moves) {
+          if (std::find(more_refinement_nodes.begin(), more_refinement_nodes.end(), move.hn) ==
+              more_refinement_nodes.end()) {
             more_refinement_nodes.push_back(move.hn);
           }
         }
@@ -201,13 +222,15 @@ class AcyclicKMinusOneRefiner final : public IRefiner {
     }
 
     const bool stop = _context.only_do_advanced_moves
-        ? _local_search_refiner_am.refine(more_refinement_nodes, max_allowed_part_weights, uncontraction_changes, best_metrics)
-        : _local_search_refiner.refine(more_refinement_nodes, max_allowed_part_weights, uncontraction_changes, best_metrics);
+                      ? _local_search_refiner_am.refine(more_refinement_nodes, max_allowed_part_weights,
+                                                        uncontraction_changes, best_metrics)
+                      : _local_search_refiner.refine(more_refinement_nodes, max_allowed_part_weights,
+                                                     uncontraction_changes, best_metrics);
     ASSERT(!_gain_manager.hasDelta());
 
-    const auto& moves = _context.only_do_advanced_moves
-        ? _local_search_refiner_am.moves()
-        : _local_search_refiner.moves();
+    const auto &moves = _context.only_do_advanced_moves
+                        ? _local_search_refiner_am.moves()
+                        : _local_search_refiner.moves();
     if (_context.enable_soft_rebalance) {
       _soft_rebalance_refiner.performMovesAndUpdateCache(moves, refinement_nodes, uncontraction_changes);
     }
@@ -221,15 +244,16 @@ class AcyclicKMinusOneRefiner final : public IRefiner {
     return stop;
   }
 
-  Hypergraph& _hg;
-  const Context& _original_context;
+  Hypergraph &_hg;
+  const Context &_original_context;
   Context _context;
   HypernodeID _least_num_nodes{0};
   AdjacencyMatrixQuotientGraph<DFSCycleDetector> _qg;
   KMinusOneGainManager _gain_manager;
 
-  AcyclicLocalSearchRefiner<NumberOfFruitlessMovesStopsSearch> _local_search_refiner;
-  AcyclicKWayAdvancedMovesFMRefiner<NumberOfFruitlessMovesStopsSearch> _local_search_refiner_am;
+  //AcyclicLocalSearchRefiner<StoppingPolicy, FMImprovementPolicy> _local_search_refiner;
+  AcyclicLocalSearchRepeatedRefiner<StoppingPolicy, FMImprovementPolicy> _local_search_refiner;
+  AcyclicKWayAdvancedMovesFMRefiner<StoppingPolicy, FMImprovementPolicy> _local_search_refiner_am;
   AcyclicHardRebalanceRefiner _hard_rebalance_refiner;
   AcyclicSoftRebalanceRefiner _soft_rebalance_refiner;
 };

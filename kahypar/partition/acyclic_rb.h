@@ -67,7 +67,10 @@ static inline bool partitionVCycle(Hypergraph &hypergraph, ICoarsener &coarsener
 
   hypergraph.initializeNumCutHyperedges();
   io::printLocalSearchBanner(context);
+  const auto old_km1 = metrics::km1(hypergraph);
   const bool improved_quality = coarsener.uncoarsen(refiner);
+  const auto new_km1 = metrics::km1(hypergraph);
+  LOG << "vCycle result:" << old_km1 << "-->" << new_km1;
   io::printLocalSearchResults(context, hypergraph);
   return improved_quality;
 }
@@ -205,11 +208,14 @@ static inline void partition(Hypergraph &hypergraph, const Context &context) {
   HyperedgeWeight best_km1 = metrics::km1(hypergraph);
   std::vector<PartitionID> best_partition = createPartitionSnapshot(hypergraph);
 
+//  io::writePartitionFile(hypergraph, "/Users/danielseemaier/Projects/kahypar/test.ip");
+
   for (uint32_t vcycle = 1; vcycle <= context.partition.global_search_iterations; ++vcycle) {
     LOG << "Performing vCycle on already partitioned graph using the following configuration:";
     LOG << "\t-refiner:" << context.local_search.algorithm;
     LOG << "\t-coarsening:" << context.coarsening.algorithm;
     LOG << "\t-recombine operation:" << recombine;
+    LOG << "\t-advanced moves:" << context.only_do_advanced_moves;
 
     context.partition.current_v_cycle = vcycle;
     partitionVCycle(hypergraph, *coarsener, *km1_refiner, ctx_copy, recombine);

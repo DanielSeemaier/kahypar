@@ -29,7 +29,7 @@ static void diversify(Context& context) {
   context.coarsening.contraction_limit_multiplier = Randomize::instance().getRandomInt(100, 160);
 
   const bool use_lazy_coarsening = Randomize::instance().flipCoin();
-  const bool use_acyclic_coarsening = Randomize::instance().flipCoin();
+  const bool use_acyclic_coarsening = Randomize::instance().flipCoin() || Randomize::instance().flipCoin();
 
   if (use_acyclic_coarsening) {
     context.coarsening.algorithm = CoarseningAlgorithm::acyclic_cluster_coarsening_v2;

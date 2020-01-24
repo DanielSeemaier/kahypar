@@ -88,6 +88,9 @@ po::options_description createGeneralOptionsDescription(Context& context, const 
       ("r-only-am",
           po::value<bool>(&context.only_do_advanced_moves)->value_name("<bool>"),
           "Only do advanced movements during KWay refinement")
+      ("r-repeated-insert",
+       po::value<bool>(&context.repeated_insert)->value_name("<bool>"),
+       "Repeated insert in acyclic local search")
     ("r-refine-rebalance-moves",
      po::value<bool>(&context.refine_rebalance_moves)->value_name("<bool>"),
      "Run local search on hypernodes moved during soft and hard rebalance")

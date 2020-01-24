@@ -104,12 +104,12 @@ Individual usingTournamentSelection(Hypergraph& hg, const Context& context, cons
     return combine::partitions(hg, parents, temporary_context);
   } else if (coin && context.evolutionary.use_cross_combine) {
     LOG << "Using on-the-fly individual with random k and epsilon";
-    const PartitionID lower_bound = std::max<PartitionID>(2, context.partition.k / 2);
+    const PartitionID lower_bound = std::max<PartitionID>(2, context.partition.k / 4);
     const PartitionID upper_bound = context.partition.k * 4;
     const PartitionID k_prime = Randomize::instance().getRandomInt(lower_bound, upper_bound);
     const double epsilon_prime = Randomize::instance().getRandomFloat(
-      context.evolutionary.lower_epsilon_prime_bound,
-      context.evolutionary.upper_epsilon_prime_bound
+      static_cast<double>(context.partition.epsilon),
+      static_cast<double>(context.partition.epsilon * 4)
     );
     LOG << "\t" << V(k_prime) << V(epsilon_prime);
 
