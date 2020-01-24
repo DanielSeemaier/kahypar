@@ -23,7 +23,7 @@ template<typename StoppingPolicy = Mandatory,
          typename FMImprovementPolicy = CutDecreasedOrInfeasibleImbalanceDecreased>
 class AcyclicLocalSearchRefiner final : public IRefiner {
  private:
-  using KWayRefinementPQ = ds::KWayPriorityQueue<HypernodeID, Gain, std::numeric_limits<Gain>>;
+  using KWayRefinementPQ = ds::KWayPriorityQueue<HypernodeID, Gain, std::numeric_limits<Gain>, true>;
 
   static constexpr bool debug = false;
   static constexpr HypernodeID hn_to_debug = 0;

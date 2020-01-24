@@ -256,7 +256,6 @@ class QuotientGraph {
 
   std::vector<QNodeID> computeTopologicalOrdering(bool strict = true, bool randomized = false) const {
     ASSERT(!randomized, "randomized topological ordering currently not implemented");
-
     std::vector<QEdgeID> in_degree(numberOfNodes());
     for (QNodeID u = 0; u < numberOfNodes(); ++u) {
       for (const QNodeID& v : outs(u)) {
@@ -321,6 +320,8 @@ class QuotientGraph {
       }
     }
 
+    auto* nc_this = const_cast<QuotientGraph*>(this);
+    nc_this->_outdated_topological_ordering = false;
     return true;
   }
 
@@ -340,6 +341,8 @@ class QuotientGraph {
       }
     }
 
+    auto* nc_this = const_cast<QuotientGraph*>(this);
+    nc_this->_outdated_weak_topological_ordering = false;
     return true;
   }
 
@@ -464,7 +467,6 @@ class AdjacencyMatrixQuotientGraph : public QuotientGraph {
 //      const_cast<Hypergraph*>(&_hg)->changeNodePart(hn, to_part, from_part);
 //      return true;
 //    }());
-
      if (!todo_insert.empty()) {
        notifyGraphChanged();
      }

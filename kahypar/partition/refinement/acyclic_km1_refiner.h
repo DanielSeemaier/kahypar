@@ -5,6 +5,7 @@
 #include "kahypar/partition/refinement/acyclic_local_search_refiner.h"
 #include "kahypar/partition/refinement/acyclic_hard_rebalance_refiner.h"
 #include "kahypar/partition/refinement/acyclic_soft_rebalance_refiner.h"
+#include "kahypar/partition/refinement/acyclic_kway_am_fm_refiner.h"
 #include "kahypar/partition/refinement/policies/fm_stop_policy.h"
 #include "kahypar/partition/context.h"
 
@@ -23,6 +24,7 @@ class AcyclicKMinusOneRefiner final : public IRefiner {
     _qg(hypergraph, context),
     _gain_manager(hypergraph, context),
     _local_search_refiner(hypergraph, _context, _qg, _gain_manager),
+    _local_search_refiner_am(hypergraph, _context, _qg, _gain_manager),
     _hard_rebalance_refiner(hypergraph, _context, _qg, _gain_manager),
     _soft_rebalance_refiner(hypergraph, _context, _qg, _gain_manager) {}
 
@@ -35,7 +37,11 @@ class AcyclicKMinusOneRefiner final : public IRefiner {
   AcyclicKMinusOneRefiner& operator=(AcyclicKMinusOneRefiner&&) = delete;
 
   void preUncontraction(const HypernodeID representant) override {
-    _local_search_refiner.preUncontraction(representant);
+    if (_context.only_do_advanced_moves) {
+      _local_search_refiner_am.preUncontraction(representant);
+    } else {
+      _local_search_refiner.preUncontraction(representant);
+    }
     if (_context.enable_soft_rebalance) {
       _soft_rebalance_refiner.preUncontraction(representant);
     }
@@ -55,7 +61,11 @@ class AcyclicKMinusOneRefiner final : public IRefiner {
     if (_context.enable_soft_rebalance) {
       _soft_rebalance_refiner.postUncontraction(representant, std::forward<const std::vector<HypernodeID>>(partners));
     }
-    _local_search_refiner.postUncontraction(representant, std::forward<const std::vector<HypernodeID>>(partners));
+    if (_context.only_do_advanced_moves) {
+      _local_search_refiner_am.postUncontraction(representant, std::forward<const std::vector<HypernodeID>>(partners));
+    } else {
+      _local_search_refiner.postUncontraction(representant, std::forward<const std::vector<HypernodeID>>(partners));
+    }
   }
 
   void printSummary() const override {
@@ -71,8 +81,13 @@ class AcyclicKMinusOneRefiner final : public IRefiner {
     } else {
       LOG << "Hard Rebalance disabled";
     }
-    LOG << "Local Search Refiner:";
-    _local_search_refiner.printSummary();
+    if (_context.only_do_advanced_moves) {
+      LOG << "AM Local Search Refiner:";
+      _local_search_refiner_am.printSummary();
+    } else {
+      LOG << "GM Local Search Refiner:";
+      _local_search_refiner.printSummary();
+    }
     LOG << "Running with extra refinement nodes:" << _context.refine_rebalance_moves;
   }
 
@@ -80,7 +95,11 @@ class AcyclicKMinusOneRefiner final : public IRefiner {
   void initializeImpl(const HyperedgeWeight max_gain) final {
     _qg.rebuild();
     _gain_manager.initialize();
-    _local_search_refiner.initialize(max_gain);
+    if (_context.only_do_advanced_moves) {
+      _local_search_refiner_am.initialize(max_gain);
+    } else {
+      _local_search_refiner.initialize(max_gain);
+    }
     if (_context.enable_hard_rebalance) {
       _hard_rebalance_refiner.initialize(max_gain);
     }
@@ -137,8 +156,14 @@ class AcyclicKMinusOneRefiner final : public IRefiner {
       ASSERT(!_gain_manager.hasDelta());
 
       const auto& moves = _soft_rebalance_refiner.moves();
-      _hard_rebalance_refiner.performMovesAndUpdateCache(moves, refinement_nodes, uncontraction_changes);
-      _local_search_refiner.performMovesAndUpdateCache(moves, refinement_nodes, uncontraction_changes);
+      if (_context.enable_hard_rebalance) {
+        _hard_rebalance_refiner.performMovesAndUpdateCache(moves, refinement_nodes, uncontraction_changes);
+      }
+      if (_context.only_do_advanced_moves) {
+        _local_search_refiner_am.performMovesAndUpdateCache(moves, refinement_nodes, uncontraction_changes);
+      } else {
+        _local_search_refiner.performMovesAndUpdateCache(moves, refinement_nodes, uncontraction_changes);
+      }
 
       if (_context.refine_rebalance_moves) {
         for (const auto& move : moves) {
@@ -159,7 +184,11 @@ class AcyclicKMinusOneRefiner final : public IRefiner {
       if (_context.enable_soft_rebalance) {
         _soft_rebalance_refiner.performMovesAndUpdateCache(moves, refinement_nodes, uncontraction_changes);
       }
-      _local_search_refiner.performMovesAndUpdateCache(moves, refinement_nodes, uncontraction_changes);
+      if (_context.only_do_advanced_moves) {
+        _local_search_refiner_am.performMovesAndUpdateCache(moves, refinement_nodes, uncontraction_changes);
+      } else {
+        _local_search_refiner.performMovesAndUpdateCache(moves, refinement_nodes, uncontraction_changes);
+      }
 
       if (_context.refine_rebalance_moves) {
         for (const auto& move : moves) {
@@ -171,10 +200,14 @@ class AcyclicKMinusOneRefiner final : public IRefiner {
       DBG << "-->" << best_metrics.imbalance;
     }
 
-    const bool stop = _local_search_refiner.refine(more_refinement_nodes, max_allowed_part_weights, uncontraction_changes, best_metrics);
+    const bool stop = _context.only_do_advanced_moves
+        ? _local_search_refiner_am.refine(more_refinement_nodes, max_allowed_part_weights, uncontraction_changes, best_metrics)
+        : _local_search_refiner.refine(more_refinement_nodes, max_allowed_part_weights, uncontraction_changes, best_metrics);
     ASSERT(!_gain_manager.hasDelta());
 
-    const auto& moves = _local_search_refiner.moves();
+    const auto& moves = _context.only_do_advanced_moves
+        ? _local_search_refiner_am.moves()
+        : _local_search_refiner.moves();
     if (_context.enable_soft_rebalance) {
       _soft_rebalance_refiner.performMovesAndUpdateCache(moves, refinement_nodes, uncontraction_changes);
     }
@@ -196,6 +229,7 @@ class AcyclicKMinusOneRefiner final : public IRefiner {
   KMinusOneGainManager _gain_manager;
 
   AcyclicLocalSearchRefiner<NumberOfFruitlessMovesStopsSearch> _local_search_refiner;
+  AcyclicKWayAdvancedMovesFMRefiner<NumberOfFruitlessMovesStopsSearch> _local_search_refiner_am;
   AcyclicHardRebalanceRefiner _hard_rebalance_refiner;
   AcyclicSoftRebalanceRefiner _soft_rebalance_refiner;
 };

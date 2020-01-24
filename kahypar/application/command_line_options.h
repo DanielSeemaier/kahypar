@@ -85,6 +85,9 @@ po::options_description createGeneralOptionsDescription(Context& context, const 
      ("r-hard-rebalance",
      po::value<bool>(&context.enable_hard_rebalance)->value_name("<bool>"),
      "Use soft rebalance")
+      ("r-only-am",
+          po::value<bool>(&context.only_do_advanced_moves)->value_name("<bool>"),
+          "Only do advanced movements during KWay refinement")
     ("r-refine-rebalance-moves",
      po::value<bool>(&context.refine_rebalance_moves)->value_name("<bool>"),
      "Run local search on hypernodes moved during soft and hard rebalance")

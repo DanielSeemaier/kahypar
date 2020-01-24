@@ -439,6 +439,7 @@ class Context {
   bool partition_evolutionary = false;
   bool imbalanced_intermediate_step = false;
   bool reduce_balance_during_uncoarsening = false;
+  bool only_do_advanced_moves = false;
   bool enable_soft_rebalance = false;
   bool enable_hard_rebalance = false;
   bool refine_rebalance_moves = true;
@@ -463,6 +464,7 @@ class Context {
     reduce_balance_during_uncoarsening(other.reduce_balance_during_uncoarsening),
     enable_hard_rebalance(other.enable_hard_rebalance),
     enable_soft_rebalance(other.enable_soft_rebalance),
+    only_do_advanced_moves(other.only_do_advanced_moves),
     refine_rebalance_moves(other.refine_rebalance_moves),
     patoh_path(other.patoh_path),
     rmlgp_path(other.rmlgp_path),
