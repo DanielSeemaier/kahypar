@@ -291,7 +291,7 @@ class AcyclicLocalSearchRefiner final : public IRefiner {
 
         // check if we accept the new state
         const bool improved_km1_within_balance = (current_imbalance <= _context.partition.epsilon) &&
-                                                 (current_km1 < best_metrics.km1);
+                                                 (current_km1 < best_metrics.km1 || (current_km1 == best_metrics.km1 && Randomize::instance().flipCoin()));
         bool improved_balance_less_equal_km1 = current_imbalance < best_metrics.imbalance;
         if (!_context.imbalanced_intermediate_step) {
           improved_balance_less_equal_km1 &= current_km1 <= best_metrics.km1;

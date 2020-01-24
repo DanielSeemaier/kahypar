@@ -277,30 +277,6 @@ static inline void partition(Hypergraph& hypergraph, const Context& context) {
       LOG << "\t-refiner:" << context.local_search.algorithm_second;
       LOG << "\t-coarsening:" << context.coarsening.algorithm;
 
-//      { // just for testing ...
-//        std::unique_ptr<IRefiner> pre_refiner(
-//          RefinerFactory::getInstance().createObject(
-//            context.local_search.algorithm_second, hypergraph, context));
-//
-//        LOG << "Performing pre V-cycle refinement with all border nodes";
-//        pre_refiner->initialize(0);
-//        UncontractionGainChanges changes;
-//        changes.representative.push_back(0);
-//        changes.contraction_partner.push_back(0);
-//        std::vector<HypernodeID> refinement_nodes;
-//        for (const HypernodeID& hn : hypergraph.nodes()) {
-//          if (hypergraph.isBorderNode(hn)) {
-//            refinement_nodes.push_back(hn);
-//          }
-//        }
-//        Metrics current_metrics = {metrics::hyperedgeCut(hypergraph),
-//                                   metrics::km1(hypergraph),
-//                                   metrics::imbalance(hypergraph, context)};
-//        LOG << "Before: KM1 is" << current_metrics.km1 << "and imbalance is" << current_metrics.imbalance;
-//        pre_refiner->refine(refinement_nodes, {0, 0}, changes, current_metrics);
-//        LOG << "Changed KM1 to" << current_metrics.km1 << "and imbalance to" << current_metrics.imbalance;
-//      }
-
       partitionVCycle(hypergraph, *coarsener, *km1_refiner_second, context);
       ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(hypergraph, context).isAcyclic(),
              "Vcycle" << vcycle << "produced a cyclic partition");
