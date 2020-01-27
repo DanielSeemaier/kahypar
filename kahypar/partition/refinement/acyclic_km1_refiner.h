@@ -24,12 +24,13 @@ public:
       _hg(hypergraph),
       _original_context(context),
       _context(context),
-      _qg(hypergraph, context),
-      _gain_manager(hypergraph, context),
-      _local_search_refiner(hypergraph, _context, _qg, _gain_manager),
-      _local_search_refiner_am(hypergraph, _context, _qg, _gain_manager),
-      _hard_rebalance_refiner(hypergraph, _context, _qg, _gain_manager),
-      _soft_rebalance_refiner(hypergraph, _context, _qg, _gain_manager) {}
+      _qg(std::make_shared<AdjacencyMatrixQuotientGraph<DFSCycleDetector>>(_hg, _context)),
+      _gain_manager(std::make_shared<KMinusOneGainManager>(_hg, _context)),
+      _local_search_refiner(hypergraph, _context, *_qg, *_gain_manager),
+      _local_search_refiner_am(hypergraph, _context, *_qg, *_gain_manager),
+      _hard_rebalance_refiner(hypergraph, _context, *_qg, *_gain_manager),
+      _soft_rebalance_refiner(hypergraph, _context, *_qg, *_gain_manager) {
+  }
 
   ~AcyclicKMinusOneRefiner() override = default;
 
@@ -53,13 +54,13 @@ public:
     if (_context.enable_hard_rebalance) {
       _hard_rebalance_refiner.preUncontraction(representant);
     }
-    _gain_manager.preUncontraction(representant);
-    _qg.preUncontraction(representant);
+    _gain_manager->preUncontraction(representant);
+    _qg->preUncontraction(representant);
   }
 
   void postUncontraction(const HypernodeID representant, const std::vector<HypernodeID> &&partners) override {
-    _qg.postUncontraction(representant, std::forward<const std::vector<HypernodeID>>(partners));
-    _gain_manager.postUncontraction(representant, std::forward<const std::vector<HypernodeID>>(partners));
+    _qg->postUncontraction(representant, std::forward<const std::vector<HypernodeID>>(partners));
+    _gain_manager->postUncontraction(representant, std::forward<const std::vector<HypernodeID>>(partners));
     if (_context.enable_hard_rebalance) {
       _hard_rebalance_refiner.postUncontraction(representant, std::forward<const std::vector<HypernodeID>>(partners));
     }
@@ -98,8 +99,8 @@ public:
 
 private:
   void initializeImpl(const HyperedgeWeight max_gain) final {
-    _qg.rebuild();
-    _gain_manager.initialize();
+    _qg->rebuild();
+    _gain_manager->initialize();
     if (_context.only_do_advanced_moves) {
       _local_search_refiner_am.initialize(max_gain);
     } else {
@@ -172,7 +173,7 @@ private:
     if (_context.enable_soft_rebalance && best_metrics.imbalance > _context.partition.epsilon) {
       DBG << "Running soft rebalance because" << best_metrics.imbalance << ">" << _context.partition.epsilon;
       _soft_rebalance_refiner.refine(refinement_nodes, max_allowed_part_weights, uncontraction_changes, best_metrics);
-      ASSERT(!_gain_manager.hasDelta());
+      ASSERT(!_gain_manager->hasDelta());
 
       const auto &moves = _soft_rebalance_refiner.moves();
       if (_context.enable_hard_rebalance) {
@@ -198,7 +199,7 @@ private:
     if (_context.enable_hard_rebalance && best_metrics.imbalance > _context.partition.epsilon) {
       DBG << "Running hard rebalance because" << best_metrics.imbalance << ">" << _context.partition.epsilon;
       _hard_rebalance_refiner.refine(refinement_nodes, max_allowed_part_weights, uncontraction_changes, best_metrics);
-      ASSERT(!_gain_manager.hasDelta());
+      ASSERT(!_gain_manager->hasDelta());
 
       const auto &moves = _hard_rebalance_refiner.moves();
       if (_context.enable_soft_rebalance) {
@@ -226,7 +227,7 @@ private:
                                                         uncontraction_changes, best_metrics)
                       : _local_search_refiner.refine(more_refinement_nodes, max_allowed_part_weights,
                                                      uncontraction_changes, best_metrics);
-    ASSERT(!_gain_manager.hasDelta());
+    ASSERT(!_gain_manager->hasDelta());
 
     const auto &moves = _context.only_do_advanced_moves
                         ? _local_search_refiner_am.moves()
@@ -237,7 +238,7 @@ private:
     if (_context.enable_hard_rebalance) {
       _hard_rebalance_refiner.performMovesAndUpdateCache(moves, refinement_nodes, uncontraction_changes);
     }
-    _qg.resetChanged();
+    _qg->resetChanged();
 
     ASSERT(best_metrics.km1 == metrics::km1(_hg));
     ASSERT(best_metrics.imbalance == metrics::imbalance(_hg, _context));
@@ -248,11 +249,11 @@ private:
   const Context &_original_context;
   Context _context;
   HypernodeID _least_num_nodes{0};
-  AdjacencyMatrixQuotientGraph<DFSCycleDetector> _qg;
-  KMinusOneGainManager _gain_manager;
+  std::shared_ptr<AdjacencyMatrixQuotientGraph<DFSCycleDetector>> _qg;
+  std::shared_ptr<KMinusOneGainManager> _gain_manager;
 
-  //AcyclicLocalSearchRefiner<StoppingPolicy, FMImprovementPolicy> _local_search_refiner;
-  AcyclicLocalSearchRepeatedRefiner<StoppingPolicy, FMImprovementPolicy> _local_search_refiner;
+  AcyclicLocalSearchRefiner<StoppingPolicy, FMImprovementPolicy> _local_search_refiner;
+  //AcyclicLocalSearchRepeatedRefiner<StoppingPolicy, FMImprovementPolicy> _local_search_refiner;
   AcyclicKWayAdvancedMovesFMRefiner<StoppingPolicy, FMImprovementPolicy> _local_search_refiner_am;
   AcyclicHardRebalanceRefiner _hard_rebalance_refiner;
   AcyclicSoftRebalanceRefiner _soft_rebalance_refiner;

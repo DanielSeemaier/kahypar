@@ -91,6 +91,9 @@ po::options_description createGeneralOptionsDescription(Context& context, const 
       ("r-repeated-insert",
        po::value<bool>(&context.repeated_insert)->value_name("<bool>"),
        "Repeated insert in acyclic local search")
+      ("r-no-ml",
+       po::value<bool>(&context.refine_no_ml)->value_name("<bool>"),
+       "No multilevel refinement")
     ("r-refine-rebalance-moves",
      po::value<bool>(&context.refine_rebalance_moves)->value_name("<bool>"),
      "Run local search on hypernodes moved during soft and hard rebalance")

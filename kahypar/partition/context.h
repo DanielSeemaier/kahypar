@@ -443,6 +443,7 @@ class Context {
   bool enable_soft_rebalance = false;
   bool enable_hard_rebalance = false;
   bool refine_rebalance_moves = true;
+  bool refine_no_ml = false;
   bool repeated_insert = false;
   std::string patoh_path = "";
   std::string rmlgp_path = "";
@@ -468,6 +469,7 @@ class Context {
     only_do_advanced_moves(other.only_do_advanced_moves),
     repeated_insert(other.repeated_insert),
     refine_rebalance_moves(other.refine_rebalance_moves),
+    refine_no_ml(other.refine_no_ml),
     patoh_path(other.patoh_path),
     rmlgp_path(other.rmlgp_path),
     bin_kaffpaD(other.bin_kaffpaD) { }

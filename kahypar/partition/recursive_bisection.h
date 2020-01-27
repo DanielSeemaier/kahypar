@@ -298,20 +298,26 @@ static inline void partition(Hypergraph& input_hypergraph,
               std::unique_ptr<ICoarsener> coarsener(CoarsenerFactory::getInstance().createObject(
                   current_context.coarsening.initial_algorithm, current_hypergraph, current_context, current_hypergraph.weightOfHeaviestNode()));
 
+//              AcyclicLocalSearchRepeatedRefiner<NumberOfFruitlessMovesStopsSearch> refiner(current_hypergraph, current_context);
+
               double current_km1 = metrics::km1(current_hypergraph);
               double previous_km1 = current_km1;
               bool improved = true;
 
-              do {
-                previous_km1 = current_km1;
+              if (!original_context.refine_no_ml) {
+                do {
+                  previous_km1 = current_km1;
 
-                coarsener->coarsen(current_context.coarsening.contraction_limit);
-                current_hypergraph.initializeNumCutHyperedges();
-                improved = coarsener->uncoarsen(*refiner);
-                current_km1 = metrics::km1(current_hypergraph);
+                  coarsener->coarsen(current_context.coarsening.contraction_limit);
+                  current_hypergraph.initializeNumCutHyperedges();
+                  improved = coarsener->uncoarsen(*refiner);
+                  current_km1 = metrics::km1(current_hypergraph);
 
-                LOG << "Result of refinement:" << previous_km1 << "-->" << current_km1;
-              } while (0.99 * previous_km1 > current_km1 && improved);
+                  LOG << "Result of refinement:" << previous_km1 << "-->" << current_km1;
+                } while (0.99 * previous_km1 > current_km1 && improved);
+              } else {
+                LOG << "ML refinement disabled";
+              }
             } else {
               std::unique_ptr<ICoarsener> coarsener(
                   CoarsenerFactory::getInstance().createObject(

@@ -181,25 +181,18 @@ void rebalancePartition(Hypergraph& hg, const Context& context, const bool refin
   UncontractionGainChanges changes{}; // dummy
 
   if (current_metrics.imbalance > balanced_context.partition.epsilon) {
-    //DBG << "Running HardRebalance to improve balance from " << current_metrics.imbalance << "to"
-    //    << balanced_context.partition.epsilon;
     AcyclicHardRebalanceRefiner hard_balance_refiner(hg, balanced_context, qg, gain_manager);
     hard_balance_refiner.initialize(0);
     std::vector<HypernodeID> refinement_nodes{};
     hard_balance_refiner.refine(refinement_nodes, {0, 0}, changes, current_metrics);
-    //DBG << "Imbalance after HardRebalance:" << current_metrics.imbalance;
   }
 
   if (refine_km1) {
-//    LOG << "#fruitless:" << context.local_search.fm.max_number_of_fruitless_moves;
-//    LOG << "max0:" << context.partition.max_part_weights[0];
-//    LOG << "max1:" << context.partition.max_part_weights[1];
-//    LOG << "cur0:" << hg.partWeight(0);
-//    LOG << "cur1:" << hg.partWeight(1);
     HyperedgeWeight previous_km1 = current_metrics.km1;
     do {
       previous_km1 = current_metrics.km1;
 
+//      AcyclicLocalSearchRepeatedRefiner<NumberOfFruitlessMovesStopsSearch> local_search_refiner(hg, context);
       AcyclicTwoWayKMinusOneRefiner local_search_refiner(hg, context);
       local_search_refiner.initialize(0);
 
@@ -211,8 +204,7 @@ void rebalancePartition(Hypergraph& hg, const Context& context, const bool refin
       }
 
       local_search_refiner.refine(local_search_refinement_nodes, {0, 0}, changes, current_metrics);
-      //local_search_refiner.printSummary();
-      LOG << "Result of 2Way refinement:" << previous_km1 << "-->" << current_metrics.km1;
+      LOG << "Result of flat 2Way refinement:" << previous_km1 << "-->" << current_metrics.km1;
     } while (0.99 * previous_km1 > current_metrics.km1);
   }
 }

@@ -20,9 +20,9 @@
 
 namespace kahypar {
 template<typename StoppingPolicy = Mandatory,
-         typename FMImprovementPolicy = CutDecreasedOrInfeasibleImbalanceDecreased>
+    typename FMImprovementPolicy = CutDecreasedOrInfeasibleImbalanceDecreased>
 class AcyclicLocalSearchRepeatedRefiner final : public IRefiner {
- private:
+private:
   using KWayRefinementPQ = ds::KWayPriorityQueue<HypernodeID, Gain, std::numeric_limits<Gain>, true>;
 
   static constexpr bool debug = false;
@@ -32,28 +32,43 @@ class AcyclicLocalSearchRepeatedRefiner final : public IRefiner {
   static constexpr Gain kInvalidGain = std::numeric_limits<Gain>::min();
   static constexpr HyperedgeWeight kInvalidDecrease = std::numeric_limits<PartitionID>::min();
 
- public:
-  AcyclicLocalSearchRepeatedRefiner(Hypergraph& hypergraph, const Context& context,
-                              AdjacencyMatrixQuotientGraph<DFSCycleDetector>& qg,
-                              KMinusOneGainManager& gain_manager) :
-    _hg(hypergraph),
-    _context(context),
-    _pq(context.partition.k),
-    _qg(qg),
-    _updated_neighbors(_hg.initialNumNodes(), false),
-    _gain_manager(gain_manager),
-    _stopping_policy(),
-    _locked_target(_hg.initialNumNodes(), std::vector<bool>(_context.partition.k)) {}
+public:
+  AcyclicLocalSearchRepeatedRefiner(Hypergraph &hypergraph, const Context &context,
+                                    std::shared_ptr<AdjacencyMatrixQuotientGraph<DFSCycleDetector>> qg,
+                                    std::shared_ptr<KMinusOneGainManager> gain_manager) :
+      _hg(hypergraph),
+      _context(context),
+      _pq(context.partition.k),
+      _qg(std::move(qg)),
+      _updated_neighbors(_hg.initialNumNodes(), false),
+      _gain_manager(std::move(gain_manager)),
+      _stopping_policy(),
+      _locked_target(_hg.initialNumNodes(), std::vector<bool>(_context.partition.k)),
+      _control_qg_and_gm(false) {}
+
+  AcyclicLocalSearchRepeatedRefiner(Hypergraph &hypergraph, const Context &context) :
+      _hg(hypergraph),
+      _context(context),
+      _pq(context.partition.k),
+      _updated_neighbors(_hg.initialNumNodes(), false),
+      _stopping_policy(),
+      _locked_target(_hg.initialNumNodes(), std::vector<bool>(_context.partition.k)) {
+    _qg = std::make_shared<AdjacencyMatrixQuotientGraph<DFSCycleDetector>>(_hg, _context);
+    _gain_manager = std::make_shared<KMinusOneGainManager>(_hg, _context);
+    _control_qg_and_gm = true;
+  }
 
   ~AcyclicLocalSearchRepeatedRefiner() override = default;
 
-  AcyclicLocalSearchRepeatedRefiner(const AcyclicLocalSearchRepeatedRefiner&) = delete;
-  AcyclicLocalSearchRepeatedRefiner& operator=(const AcyclicLocalSearchRepeatedRefiner&) = delete;
+  AcyclicLocalSearchRepeatedRefiner(const AcyclicLocalSearchRepeatedRefiner &) = delete;
 
-  AcyclicLocalSearchRepeatedRefiner(AcyclicLocalSearchRepeatedRefiner&&) = delete;
-  AcyclicLocalSearchRepeatedRefiner& operator=(AcyclicLocalSearchRepeatedRefiner&&) = delete;
+  AcyclicLocalSearchRepeatedRefiner &operator=(const AcyclicLocalSearchRepeatedRefiner &) = delete;
 
-  const std::vector<Move>& moves() {
+  AcyclicLocalSearchRepeatedRefiner(AcyclicLocalSearchRepeatedRefiner &&) = delete;
+
+  AcyclicLocalSearchRepeatedRefiner &operator=(AcyclicLocalSearchRepeatedRefiner &&) = delete;
+
+  const std::vector<Move> &moves() {
     return _moves;
   }
 
@@ -61,11 +76,15 @@ class AcyclicLocalSearchRepeatedRefiner final : public IRefiner {
     LOG << "[AcyclicLocalSearchRepeatedRefiner] Number of calls:" << _num_calls;
     LOG << "[AcyclicLocalSearchRepeatedRefiner] Number of moves:" << _num_moves;
     LOG << "[AcyclicLocalSearchRepeatedRefiner] Number of rollbacks:" << _num_rollbacks;
-    LOG << "[AcyclicLocalSearchRepeatedRefiner] Number of refinement nodes that are border nodes:" << _num_border_refinement_nodes;
-    LOG << "[AcyclicLocalSearchRepeatedRefiner] Number of refinement nodes that are NOT border nodes:" << _num_non_border_refinement_nodes;
+    LOG << "[AcyclicLocalSearchRepeatedRefiner] Number of refinement nodes that are border nodes:"
+        << _num_border_refinement_nodes;
+    LOG << "[AcyclicLocalSearchRepeatedRefiner] Number of refinement nodes that are NOT border nodes:"
+        << _num_non_border_refinement_nodes;
     LOG << "[AcyclicLocalSearchRepeatedRefiner] Number of moves in the last iteration:" << _num_moves_in_last_iteration;
-    LOG << "[AcyclicLocalSearchRepeatedRefiner] Number of moves denied by the acyclic constrain:" << _num_moves_denied_by_acyclic_constrain;
-    LOG << "[AcyclicLocalSearchRepeatedRefiner] Number of moves denied by the balance constrain:" << _num_moves_denied_by_balance_constrain;
+    LOG << "[AcyclicLocalSearchRepeatedRefiner] Number of moves denied by the acyclic constrain:"
+        << _num_moves_denied_by_acyclic_constrain;
+    LOG << "[AcyclicLocalSearchRepeatedRefiner] Number of moves denied by the balance constrain:"
+        << _num_moves_denied_by_balance_constrain;
     LOG << "[AcyclicLocalSearchRepeatedRefiner] Number of moves with positive gain:" << _num_positive_gain_moves;
     LOG << "[AcyclicLocalSearchRepeatedRefiner] Number of moves with zero gain:" << _num_zero_gain_moves;
     LOG << "[AcyclicLocalSearchRepeatedRefiner] Number of moves with negative gain:" << _num_negative_gain_moves;
@@ -79,12 +98,39 @@ class AcyclicLocalSearchRepeatedRefiner final : public IRefiner {
     LOG << "[AcyclicLocalSearchRepeatedRefiner] Gains time:" << _gain_time;
   }
 
- private:
+  void performMovesAndUpdateCacheImpl(const std::vector<Move> &moves,
+                                      std::vector<HypernodeID> &refinement_nodes,
+                                      const UncontractionGainChanges &changes) final {
+  }
+
+  void preUncontraction(const HypernodeID representant) override {
+    if (_control_qg_and_gm) {
+      _qg->preUncontraction(representant);
+      _gain_manager->preUncontraction(representant);
+    }
+  }
+
+  void postUncontraction(const HypernodeID representant, const std::vector<HypernodeID>&& partners) override {
+    if (_control_qg_and_gm) {
+      _qg->postUncontraction(representant, std::forward<const std::vector<HypernodeID>>(partners));
+      _gain_manager->postUncontraction(representant, std::forward<const std::vector<HypernodeID>>(partners));
+    }
+  }
+
+
+private:
   void initializeImpl(const HyperedgeWeight max_gain) final {
     if (!_is_initialized) {
       _pq.initialize(_hg.initialNumNodes());
       _is_initialized = true;
     }
+
+    if (_control_qg_and_gm) {
+      _qg->rebuild();
+      _gain_manager->initialize();
+    }
+    _gain_manager->resetDelta();
+
     _num_positive_gain_moves = 0;
     _num_zero_gain_moves = 0;
     _num_negative_gain_moves = 0;
@@ -104,18 +150,15 @@ class AcyclicLocalSearchRepeatedRefiner final : public IRefiner {
     _actual_refine_time = 0.0;
     _num_initially_enabled_pqs = 0;
 
-    LOG << "Initialized AcyclicLocalSearchRepeatedRefiner with eps=" << _context.partition.epsilon << "and k=" << _context.partition.k;
+    LOG << "Initialized AcyclicLocalSearchRepeatedRefiner with eps=" << _context.partition.epsilon << "and k="
+        << _context.partition.k;
   }
 
-  void performMovesAndUpdateCacheImpl(const std::vector<Move>& moves,
-                                      std::vector<HypernodeID>& refinement_nodes,
-                                      const UncontractionGainChanges& changes) final {
-  }
 
-  bool refineImpl(std::vector<HypernodeID>& refinement_nodes,
-                  const std::array<HypernodeWeight, 2>&,
-                  const UncontractionGainChanges&,
-                  Metrics& best_metrics) final {
+  bool refineImpl(std::vector<HypernodeID> &refinement_nodes,
+                  const std::array<HypernodeWeight, 2> &,
+                  const UncontractionGainChanges &,
+                  Metrics &best_metrics) final {
     ASSERT(best_metrics.km1 == metrics::km1(_hg));
     ASSERT(best_metrics.imbalance == metrics::imbalance(_hg, _context));
 
@@ -129,7 +172,7 @@ class AcyclicLocalSearchRepeatedRefiner final : public IRefiner {
     resetLockedTargets();
 
     Randomize::instance().shuffleVector(refinement_nodes, refinement_nodes.size());
-    for (const HypernodeID& hn : refinement_nodes) {
+    for (const HypernodeID &hn : refinement_nodes) {
       if (_hg.isBorderNode(hn)) {
         ++_num_border_refinement_nodes;
       } else {
@@ -164,14 +207,15 @@ class AcyclicLocalSearchRepeatedRefiner final : public IRefiner {
       Gain max_gain = kInvalidGain;
       HypernodeID max_gain_node = kInvalidHN;
       PartitionID to_part = Hypergraph::kInvalidPartition;
-      _pq.deleteMax(max_gain_node, max_gain, to_part);
+
+        _pq.deleteMax(max_gain_node, max_gain, to_part);
 
       ASSERT(max_gain != kInvalidGain);
       ASSERT(max_gain_node != kInvalidHN);
       ASSERT(to_part != Hypergraph::kInvalidPartition);
       ASSERT(_hg.active(max_gain_node));
       ASSERT(!_hg.marked(max_gain_node));
-      ASSERT(max_gain == _gain_manager.adjacentGain(max_gain_node, to_part));
+      ASSERT(max_gain == _gain_manager->adjacentGain(max_gain_node, to_part));
       ASSERT(max_gain == gainInducedByHypergraph(max_gain_node, to_part));
       ASSERT(_hg.isBorderNode(max_gain_node));
       ASSERT(isConnectedTo(max_gain_node, to_part));
@@ -179,8 +223,8 @@ class AcyclicLocalSearchRepeatedRefiner final : public IRefiner {
       const PartitionID from_part = _hg.partID(max_gain_node);
 
       bool weight_ok = ((_hg.partWeight(to_part) + _hg.nodeWeight(max_gain_node))
-                      <= _context.partition.max_part_weights[to_part]) // to_part does not become overloaded
-                     && (_hg.partSize(from_part) > 1); // from_part does not become empty
+                        <= _context.partition.max_part_weights[to_part]) // to_part does not become overloaded
+                       && (_hg.partSize(from_part) > 1); // from_part does not become empty
       if (!weight_ok) {
         ++_num_moves_denied_by_balance_constrain;
       }
@@ -188,7 +232,7 @@ class AcyclicLocalSearchRepeatedRefiner final : public IRefiner {
       // quotient graph remains acyclic
       bool acyclicity_ok = false;
       if (weight_ok) {
-        acyclicity_ok = _qg.testAndUpdateBeforeMovement(max_gain_node, from_part, to_part);
+        acyclicity_ok = _qg->testAndUpdateBeforeMovement(max_gain_node, from_part, to_part);
         if (!acyclicity_ok) {
           ++_num_moves_denied_by_acyclic_constrain;
         }
@@ -197,7 +241,7 @@ class AcyclicLocalSearchRepeatedRefiner final : public IRefiner {
 
       if (acyclicity_ok) {
         // Step 2: remove all movements for this hypernode
-        for (const PartitionID &part : _gain_manager.adjacentParts(max_gain_node)) {
+        for (const PartitionID &part : _gain_manager->adjacentParts(max_gain_node)) {
           if (part == to_part) {
             ASSERT(!_pq.contains(max_gain_node, part));
             continue;
@@ -253,8 +297,8 @@ class AcyclicLocalSearchRepeatedRefiner final : public IRefiner {
         // perform gain updates
         _hns_to_activate.clear();
         HighResClockTimepoint start_gain = std::chrono::high_resolution_clock::now();
-        _gain_manager.updateAfterMovement(max_gain_node, from_part, to_part,
-                                          [&](const HypernodeID& hn, const PartitionID& part, const Gain& gain) {
+        _gain_manager->updateAfterMovement(max_gain_node, from_part, to_part,
+                                          [&](const HypernodeID &hn, const PartitionID &part, const Gain &gain) {
                                             if (_hg.marked(hn) || isLockedTarget(hn, part)) {
                                               return;
                                             }
@@ -271,7 +315,7 @@ class AcyclicLocalSearchRepeatedRefiner final : public IRefiner {
                                               _pq.enablePart(to_part);
                                             }
                                           },
-                                          [&](const HypernodeID& hn, const PartitionID& part, const Gain& delta) {
+                                          [&](const HypernodeID &hn, const PartitionID &part, const Gain &delta) {
                                             if (_hg.marked(hn) || !_hg.active(hn) ||
                                                 part == Hypergraph::kInvalidPartition ||
                                                 isLockedTarget(hn, part)) {
@@ -281,7 +325,7 @@ class AcyclicLocalSearchRepeatedRefiner final : public IRefiner {
                                             ASSERT(_pq.contains(hn, part));
                                             _pq.updateKeyBy(hn, part, delta);
                                           },
-                                          [&](const HypernodeID& hn, const PartitionID& part, const Gain&) {
+                                          [&](const HypernodeID &hn, const PartitionID &part, const Gain &) {
                                             if (_hg.marked(hn) || !_hg.active(hn) || isLockedTarget(hn, part)) {
                                               return;
                                             }
@@ -292,7 +336,7 @@ class AcyclicLocalSearchRepeatedRefiner final : public IRefiner {
         HighResClockTimepoint end_gain = std::chrono::high_resolution_clock::now();
         _gain_time += std::chrono::duration<double>(end_gain - start_gain).count();;
 
-        for (const HypernodeID& hn_to_activate : _hns_to_activate) {
+        for (const HypernodeID &hn_to_activate : _hns_to_activate) {
           if (!_hg.active(hn_to_activate)) {
             activate(hn_to_activate);
           }
@@ -300,7 +344,8 @@ class AcyclicLocalSearchRepeatedRefiner final : public IRefiner {
 
         // check if we accept the new state
         const bool improved_km1_within_balance = (current_imbalance <= _context.partition.epsilon) &&
-                                                 (current_km1 < best_metrics.km1 || (current_km1 == best_metrics.km1 && Randomize::instance().flipCoin()));
+                                                 (current_km1 < best_metrics.km1 || (current_km1 == best_metrics.km1 &&
+                                                                                     Randomize::instance().flipCoin()));
         bool improved_balance_less_equal_km1 = current_imbalance < best_metrics.imbalance;
         if (!_context.imbalanced_intermediate_step) {
           improved_balance_less_equal_km1 &= current_km1 <= best_metrics.km1;
@@ -316,7 +361,7 @@ class AcyclicLocalSearchRepeatedRefiner final : public IRefiner {
           _stopping_policy.resetStatistics();
           min_cut_index = _moves.size();
           touched_hns_since_last_improvement = 0;
-          _gain_manager.resetDelta();
+          _gain_manager->resetDelta();
 
           HighResClockTimepoint end_best_cut = std::chrono::high_resolution_clock::now();
           refine_time_until_best_cut = std::chrono::duration<double>(end_best_cut - start_refine).count();
@@ -330,8 +375,8 @@ class AcyclicLocalSearchRepeatedRefiner final : public IRefiner {
       }
 
       // Step 5: activate neighbors
-      for (const HyperedgeID& he : _hg.incidentEdges(max_gain_node)) {
-        for (const HypernodeID& pin : _hg.pins(he)) {
+      for (const HyperedgeID &he : _hg.incidentEdges(max_gain_node)) {
+        for (const HypernodeID &pin : _hg.pins(he)) {
           if (!_hg.marked(pin) && !_hg.active(pin) && _hg.isBorderNode(pin)) {
             activate(pin);
           }
@@ -347,7 +392,7 @@ class AcyclicLocalSearchRepeatedRefiner final : public IRefiner {
       const PartitionID to_part = _moves[last_index].from;
       DBG << "Rollback" << hn << "/" << from_part << "-->" << to_part;
 
-      const bool success = _qg.testAndUpdateBeforeMovement(hn, from_part, to_part);
+      const bool success = _qg->testAndUpdateBeforeMovement(hn, from_part, to_part);
       ASSERT(success);
       _hg.changeNodePart(hn, from_part, to_part);
 
@@ -360,9 +405,9 @@ class AcyclicLocalSearchRepeatedRefiner final : public IRefiner {
       }
       ++_num_rollbacks;
     }
-    _gain_manager.rollbackDelta();
+    _gain_manager->rollbackDelta();
 
-    ASSERT(_qg.isAcyclic());
+    ASSERT(_qg->isAcyclic());
     ASSERT(AdjacencyMatrixQuotientGraph<DFSCycleDetector>(_hg, _context).isAcyclic());
     ASSERT(best_metrics.km1 == metrics::km1(_hg));
     best_metrics.imbalance = metrics::imbalance(_hg, _context);
@@ -393,12 +438,12 @@ class AcyclicLocalSearchRepeatedRefiner final : public IRefiner {
   void insertHypernodeIntoPQ(const HypernodeID hn) {
     ASSERT(_hg.isBorderNode(hn));
 
-    for (const PartitionID& part : _gain_manager.adjacentParts(hn)) {
+    for (const PartitionID &part : _gain_manager->adjacentParts(hn)) {
       ASSERT(part != _hg.partID(hn));
-      ASSERT(_gain_manager.adjacentGain(hn, part) == gainInducedByHypergraph(hn, part));
+      ASSERT(_gain_manager->adjacentGain(hn, part) == gainInducedByHypergraph(hn, part));
       ASSERT(isConnectedTo(hn, part));
 
-      _pq.insert(hn, part, _gain_manager.adjacentGain(hn, part));
+      _pq.insert(hn, part, _gain_manager->adjacentGain(hn, part));
       if (_hg.partWeight(part) < _context.partition.max_part_weights[0]) {
         _pq.enablePart(part);
       }
@@ -417,7 +462,7 @@ class AcyclicLocalSearchRepeatedRefiner final : public IRefiner {
   }
 
   void resetLockedTargets() {
-    for (const auto& p : _locked_target_entries) {
+    for (const auto &p : _locked_target_entries) {
       _locked_target[p.first][p.second] = false;
     }
     _locked_target_entries.clear();
@@ -445,7 +490,7 @@ class AcyclicLocalSearchRepeatedRefiner final : public IRefiner {
         }
         if (isConnectedTo(hn, part)) {
           ASSERT(_pq.contains(hn, part), "Active HN not contained in PQ:" << V(hn) << V(_hg.partID(hn)) << V(part));
-          ASSERT(_pq.key(hn, part) == _gain_manager.adjacentGain(hn, part));
+          ASSERT(_pq.key(hn, part) == _gain_manager->adjacentGain(hn, part));
           ASSERT(_pq.key(hn, part) == gainInducedByHypergraph(hn, part));
         } else {
           ASSERT(!_pq.contains(hn, part));
@@ -484,13 +529,13 @@ class AcyclicLocalSearchRepeatedRefiner final : public IRefiner {
   }
 #endif
 
-  Hypergraph& _hg;
-  const Context& _context;
+  Hypergraph &_hg;
+  const Context &_context;
   KWayRefinementPQ _pq;
-  AdjacencyMatrixQuotientGraph<DFSCycleDetector>& _qg;
+  std::shared_ptr<AdjacencyMatrixQuotientGraph<DFSCycleDetector>> _qg;
   std::vector<Move> _moves;
   ds::FastResetArray<bool> _updated_neighbors;
-  KMinusOneGainManager& _gain_manager;
+  std::shared_ptr<KMinusOneGainManager> _gain_manager;
   StoppingPolicy _stopping_policy;
   std::vector<HypernodeID> _hns_to_activate;
 
@@ -515,5 +560,6 @@ class AcyclicLocalSearchRepeatedRefiner final : public IRefiner {
 
   std::vector<std::vector<bool>> _locked_target;
   std::vector<std::pair<HypernodeID, PartitionID>> _locked_target_entries;
+  bool _control_qg_and_gm = false;
 };
 } // namespace kahypar

@@ -40,7 +40,8 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
     _fixtures{std::vector<HypernodeID>(_hg.initialNumNodes()),
               std::vector<HypernodeID>(_hg.initialNumNodes())},
     _gain_manager(std::move(gain_manager)),
-    _control_qg_and_gm(false) {}
+    _control_qg_and_gm(false),
+    _stopping_policy() {}
 
   AcyclicTwoWayKMinusOneRefiner(Hypergraph& hypergraph, const Context& context) :
     _hg(hypergraph),
@@ -48,7 +49,8 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
     _pqs{ds::BinaryMaxHeap<HypernodeID, Gain>(_hg.initialNumNodes()),
          ds::BinaryMaxHeap<HypernodeID, Gain>(_hg.initialNumNodes())},
     _fixtures{std::vector<HypernodeID>(_hg.initialNumNodes()),
-              std::vector<HypernodeID>(_hg.initialNumNodes())} {
+              std::vector<HypernodeID>(_hg.initialNumNodes())},
+    _stopping_policy() {
     _qg = std::make_shared<AdjacencyMatrixQuotientGraph<DFSCycleDetector>>(_hg, _context);
     _gain_manager = std::make_shared<KMinusOneGainManager>(_hg, _context);
     _control_qg_and_gm = true;
@@ -116,7 +118,7 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
     _timer.start();
     _is_initialized = true;
 
-    if (_gain_manager) {
+    if (_control_qg_and_gm) {
       _qg->rebuild();
       _gain_manager->initialize();
     }
@@ -200,9 +202,10 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
     // main refinement loop
     int moves_since_improvement = 0;
     int min_cut_index = -1;
+    const double beta = std::log(_hg.currentNumNodes());
 
-    while (moves_since_improvement < 350 // TODO
-           && (!_pqs[0].empty() || !_pqs[1].empty())) {
+    while ((!_pqs[0].empty() || !_pqs[1].empty()) && !_stopping_policy.searchShouldStop(moves_since_improvement,
+                                                                                        _context, beta, best_metrics.km1, current_km1)) {
       ASSERT(VALIDATE_PQS_STATE());
       ASSERT(VALIDATE_FIXTURES_STATE());
 
@@ -249,6 +252,7 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
 
         ++moves_since_improvement;
         ASSERT(current_km1 == metrics::km1(_hg));
+        _stopping_policy.updateStatistics(max_gain);
 
         // accept new partition if it improves the cut
         bool accept = current_km1 < best_metrics.km1;
@@ -261,6 +265,7 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
           _gain_manager->resetDelta();
           moves_since_improvement = 0;
           min_cut_index = _moves.size();
+          _stopping_policy.resetStatistics();
         }
 
         _moves.emplace_back(max_gain_hn, from_part, to_part);
@@ -713,6 +718,7 @@ class AcyclicTwoWayKMinusOneRefiner final : public IRefiner {
   double _time_hn_deactivate{0.0};
   double _time_init{0.0};
   bool _control_qg_and_gm{false};
+  AdvancedRandomWalkModelStopsSearch _stopping_policy;
 
   HTimer _timer;
 };

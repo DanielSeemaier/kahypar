@@ -180,8 +180,6 @@ class HgpInitialPartitioner : public IInitialPartitioner, private InitialPartiti
       dag::fixBipartitionAcyclicity(*hg_ptr, ctx);
     }
 
-//    runVCycle(*hg_ptr, ctx); // TODO refactor
-
     DBG << "Bipartition KM1 after acyclicity fix + local search:" << metrics::km1(*hg_ptr);
     DBG << "Bipartition imbalance after acyclicity fix + local search:" << metrics::imbalance(*hg_ptr, ctx);
     hg_ptr->printPartSizes();
