@@ -32,9 +32,12 @@ int main(int argc, char *argv[]) {
 
   context.imbalanced_intermediate_step = false;
   context.reduce_balance_during_uncoarsening = false;
+  context.partition.final_epsilon = context.partition.epsilon;
 
   if (context.bin_kaffpaD) {
-    LOG << "Reading input / writing output in kaffpaD shared memory format";
+    if (!context.partition.quiet_mode) {
+      LOG << "Reading input / writing output in kaffpaD shared memory format";
+    }
     context.partition.write_partition_file = false;
   }
 
@@ -54,6 +57,13 @@ int main(int argc, char *argv[]) {
   if (context.bin_kaffpaD) {
     kahypar::io::writePartitionToSharedMemoryGraphFile(hypergraph, context.partition.graph_filename);
   }
+
+  std::cout << "FINAL graph=" << context.partition.graph_filename
+            << ", k=" << context.partition.k
+            << ", eps=" << context.partition.epsilon
+            << ", final_imbalance=" << kahypar::metrics::imbalance(hypergraph, context)
+            << ", final_km1=" << kahypar::metrics::km1(hypergraph)
+            << std::endl;
 
   return 0;
 }

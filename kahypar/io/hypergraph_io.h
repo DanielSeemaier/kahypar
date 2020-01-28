@@ -421,7 +421,7 @@ static inline void readPartitionFile(const std::string &filename, std::vector<Pa
 
 static inline void writePartitionFile(const Hypergraph &hypergraph, const std::string &filename) {
   if (filename.empty()) {
-    LOG << "No filename for partition file specified";
+    //LOG << "No filename for partition file specified";
   } else {
     std::ofstream out_stream(filename.c_str());
     for (const HypernodeID &hn : hypergraph.nodes()) {

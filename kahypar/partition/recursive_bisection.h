@@ -289,16 +289,16 @@ static inline void partition(Hypergraph& input_hypergraph,
               initial::partition(current_hypergraph, current_context);
 
               // perform refinement
-              LOG << "Performing refinement of initial partitioner with configuration:";
-              LOG << "\t-refinement algorithm:" << RefinementAlgorithm::acyclic_twoway_km1;
-              LOG << "\t-coarsening algorithm:" << current_context.coarsening.initial_algorithm;
+              if (!current_context.partition.quiet_mode) {
+                LOG << "Performing refinement of initial partitioner with configuration:";
+                LOG << "\t-refinement algorithm:" << RefinementAlgorithm::acyclic_twoway_km1;
+                LOG << "\t-coarsening algorithm:" << current_context.coarsening.initial_algorithm;
+              }
 
               std::unique_ptr<IRefiner> refiner(RefinerFactory::getInstance().createObject(
                   RefinementAlgorithm::acyclic_twoway_km1, current_hypergraph, current_context));
               std::unique_ptr<ICoarsener> coarsener(CoarsenerFactory::getInstance().createObject(
                   current_context.coarsening.initial_algorithm, current_hypergraph, current_context, current_hypergraph.weightOfHeaviestNode()));
-
-//              AcyclicLocalSearchRepeatedRefiner<NumberOfFruitlessMovesStopsSearch> refiner(current_hypergraph, current_context);
 
               double current_km1 = metrics::km1(current_hypergraph);
               double previous_km1 = current_km1;
@@ -313,9 +313,11 @@ static inline void partition(Hypergraph& input_hypergraph,
                   improved = coarsener->uncoarsen(*refiner);
                   current_km1 = metrics::km1(current_hypergraph);
 
-                  LOG << "Result of refinement:" << previous_km1 << "-->" << current_km1;
+                  if (!current_context.partition.quiet_mode) {
+                    LOG << "Result of refinement:" << previous_km1 << "-->" << current_km1;
+                  }
                 } while (0.99 * previous_km1 > current_km1 && improved);
-              } else {
+              } else if (!current_context.partition.quiet_mode) {
                 LOG << "ML refinement disabled";
               }
             } else {

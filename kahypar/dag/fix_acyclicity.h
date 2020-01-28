@@ -204,7 +204,9 @@ void rebalancePartition(Hypergraph& hg, const Context& context, const bool refin
       }
 
       local_search_refiner.refine(local_search_refinement_nodes, {0, 0}, changes, current_metrics);
-      LOG << "Result of flat 2Way refinement:" << previous_km1 << "-->" << current_metrics.km1;
+      if (!context.partition.quiet_mode) {
+        LOG << "Result of flat 2Way refinement:" << previous_km1 << "-->" << current_metrics.km1;
+      }
     } while (0.99 * previous_km1 > current_metrics.km1);
   }
 }

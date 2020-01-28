@@ -73,7 +73,9 @@ class TopologicalOrderingInitialPartitioner : public IInitialPartitioner,
 
         local_search_refiner.refine(local_search_refinement_nodes, {0, 0}, changes, current_metrics);
         //local_search_refiner.printSummary();
-        LOG << "Result of 2Way refinement:" << previous_km1 << "-->" << current_metrics.km1;
+        if (!_context.partition.quiet_mode) {
+          LOG << "Result of 2Way refinement:" << previous_km1 << "-->" << current_metrics.km1;
+        }
       } while (0.99 * previous_km1 > current_metrics.km1);
     }
   }

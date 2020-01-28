@@ -71,8 +71,10 @@ class HgpInitialPartitioner : public IInitialPartitioner, private InitialPartiti
       rebalancePartition(_hg, _context);
     }
 
-    LOG << "Total time spend in blackbox Hypergraph partitioners:" << _total_hgp_time;
-    LOG << "Total time spend for initial partitioning:" << timer.stop();
+    if (!_context.partition.quiet_mode) {
+      LOG << "Total time spend in blackbox Hypergraph partitioners:" << _total_hgp_time;
+      LOG << "Total time spend for initial partitioning:" << timer.stop();
+    }
   }
 
   static void rebalancePartition(Hypergraph& hg, const Context& context, const bool refine_km1 = false) {
@@ -114,34 +116,6 @@ class HgpInitialPartitioner : public IInitialPartitioner, private InitialPartiti
       } while (0.99 * previous_km1 > current_metrics.km1);
     }
   }
-
-//  static void runVCycle(Hypergraph& hg, Context context) {
-//    context.setupPartWeights(hg.totalWeight());
-//    context.coarsening.algorithm = CoarseningAlgorithm::external;
-//    context.coarsening.external_file = "rmlgp";
-//    context.coarsening.allow_mixed_contraction = true;
-//    context.coarsening.rating.acceptance_policy = AcceptancePolicy::best_prefer_unmatched;
-//    context.coarsening.rating.community_policy = CommunityPolicy::ignore_communities;
-//    context.coarsening.rating.fixed_vertex_acceptance_policy = FixVertexContractionAcceptancePolicy::fixed_vertex_allowed;
-//    context.coarsening.rating.heavy_node_penalty_policy = HeavyNodePenaltyPolicy::no_penalty;
-//    context.coarsening.rating.rating_function = RatingFunction::heavy_edge;
-//    context.local_search.fm.max_number_of_fruitless_moves = 350;
-//    context.local_search.iterations_per_level = 5;
-//
-//    std::unique_ptr<ICoarsener> coarsener(
-//        CoarsenerFactory::getInstance().createObject(
-//            context.coarsening.algorithm, hg, context,
-//            hg.weightOfHeaviestNode()));
-//    AcyclicTwoWayKMinusOneRefiner refiner(hg, context);
-//    LOG << context.local_search.iterations_per_level;
-//    LOG << "Coarsening with" << context.coarsening.algorithm;
-//    LOG << context.local_search.fm.max_number_of_fruitless_moves;
-//    coarsener->coarsen(context.coarsening.contraction_limit);
-//    LOG << hg.initialNumNodes() << "/" << hg.currentNumNodes();
-//    hg.initializeNumCutHyperedges();
-//    coarsener->uncoarsen(refiner);
-//    refiner.printSummary();
-//  }
 
   void performPartition(const PartitionID part, const PartitionID k) {
     if (k < 2) {
@@ -274,7 +248,9 @@ class HgpInitialPartitioner : public IInitialPartitioner, private InitialPartiti
       << " --ip " << ip_filename
       << " --action ip";
     const std::string cmd = cmd_ss.str();
-    LOG << "Calling rMLGP_interface:" << cmd;
+    if (!_context.partition.quiet_mode) {
+      LOG << "Calling rMLGP_interface:" << cmd;
+    }
     const int rmlgp_exit_code = std::system(cmd.c_str());
     if (rmlgp_exit_code != 0) {
       throw std::runtime_error("rMLGP_interface returned a nonzero exit code");
@@ -284,22 +260,14 @@ class HgpInitialPartitioner : public IInitialPartitioner, private InitialPartiti
     io::readPartitionFile(ip_filename, part);
     hg.setPartition(part);
 
-    LOG << "IP with KM1" << metrics::km1(hg) << "imbalance" << metrics::imbalance(hg, _context);
+    if (!_context.partition.quiet_mode) {
+      LOG << "IP with KM1" << metrics::km1(hg) << "imbalance" << metrics::imbalance(hg, _context);
+    }
   }
 
   void invokeKaHyPar(Hypergraph& hg, const PartitionID k, const double epsilon) const {
-//    io::writeHypergraphFile(hg, "test.hgr", false);
-//    kahypar::Hypergraph hypergraph(
-//        kahypar::io::createHypergraphFromFile("test.hgr", _context.partition.k)
-//    );
     Context ctx = createContext(k, epsilon);
     kahypar::PartitionerFacade().partition(hg, ctx);
-//    hg.resetPartitioning();
-//    hg.changeK(k);
-//    for (const HypernodeID& hn : hypergraph.nodes()) {
-//      hg.setNodePart(hn, hypergraph.partID(hn));
-//    }
-//    hg.initializeNumCutHyperedges();
   }
 
   void invokePaToH(Hypergraph& hg, const PartitionID k, const double epsilon) const {
@@ -316,7 +284,9 @@ class HgpInitialPartitioner : public IInitialPartitioner, private InitialPartiti
       << " SD=" << _context.partition.seed
       << " IB=" << epsilon;
     const std::string command = command_ss.str();
-    LOG << "Calling PaToH:" << command;
+    if (!_context.partition.quiet_mode) {
+      LOG << "Calling PaToH:" << command;
+    }
     const int patoh_exit_code = std::system(command.c_str());
     if (patoh_exit_code != 0) {
       throw std::runtime_error("PaToH returned with a nonzero exit code");

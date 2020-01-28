@@ -116,7 +116,10 @@ private:
     }
 
     _context.stats.add(StatTag::Coarsening, "HnsAfterCoarsening", _hg.currentNumNodes());
-    LOG << "Coarsened from" << _hg.initialNumNodes() << "to" << _hg.currentNumNodes() << "in" << timer.stop() << "s /" << it << "iterations";
+    if (!_context.partition.quiet_mode) {
+      LOG << "Coarsened from" << _hg.initialNumNodes() << "to" << _hg.currentNumNodes() << "in" << timer.stop() << "s /"
+          << it << "iterations";
+    }
   }
 
   bool uncoarsenImpl(IRefiner& refiner) override final {

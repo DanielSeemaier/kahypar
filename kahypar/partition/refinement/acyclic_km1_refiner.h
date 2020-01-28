@@ -75,6 +75,10 @@ public:
   }
 
   void printSummary() const override {
+    if (_context.partition.quiet_mode) {
+      return;
+    }
+
     if (_context.enable_soft_rebalance) {
       LOG << "Soft Rebalance Refiner:";
       _soft_rebalance_refiner.printSummary();
@@ -121,17 +125,20 @@ private:
 
     _context.only_do_advanced_moves = false;
     _context.repeated_insert = false;
-    if (_context.only_do_advanced_moves) {
-      LOG << "\t-move heuristic: advanced moves";
-    } else {
-      if (_context.repeated_insert) {
-        LOG << "\t-move heuristic: global moves with repeated insert";
+
+    if (!_context.partition.quiet_mode) {
+      if (_context.only_do_advanced_moves) {
+        LOG << "\t-move heuristic: advanced moves";
       } else {
-        LOG << "\t-move heuristic: global moves";
+        if (_context.repeated_insert) {
+          LOG << "\t-move heuristic: global moves with repeated insert";
+        } else {
+          LOG << "\t-move heuristic: global moves";
+        }
       }
+      LOG << "\t-extra refinement nodes:" << _context.refine_rebalance_moves;
+      LOG << "\t-epsilon:" << _context.partition.epsilon;
     }
-    LOG << "\t-extra refinement nodes:" << _context.refine_rebalance_moves;
-    LOG << "\t-epsilon:" << _context.partition.epsilon;
   }
 
   void performMovesAndUpdateCacheImpl(const std::vector<Move> &moves,

@@ -70,7 +70,9 @@ static inline bool partitionVCycle(Hypergraph &hypergraph, ICoarsener &coarsener
   const auto old_km1 = metrics::km1(hypergraph);
   const bool improved_quality = coarsener.uncoarsen(refiner);
   const auto new_km1 = metrics::km1(hypergraph);
-  LOG << "vCycle result:" << old_km1 << "-->" << new_km1;
+  if (!context.partition.quiet_mode) {
+    LOG << "vCycle result:" << old_km1 << "-->" << new_km1;
+  }
   io::printLocalSearchResults(context, hypergraph);
   return improved_quality;
 }
@@ -126,25 +128,31 @@ static inline void partition(Hypergraph &hypergraph, const Context &context) {
 
   if (metrics::imbalance(hypergraph, context) > context.partition.epsilon) {
     ctx_copy.partition.epsilon = metrics::imbalance(hypergraph, context);
-    LOG << "Relaxed epsilon' from" << context.partition.epsilon << "to" << ctx_copy.partition.epsilon;
+    if (!context.partition.quiet_mode) {
+      LOG << "Relaxed epsilon' from" << context.partition.epsilon << "to" << ctx_copy.partition.epsilon;
+    }
   }
   ctx_copy.setupPartWeights(hypergraph.totalWeight());
 
-  LOG << "Initial" << context.partition.objective << "before first Vcycle ="
-      << (context.partition.objective == Objective::cut
-          ? metrics::hyperedgeCut(hypergraph)
-          : metrics::km1(hypergraph));
+  if (!context.partition.quiet_mode) {
+    LOG << "Initial" << context.partition.objective << "before first Vcycle ="
+        << (context.partition.objective == Objective::cut
+            ? metrics::hyperedgeCut(hypergraph)
+            : metrics::km1(hypergraph));
+  }
 
   bool achieved_imbalance = metrics::imbalance(hypergraph, ctx_copy) < context.partition.final_epsilon;
   HyperedgeWeight best_km1 = metrics::km1(hypergraph);
   std::vector<PartitionID> best_partition = createPartitionSnapshot(hypergraph);
 
   for (uint32_t vcycle = 1; vcycle <= context.partition.global_search_iterations; ++vcycle) {
-    LOG << "Performing vCycle on already partitioned graph using the following configuration:";
-    LOG << "\t-refiner:" << context.local_search.algorithm;
-    LOG << "\t-coarsening:" << context.coarsening.algorithm;
-    LOG << "\t-recombine operation:" << recombine;
-    LOG << "\t-advanced moves:" << context.only_do_advanced_moves;
+    if (!context.partition.quiet_mode) {
+      LOG << "Performing vCycle on already partitioned graph using the following configuration:";
+      LOG << "\t-refiner:" << context.local_search.algorithm;
+      LOG << "\t-coarsening:" << context.coarsening.algorithm;
+      LOG << "\t-recombine operation:" << recombine;
+      LOG << "\t-advanced moves:" << context.only_do_advanced_moves;
+    }
 
     context.partition.current_v_cycle = vcycle;
     partitionVCycle(hypergraph, *coarsener, *km1_refiner, ctx_copy, recombine);
@@ -156,13 +164,17 @@ static inline void partition(Hypergraph &hypergraph, const Context &context) {
     // otherwise only accept balanced partition that is better than the best balanced partition found so far
     if (best_km1 == 0 || (current_km1 < best_km1 && achieved_imbalance) ||
         (!achieved_imbalance && (current_achieved_imbalance || current_km1 < best_km1))) {
-      LOG << "V-Cycle" << vcycle << "improved KM1 from" << best_km1 << "to" << current_km1;
+      if (!context.partition.quiet_mode) {
+        LOG << "V-Cycle" << vcycle << "improved KM1 from" << best_km1 << "to" << current_km1;
+      }
       best_km1 = current_km1;
       best_partition = createPartitionSnapshot(hypergraph);
       achieved_imbalance = current_achieved_imbalance;
     } else {
-      LOG << "V-Cycle" << vcycle << "did not improve KM1:" << best_km1 << "is better than" << current_km1
-          << "or imbalance constrain is violated";
+      if (!context.partition.quiet_mode) {
+        LOG << "V-Cycle" << vcycle << "did not improve KM1:" << best_km1 << "is better than" << current_km1
+            << "or imbalance constrain is violated";
+      }
     }
   }
 
@@ -173,8 +185,10 @@ static inline void partition(Hypergraph &hypergraph, const Context &context) {
   // rebalance edge case: graph too small for multilevel
   const double imbalance = metrics::imbalance(hypergraph, context);
   if (imbalance > context.partition.final_epsilon || imbalance > context.partition.epsilon) {
-    LOG << "Running hard rebalance to improve imbalance from" << imbalance << "to min{"
-        << context.partition.final_epsilon << "," << context.partition.epsilon << "}";
+    if (!context.partition.quiet_mode) {
+      LOG << "Running hard rebalance to improve imbalance from" << imbalance << "to min{"
+          << context.partition.final_epsilon << "," << context.partition.epsilon << "}";
+    }
 
     Context balanced_context = context;
     balanced_context.partition.epsilon = context.partition.final_epsilon;
