@@ -407,9 +407,9 @@ class AdjacencyMatrixQuotientGraph : public QuotientGraph {
     ASSERT(_hg.partID(hn) == from_part, "You must call this method before moving the hypernode!");
     ASSERT(from_part != to_part);
 
-    if (_forbidden_edges_cache[from_part][to_part]) {
-      return false;
-    }
+//    if (_forbidden_edges_cache[from_part][to_part]) {
+//      return false;
+//    }
 
     resetDeltaMatrix();
 
@@ -462,8 +462,8 @@ class AdjacencyMatrixQuotientGraph : public QuotientGraph {
     }
 
     clearForbiddenEdgesCache();
-
     commitDeltaMatrix();
+
      if (!todo_insert.empty()) {
        notifyGraphChanged();
      }
@@ -506,7 +506,6 @@ class AdjacencyMatrixQuotientGraph : public QuotientGraph {
     _num_edges = 0;
     _detector.reset();
     buildFromHypergraph();
-    clearForbiddenEdgesCache();
   }
 
  private:
@@ -519,6 +518,8 @@ class AdjacencyMatrixQuotientGraph : public QuotientGraph {
       ASSERT_THAT_ADJACENCY_MATRIX_IS_CORRECT();
       return true;
     }());
+
+    clearForbiddenEdgesCache();
   }
 
   void removeHypernodePreUncontraction(const HypernodeID hn) {
