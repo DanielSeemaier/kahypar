@@ -51,7 +51,7 @@ class TopologicalOrderingInitialPartitioner : public IInitialPartitioner,
 
     _hg.initializeNumCutHyperedges();
 
-    if (_context.partition.k == 2) {
+    if (_context.partition.k == 2 && _context.partition.mode == Mode::acyclic) {
       Metrics current_metrics = {metrics::hyperedgeCut(_hg),
                                  metrics::km1(_hg),
                                  metrics::imbalance(_hg, _context)};
