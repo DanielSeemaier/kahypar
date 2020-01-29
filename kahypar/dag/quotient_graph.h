@@ -374,7 +374,8 @@ class AdjacencyMatrixQuotientGraph : public QuotientGraph {
     _context(context),
     _detector(context.partition.k),
     _adj_matrix(context.partition.k, std::vector<QEdgeWeight>(context.partition.k)),
-    _delta_matrix(context.partition.k, std::vector<QEdgeWeight>(context.partition.k)) {
+    _delta_matrix(context.partition.k, std::vector<QEdgeWeight>(context.partition.k)),
+    _forbidden_edges_cache(context.partition.k, std::vector<bool>(context.partition.k)) {
     buildFromHypergraph();
   }
 
@@ -406,12 +407,11 @@ class AdjacencyMatrixQuotientGraph : public QuotientGraph {
     ASSERT(_hg.partID(hn) == from_part, "You must call this method before moving the hypernode!");
     ASSERT(from_part != to_part);
 
-    resetDeltaMatrix();
+    if (_forbidden_edges_cache[from_part][to_part]) {
+      return false;
+    }
 
-//    ASSERT([&]() {
-//      ASSERT_THAT_ADJACENCY_MATRIX_IS_CORRECT();
-//      return true;
-//    }());
+    resetDeltaMatrix();
 
     // note: during graph construction, edges are counted twice, thus we increment / decrement the delta matrix by 2
 
@@ -457,16 +457,13 @@ class AdjacencyMatrixQuotientGraph : public QuotientGraph {
     // note: if successful, testChanges does not rollback edge insertions / deletions, i.e. the detector is up to date
     // with the changes after a successful call
     if (!testChanges(todo_remove, todo_insert)) {
+      cacheForbiddenEdge(from_part, to_part);
       return false; // illegal move, don't commit
     }
 
+    clearForbiddenEdgesCache();
+
     commitDeltaMatrix();
-//    ASSERT([&]() {
-//      const_cast<Hypergraph*>(&_hg)->changeNodePart(hn, from_part, to_part);
-//      ASSERT_THAT_ADJACENCY_MATRIX_IS_CORRECT();
-//      const_cast<Hypergraph*>(&_hg)->changeNodePart(hn, to_part, from_part);
-//      return true;
-//    }());
      if (!todo_insert.empty()) {
        notifyGraphChanged();
      }
@@ -499,6 +496,8 @@ class AdjacencyMatrixQuotientGraph : public QuotientGraph {
       ASSERT_THAT_ADJACENCY_MATRIX_IS_CORRECT();
       return true;
     }());
+
+    clearForbiddenEdgesCache();
   }
 
   void rebuild() override {
@@ -507,6 +506,7 @@ class AdjacencyMatrixQuotientGraph : public QuotientGraph {
     _num_edges = 0;
     _detector.reset();
     buildFromHypergraph();
+    clearForbiddenEdgesCache();
   }
 
  private:
@@ -685,6 +685,20 @@ class AdjacencyMatrixQuotientGraph : public QuotientGraph {
     return true; // no cycle
   }
 
+  void cacheForbiddenEdge(std::size_t u, std::size_t v) {
+    if (!_forbidden_edges_cache[u][v]) {
+      _forbidden_edges_cache[u][v] = true;
+      _forbidden_edges_cache_entries.emplace_back(u, v);
+    }
+  }
+
+  void clearForbiddenEdgesCache() {
+    for (const auto& entry : _forbidden_edges_cache_entries) {
+      _forbidden_edges_cache[entry.first][entry.second] = false;
+    }
+    _forbidden_edges_cache_entries.clear();
+  }
+
   void ASSERT_THAT_ADJACENCY_MATRIX_IS_CORRECT() {
     AdjacencyMatrix tmp_matrix(numberOfNodes(), std::vector<QEdgeWeight>(numberOfNodes()));
 
@@ -718,43 +732,11 @@ class AdjacencyMatrixQuotientGraph : public QuotientGraph {
     }
   }
 
-//  void ASSERT_THAT_DELTA_MATRIX_IS_CORRECT() {
-//    AdjacencyMatrix tmp_matrix(numberOfNodes(), std::vector<QEdgeWeight>(numberOfNodes()));
-//
-//    for (const HypernodeID& hn : _hg.nodes()) {
-//      for (const HyperedgeID& he : _hg.incidentTailEdges(hn)) {
-//        for (const HypernodeID& head : _hg.heads(he)) {
-//          const PartitionID tail_part = _hg.partID(hn);
-//          const PartitionID head_part = _hg.partID(head);
-//          if (tail_part != head_part) {
-//            ++tmp_matrix[tail_part][head_part];
-//          }
-//        }
-//      }
-//
-//      // tail --> hn
-//      for (const HyperedgeID& he : _hg.incidentHeadEdges(hn)) {
-//        for (const HypernodeID& tail : _hg.tails(he)) {
-//          const PartitionID tail_part = _hg.partID(tail);
-//          const PartitionID head_part = _hg.partID(hn);
-//          if (tail_part != head_part) {
-//            ++tmp_matrix[tail_part][head_part];
-//          }
-//        }
-//      }
-//    }
-//
-//    for (QNodeID u = 0; u < numberOfNodes(); ++u) {
-//      for (QNodeID v = 0; v < numberOfNodes(); ++v) {
-//        ASSERT(tmp_matrix[u][v] == _adj_matrix[u][v] + _delta_matrix[u][v],
-//               V(tmp_matrix[u][v]) << V(_adj_matrix[u][v]) << V(_delta_matrix[u][v]) << V(u) << V(v));
-//      }
-//    }
-//  }
-
   const Hypergraph& _hg;
   const Context& _context;
   CycleDetector _detector;
+  std::vector<std::vector<bool>> _forbidden_edges_cache;
+  std::vector<std::pair<std::size_t, std::size_t>> _forbidden_edges_cache_entries;
 
   AdjacencyMatrix _adj_matrix;
   AdjacencyMatrix _delta_matrix;

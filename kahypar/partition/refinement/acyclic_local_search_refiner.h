@@ -199,12 +199,7 @@ class AcyclicLocalSearchRefiner final : public IRefiner {
 
       // quotient graph remains acyclic
       if (move_ok) {
-//        HighResClockTimepoint start = std::chrono::high_resolution_clock::now();
         move_ok = move_ok && _qg.testAndUpdateBeforeMovement(max_gain_node, from_part, to_part);
-//        HighResClockTimepoint end = std::chrono::high_resolution_clock::now();
-//        Timer::instance().add(_context, Timepoint::cycle_detector,
-//                              std::chrono::duration<double>(end - start).count());
-
         if (!move_ok) {
           ++_num_moves_denied_by_acyclic_constrain;
         }
