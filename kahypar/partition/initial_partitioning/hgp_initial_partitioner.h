@@ -156,7 +156,9 @@ class HgpInitialPartitioner : public IInitialPartitioner, private InitialPartiti
 
     DBG << "Bipartition KM1 after acyclicity fix + local search:" << metrics::km1(*hg_ptr);
     DBG << "Bipartition imbalance after acyclicity fix + local search:" << metrics::imbalance(*hg_ptr, ctx);
-    hg_ptr->printPartSizes();
+    if (!_context.partition.quiet_mode) {
+      hg_ptr->printPartSizes();
+    }
 
     // keep HNs in hg_ptr->partID(hn) == 0 in block `part`
     for (const HypernodeID& hn : hg_ptr->nodes()) {
