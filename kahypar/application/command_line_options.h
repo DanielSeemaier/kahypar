@@ -714,6 +714,8 @@ po::options_description createGenericOptionsDescription(Context& context,
     "Verbose main partitioning output")
       ("binary-kaffpaD", po::value<bool>(&context.bin_kaffpaD)->value_name("<bool>"),
           "Thread input graph as shared memory graph file")
+          ("dagmodel", po::value<bool>(&context.bin_kaffpaD_DAG)->value_name("<bool>"),
+           "Thread input graph as shared memory graph file, use DAG model")
     ("vip", po::value<bool>(&context.initial_partitioning.verbose_output)->value_name("<bool>"),
     "Verbose initial partitioning output")
     ("quiet,q", po::value<bool>(&context.partition.quiet_mode)->value_name("<bool>"),

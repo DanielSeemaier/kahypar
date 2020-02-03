@@ -532,6 +532,89 @@ static inline void updatePartitionTableAndResult(const std::string &filename,
   std::fclose(shm);
 }
 
+static inline void writePartitionToSharedMemoryGraphFile_DAG(const Hypergraph& hg,
+                                                             const std::string& filename) {
+  kaffpa::EdgeWeight cut = metrics::km1(hg);
+  kaffpa::KaffpaResult result{
+      .k =  hg.k(),
+      .edgeCut = cut,
+      .objective = cut,
+      .errorCount = 0,
+      .warningCount = 0,
+      .numRounds = 1
+  };
+
+  std::vector<kaffpa::PartitionID> table;
+  for (const HypernodeID& hn : hg.nodes()) {
+    table.push_back(hg.partID(hn));
+  }
+
+  kaffpa::KaffpaHeader header{};
+  std::vector<kaffpa::Node> nodes;
+  std::vector<kaffpa::Edge> forward_edges;
+  std::vector<kaffpa::InEdge> backward_edges;
+  kaffpa::PartitionConfig config{};
+
+  kahypar::io::readBinaryKaffpaD(filename, header, nodes, forward_edges, backward_edges, config);
+
+  // permute block ids so that they're in topological order
+  std::vector<std::vector<bool>> Q(result.k, std::vector<bool>(result.k));
+  for (kaffpa::NodeID u = 0; u < header.numberOfNodes; ++u) {
+    const auto &node = nodes[u];
+    const auto &next = nodes[u + 1];
+    const auto part_u = table[u];
+
+    for (kaffpa::EdgeID e = node.firstOutEdge; e < next.firstOutEdge; ++e) {
+      const kaffpa::NodeID v = forward_edges[e].target;
+      const auto part_v = table[v];
+      if (part_u != part_v) {
+        Q[part_u][part_v] = true;
+      }
+    }
+  }
+
+  std::vector<kaffpa::NodeID> queue;
+  std::vector<std::size_t> permutation(result.k);
+  std::vector<std::size_t> in(result.k);
+  for (kaffpa::NodeID u = 0; u < result.k; ++u) {
+    for (kaffpa::NodeID v = 0; v < result.k; ++v) {
+      if (Q[u][v]) {
+        ++in[v];
+      }
+    }
+  }
+  for (kaffpa::NodeID u = 0; u < result.k; ++u) {
+    if (in[u] == 0) {
+      queue.push_back(u);
+    }
+  }
+  std::size_t num_popped = 0;
+  while (!queue.empty()) {
+    const auto u = queue.back();
+    queue.pop_back();
+    permutation[u] = num_popped;
+    ++num_popped;
+
+    for (kaffpa::NodeID v = 0; v < result.k; ++v) {
+      if (Q[u][v]) {
+        --in[v];
+        if (in[v] == 0) {
+          queue.push_back(v);
+        }
+      }
+    }
+  }
+  if (num_popped != result.k) {
+    throw std::runtime_error("cannot permute block ids into topological order because the partition is cyclic!");
+  }
+
+  for (kaffpa::NodeID u = 0; u < header.numberOfNodes; ++u) {
+    table[u] = permutation[table[u]];
+  }
+
+  kahypar::io::updatePartitionTableAndResult(filename, header, table, result);
+}
+
 static inline void writePartitionToSharedMemoryGraphFile(const Hypergraph &hg, const std::string &filename) {
   // compute edge cut
   kaffpa::EdgeWeight cut = 0;
@@ -671,6 +754,50 @@ static inline void writePartitionToSharedMemoryGraphFile(const Hypergraph &hg, c
   }
 
   kahypar::io::updatePartitionTableAndResult(filename, header, table, result);
+}
+
+static inline Hypergraph createHypergraphFromSharedMemoryGraphFile_DAG(const std::string& filename,
+                                                                       const PartitionID num_parts) {
+  kaffpa::KaffpaHeader header{};
+  std::vector<kaffpa::Node> nodes;
+  std::vector<kaffpa::Edge> forward_edges;
+  std::vector<kaffpa::InEdge> backward_edges;
+  kaffpa::PartitionConfig config{};
+  kahypar::io::readBinaryKaffpaD(filename, header, nodes, forward_edges, backward_edges, config);
+
+  HyperedgeIndexVector index_vector;
+  HyperedgeVector edge_vector;
+  HypernodeWeightVector hypernode_weights;
+  HyperedgeWeightVector hyperedge_weights;
+  NumHeadsVector num_heads_vector;
+
+  index_vector.push_back(edge_vector.size());
+
+  kaffpa::EdgeID num_edges = 0;
+  for (kaffpa::NodeID u = 0; u < header.numberOfNodes; ++u) {
+    const auto &node = nodes[u];
+    const auto &next = nodes[u + 1];
+    hypernode_weights.push_back(node.weight);
+
+    for (kaffpa::EdgeID e = node.firstOutEdge; e < next.firstOutEdge; ++e) {
+      ++num_edges;
+
+      const auto &edge = forward_edges[e];
+      const kaffpa::NodeID v = edge.target;
+
+      edge_vector.push_back(v);
+      edge_vector.push_back(u);
+      num_heads_vector.push_back(1);
+      hyperedge_weights.push_back(edge.weight);
+      index_vector.push_back(edge_vector.size());
+    }
+  }
+
+  const bool is_directed = true;
+
+  return Hypergraph(header.numberOfNodes, num_edges, index_vector, edge_vector,
+                    is_directed, num_heads_vector, num_parts,
+                    &hyperedge_weights, &hypernode_weights);
 }
 
 static inline Hypergraph createHypergraphFromSharedMemoryGraphFile(const std::string &filename,

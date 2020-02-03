@@ -448,6 +448,7 @@ class Context {
   std::string patoh_path = "";
   std::string rmlgp_path = "";
   bool bin_kaffpaD = false;
+  bool bin_kaffpaD_DAG = false;
 
   Context() :
     stats(*this) { }
@@ -472,7 +473,8 @@ class Context {
     refine_no_ml(other.refine_no_ml),
     patoh_path(other.patoh_path),
     rmlgp_path(other.rmlgp_path),
-    bin_kaffpaD(other.bin_kaffpaD) { }
+    bin_kaffpaD(other.bin_kaffpaD),
+    bin_kaffpaD_DAG(other.bin_kaffpaD_DAG) { }
 
   Context& operator= (const Context&) = delete;
 

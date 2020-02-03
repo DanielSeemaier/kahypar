@@ -18,12 +18,11 @@
  *
  ******************************************************************************/
 
-
 #include "kahypar/application/command_line_options.h"
 #include "kahypar/definitions.h"
 #include "kahypar/io/hypergraph_io.h"
-#include "kahypar/partitioner_facade.h"
 #include "kahypar/partition/context_enum_classes.h"
+#include "kahypar/partitioner_facade.h"
 
 int main(int argc, char *argv[]) {
   kahypar::Context context;
@@ -41,29 +40,42 @@ int main(int argc, char *argv[]) {
     context.partition.write_partition_file = false;
   }
 
-  kahypar::Hypergraph hypergraph(context.bin_kaffpaD
-    ? kahypar::io::createHypergraphFromSharedMemoryGraphFile(context.partition.graph_filename, context.partition.k)
-    : kahypar::io::createHypergraphFromFile(context.partition.graph_filename, context.partition.k)
-  );
+  kahypar::Hypergraph hypergraph(
+      context.bin_kaffpaD
+          ? (context.bin_kaffpaD_DAG
+                 ? kahypar::io::createHypergraphFromSharedMemoryGraphFile_DAG(
+                       context.partition.graph_filename, context.partition.k)
+                 : kahypar::io::createHypergraphFromSharedMemoryGraphFile(
+                       context.partition.graph_filename, context.partition.k))
+          : kahypar::io::createHypergraphFromFile(
+                context.partition.graph_filename, context.partition.k));
 
   kahypar::PartitionerFacade().partition(hypergraph, context);
 
-  if (context.partition.mode == kahypar::Mode::acyclic || context.partition.mode == kahypar::Mode::acyclic_kway) {
-    if (!kahypar::AdjacencyMatrixQuotientGraph<kahypar::DFSCycleDetector>(hypergraph, context).isAcyclic()) {
+  if (context.partition.mode == kahypar::Mode::acyclic ||
+      context.partition.mode == kahypar::Mode::acyclic_kway) {
+    if (!kahypar::AdjacencyMatrixQuotientGraph<kahypar::DFSCycleDetector>(
+             hypergraph, context)
+             .isAcyclic()) {
       throw std::runtime_error("final partition is cyclic!");
     }
   }
 
   if (context.bin_kaffpaD) {
-    kahypar::io::writePartitionToSharedMemoryGraphFile(hypergraph, context.partition.graph_filename);
+    if (context.bin_kaffpaD_DAG) {
+      kahypar::io::writePartitionToSharedMemoryGraphFile_DAG(
+          hypergraph, context.partition.graph_filename);
+    } else {
+      kahypar::io::writePartitionToSharedMemoryGraphFile(
+          hypergraph, context.partition.graph_filename);
+    }
   }
 
   std::cout << "FINAL graph=" << context.partition.graph_filename
             << ", k=" << context.partition.k
-            << ", eps=" << context.partition.epsilon
-            << ", final_imbalance=" << kahypar::metrics::imbalance(hypergraph, context)
-            << ", final_km1=" << kahypar::metrics::km1(hypergraph)
-            << std::endl;
+            << ", eps=" << context.partition.epsilon << ", final_imbalance="
+            << kahypar::metrics::imbalance(hypergraph, context)
+            << ", final_km1=" << kahypar::metrics::km1(hypergraph) << std::endl;
 
   return 0;
 }
