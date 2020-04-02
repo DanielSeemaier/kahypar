@@ -614,6 +614,9 @@ class GenericHypergraph {
     _fixed_vertex_total_weight(0),
     _k(k),
     _type(Type::Unweighted),
+#ifdef KAHYPAR_ENABLE_DHGP
+    _directed(false),
+#endif // KAHYPAR_ENABLE_DHGP
     _current_num_hypernodes(_num_hypernodes),
     _current_num_hyperedges(_num_hyperedges),
     _current_num_pins(_num_pins),
@@ -692,6 +695,9 @@ class GenericHypergraph {
     _fixed_vertex_total_weight(0),
     _k(2),
     _type(Type::Unweighted),
+#ifdef KAHYPAR_ENABLE_DHGP
+    _directed(false),
+#endif // KAHYPAR_ENABLE_DHGP
     _current_num_hypernodes(0),
     _current_num_hyperedges(0),
     _current_num_pins(0),
@@ -881,6 +887,36 @@ class GenericHypergraph {
       return std::make_pair(&_num_hypernodes, &_num_hypernodes);
     }
   }
+
+#ifdef KAHYPAR_ENABLE_DHGP
+  /*!
+   * Returns a for-each iterator-pair to loop of hyperedges containing u as a head pin.
+   */
+  std::pair<IncidenceIterator, IncidenceIterator> incidentHeadEdges(const HypernodeID u) const {
+      return incidentEdges(u); // TODO
+  }
+
+  /*!
+   * Returns a for-each iterator-pair to loop over hyperedges containing u as a tail pin.
+   */
+  std::pair<IncidenceIterator, IncidenceIterator> incidentTailEdges(const HypernodeID u) const {
+      return incidentEdges(u); // TODO
+  }
+
+  /*!
+   * Returns a for-each iterator-pair to loop over all head pins of hyperedge e.
+   */
+  std::pair<IncidenceIterator, IncidenceIterator> heads(const HyperedgeID e) const {
+      return pins(e); // TODO
+  }
+
+  /*!
+   * Returns a for-each iterator-pair to loop over all tail pins of hyperedge e.
+   */
+  std::pair<IncidenceIterator, IncidenceIterator> tails(const HyperedgeID e) const {
+      return pins(e); // TODO
+  }
+#endif // KAHYPAR_ENABLE_DHGP
 
   // ! Returns a reference to the connectivity set of hyperedge he.
   const typename ConnectivitySets<PartitionID, HyperedgeID>::ConnectivitySet&
@@ -1460,6 +1496,12 @@ class GenericHypergraph {
       return _type;
     }
   }
+
+#ifdef KAHYPAR_ENABLE_DHGP
+  bool isDirected() const {
+      return _directed;
+  }
+#endif // KAHYPAR_ENABLE_DHGP
 
   // ! Changes the target number of blocks to k. This resizes
   // internal data structures accordingly.
@@ -2115,6 +2157,10 @@ class GenericHypergraph {
   int _k;
   // ! Type of the hypergraph
   Type _type;
+#ifdef KAHYPAR_ENABLE_DHGP
+  // ! Whether the hypergraph is undirected or directed
+  bool _directed;
+#endif // KAHYPAR_ENABLE_DHGP
 
   // ! Current number of hypernodes
   HypernodeID _current_num_hypernodes;
