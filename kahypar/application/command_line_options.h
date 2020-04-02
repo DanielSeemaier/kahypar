@@ -105,6 +105,9 @@ po::options_description createGeneralOptionsDescription(Context& context, const 
       context.partition.mode = kahypar::modeFromString(mode);
     }),
     "Partitioning mode: \n"
+#ifdef KAHYPAR_ENABLE_DHGP
+    " - (dhgp) directed acyclic partitioning\n"
+#endif // KAHYPAR_ENABLE_DHGP
     " - (recursive) bisection \n"
     " - (direct) k-way");
   return options;

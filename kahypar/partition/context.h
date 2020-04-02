@@ -612,6 +612,11 @@ static inline void sanityCheck(const Hypergraph& hypergraph, Context& context) {
                     << context.initial_partitioning.technique);
       checkDirectKwayMode(context.local_search.algorithm, context.partition.objective);
       break;
+#ifdef KAHYPAR_ENABLE_DHGP
+    case Mode::dhgp:
+      // DHGP does not support the cut objective
+      ALWAYS_ASSERT(context.partition.objective == Objective::km1);
+#endif // KAHYPAR_ENABLE_DHGP
     default:
       // should never happen, because partitioning is either done via RB or directly
       break;

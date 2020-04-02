@@ -32,6 +32,9 @@ enum class ContextType : bool {
 enum class Mode : uint8_t {
   recursive_bisection,
   direct_kway,
+#ifdef KAHYPAR_ENABLE_DHGP
+  dhgp,
+#endif
   UNDEFINED
 };
 
@@ -234,6 +237,9 @@ static std::ostream& operator<< (std::ostream& os, const Mode& mode) {
   switch (mode) {
     case Mode::recursive_bisection: return os << "recursive";
     case Mode::direct_kway: return os << "direct";
+#ifdef KAHYPAR_ENABLE_DHGP
+    case Mode::dhgp: return os << "dhgp";
+#endif // KAHYPAR_ENABLE_DHGP
     case Mode::UNDEFINED: return os << "UNDEFINED";
       // omit default case to trigger compiler warning for missing cases
   }
@@ -617,7 +623,14 @@ static Mode modeFromString(const std::string& mode) {
     return Mode::recursive_bisection;
   } else if (mode == "direct") {
     return Mode::direct_kway;
+  } else if (mode == "dhgp") {
+#ifdef KAHYPAR_ENABLE_DHGP
+    return Mode::dhgp;
+#else // KAHYPAR_ENABLE_DHGP
+    LOG << "Illegal option: dhgp. Support for this mode must be enabled when building KaHyPar.";
+#endif // KAHYPAR_ENABLE_DHGP
   }
+
   LOG << "Illegal option:" << mode;
   exit(0);
   return Mode::direct_kway;
