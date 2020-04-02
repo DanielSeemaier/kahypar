@@ -562,12 +562,54 @@ class GenericHypergraph {
                       num_hyperedges,
                       index_vector.data(),
                       edge_vector.data(),
+#ifdef KAHYPAR_ENABLE_DHGP
+                      false,
+                      nullptr,
+#endif // KAHYPAR_ENABLE_DHGP
                       k,
                       hyperedge_weights == nullptr ? nullptr : hyperedge_weights->data(),
                       hypernode_weights == nullptr ? nullptr : hypernode_weights->data()) {
     ASSERT(edge_vector.size() == index_vector[num_hyperedges]);
   }
 
+#ifdef KAHYPAR_ENABLE_DHGP
+    /*!
+   * Construct a (directed) hypergraph using the index_vector/edge_vector representation that
+   * is also used by hMetis.
+   *
+   * \param num_hypernodes Number of hypernodes |V|
+   * \param num_hyperedges Number of hyperedges |E|
+   * \param index_vector For each hyperedge e, index_vector stores the index of the first pin in
+   * edge_vector that belongs to e. For example, the pins of hyperedge 2 are stored in
+   * edge_vector[index_vector[2]]..edge_vector[index_vector[3]]-1
+   * \param edge_vector Stores the pins of all hyperedges.
+   * \param directed Whether the hypergraph is directed or not.
+   * \param head_vector Number of heads in each hyperedge. Ignored if the hypergraph is undirected.
+   * \param k Number of blocks the hypergraph should be partitioned in
+   * \param hyperedge_weights Optional weight for each hyperedge
+   * \param hypernode_weights Optional weight for each hypernode
+   */
+  GenericHypergraph(const HypernodeID num_hypernodes,
+                    const HyperedgeID num_hyperedges,
+                    const HyperedgeIndexVector& index_vector,
+                    const HyperedgeVector& edge_vector,
+                    const bool directed,
+                    const HyperedgeVector& head_vector,
+                    const PartitionID k = 2,
+                    const HyperedgeWeightVector* hyperedge_weights = nullptr,
+                    const HypernodeWeightVector* hypernode_weights = nullptr) :
+    GenericHypergraph(num_hypernodes,
+                      num_hyperedges,
+                      index_vector.data(),
+                      edge_vector.data(),
+                      directed,
+                      head_vector.data(),
+                      k,
+                      hyperedge_weights == nullptr ? nullptr : hyperedge_weights->data(),
+                      hypernode_weights == nullptr ? nullptr : hypernode_weights->data()) {
+    ASSERT(edge_vector.size() == index_vector[num_hyperedges]);
+  }
+#endif // KAHYPAR_ENABLE_DHGP
 
   /*!
  * Construct a hypergraph using the index_vector/edge_vector representation that
@@ -594,6 +636,10 @@ class GenericHypergraph {
                       num_hyperedges,
                       index_vector.data(),
                       edge_vector.data(),
+#ifdef KAHYPAR_ENABLE_DHGP
+                      false,
+                      nullptr,
+#endif // KAHYPAR_ENABLE_DHGP
                       k,
                       hyperedge_weights.empty() ? nullptr : hyperedge_weights.data(),
                       hypernode_weights.empty() ? nullptr : hypernode_weights.data()) {
@@ -604,6 +650,10 @@ class GenericHypergraph {
                     const HyperedgeID num_hyperedges,
                     const size_t* index_vector,
                     const HypernodeID* edge_vector,
+#ifdef KAHYPAR_ENABLE_DHGP
+                    const bool directed = false,
+                    const HypernodeID* head_vector = nullptr,
+#endif // KAHYPAR_ENABLE_DHGP
                     const PartitionID k = 2,
                     const HyperedgeWeight* hyperedge_weights = nullptr,
                     const HypernodeWeight* hypernode_weights = nullptr) :
@@ -615,7 +665,7 @@ class GenericHypergraph {
     _k(k),
     _type(Type::Unweighted),
 #ifdef KAHYPAR_ENABLE_DHGP
-    _directed(false),
+    _directed(directed),
 #endif // KAHYPAR_ENABLE_DHGP
     _current_num_hypernodes(_num_hypernodes),
     _current_num_hyperedges(_num_hyperedges),
@@ -631,7 +681,7 @@ class GenericHypergraph {
     _part_info(_k),
     _pins_in_part(static_cast<size_t>(_num_hyperedges) * k),
     _connectivity_sets(_num_hyperedges),
-    _hes_not_containing_u(_num_hyperedges) {
+    _hes_not_containing_u(_num_hyperedges) { // TODO use head_vector
     VertexID edge_vector_index = 0;
     for (HyperedgeID i = 0; i < _num_hyperedges; ++i) {
       hyperedge(i).setFirstEntry(edge_vector_index);
@@ -915,6 +965,22 @@ class GenericHypergraph {
    */
   std::pair<IncidenceIterator, IncidenceIterator> tails(const HyperedgeID e) const {
       return pins(e); // TODO
+  }
+
+  HypernodeID edgeNumHeads(const HyperedgeID e) const {
+    return -1; // TODO
+  }
+
+  HypernodeID edgeNumTails(const HyperedgeID e) const {
+    return -1; // TODO
+  }
+
+  HyperedgeID nodeNumHeads(const HypernodeID u) const {
+    return -1; // TODO
+  }
+
+  HyperedgeID nodeNumTails(const HypernodeID u) const {
+    return -1; // TODO
   }
 #endif // KAHYPAR_ENABLE_DHGP
 

@@ -1,0 +1,1 @@
+add_gmock_test(directed_hypergraph_test directed_hypergraph_test.cc)
