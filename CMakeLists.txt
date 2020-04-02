@@ -102,6 +102,16 @@ if(KAHYPAR_USE_CPPCHECK)
   endif(CMAKE_CXX_CPPCHECK)
 endif(KAHYPAR_USE_CPPCHECK)
 
+#find_package(Python ${PY_VERSION} REQUIRED)
+#find_package(PythonLibs ${PY_VERSION} REQUIRED)
+
+option(KAHYPAR_ENABLE_DHGP
+  "Enable support for directed acyclic hypergraph partitioning." OFF)
+
+if(KAHYPAR_ENABLE_DHGP)
+  add_compile_definitions(KAHYPAR_ENABLE_DHGP)
+endif(KAHYPAR_ENABLE_DHGP)
+
 if(KAHYPAR_USE_GCOV)
    include(CodeCoverage)
    setup_target_for_coverage(${PROJECT_NAME}_coverage tests coverage)
