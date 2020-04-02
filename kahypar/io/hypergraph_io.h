@@ -35,8 +35,15 @@ namespace kahypar {
 namespace io {
 using Mapping = std::unordered_map<HypernodeID, HypernodeID>;
 
+#ifdef KAHYPAR_ENABLE_DHGP
+static inline void readHGRHeader(std::ifstream& file, HyperedgeID& num_hyperedges,
+                                 HypernodeID& num_hypernodes, HypergraphType& hypergraph_type,
+                                 bool& directed) {
+#else // KAHYPAR_ENABLE_DHGP
 static inline void readHGRHeader(std::ifstream& file, HyperedgeID& num_hyperedges,
                                  HypernodeID& num_hypernodes, HypergraphType& hypergraph_type) {
+#endif // KAHYPAR_ENABLE_DHGP
+
   std::string line;
   std::getline(file, line);
 
@@ -48,6 +55,9 @@ static inline void readHGRHeader(std::ifstream& file, HyperedgeID& num_hyperedge
   std::istringstream sstream(line);
   int i = 0;
   sstream >> num_hyperedges >> num_hypernodes >> i;
+#ifdef KAHYPAR_ENABLE_DHGP
+  sstream >> directed;
+#endif // KAHYPAR_ENABLE_DHGP
   hypergraph_type = static_cast<HypergraphType>(i);
 }
 
@@ -55,13 +65,21 @@ static inline void readHypergraphFile(const std::string& filename, HypernodeID& 
                                       HyperedgeID& num_hyperedges,
                                       HyperedgeIndexVector& index_vector,
                                       HyperedgeVector& edge_vector,
+#ifdef KAHYPAR_ENABLE_DHGP
+                                      bool& directed,
+                                      HyperedgeVector& head_vector,
+#endif // KAHYPAR_ENABLE_DHGP
                                       HyperedgeWeightVector* hyperedge_weights = nullptr,
                                       HypernodeWeightVector* hypernode_weights = nullptr) {
   ASSERT(!filename.empty(), "No filename for hypergraph file specified");
   HypergraphType hypergraph_type = HypergraphType::Unweighted;
   std::ifstream file(filename);
   if (file) {
+#ifdef KAHYPAR_ENABLE_DHGP
+    readHGRHeader(file, num_hyperedges, num_hypernodes, hypergraph_type, directed);
+#else // KAHYPAR_ENABLE_DHGP
     readHGRHeader(file, num_hyperedges, num_hypernodes, hypergraph_type);
+#endif // KAHYPAR_ENABLE_DHGP
     ASSERT(hypergraph_type == HypergraphType::Unweighted ||
            hypergraph_type == HypergraphType::EdgeWeights ||
            hypergraph_type == HypergraphType::NodeWeights ||
@@ -102,6 +120,15 @@ static inline void readHypergraphFile(const std::string& filename, HypernodeID& 
           hyperedge_weights->push_back(edge_weight);
         }
       }
+
+#ifdef KAHYPAR_ENABLE_DHGP
+      if (directed) {
+        HypernodeID num_heads = 0;
+        line_stream >> num_heads;
+        head_vector.push_back(num_heads);
+      }
+#endif // KAHYPAR_ENABLE_DHGP
+
       HypernodeID pin;
       while (line_stream >> pin) {
         // Hypernode IDs start from 0
@@ -145,6 +172,10 @@ static inline void readHypergraphFile(const std::string& filename,
                                       HyperedgeID& num_hyperedges,
                                       std::unique_ptr<size_t[]>& index_vector,
                                       std::unique_ptr<HypernodeID[]>& edge_vector,
+#ifdef KAHYPAR_ENABLE_DHGP
+                                      bool& directed,
+                                      std::unique_ptr<HypernodeID[]>& head_vector,
+#endif // KAHYPAR_ENABLE_DHGP
                                       std::unique_ptr<HyperedgeWeight[]>& hyperedge_weights,
                                       std::unique_ptr<HypernodeWeight[]>& hypernode_weights) {
   HyperedgeIndexVector index_vec;
@@ -152,8 +183,16 @@ static inline void readHypergraphFile(const std::string& filename,
   HyperedgeWeightVector edge_weights_vec;
   HypernodeWeightVector node_weights_vec;
 
+#ifdef KAHYPAR_ENABLE_DHGP
+  HyperedgeVector head_vec;
+  readHypergraphFile(filename, num_hypernodes, num_hyperedges, index_vec,
+                     edge_vec, directed, head_vec, &edge_weights_vec, &node_weights_vec);
+  head_vector = std::make_unique<HypernodeID[]>(head_vec.size());
+  memcpy(head_vector.get(), head_vec.data(), head_vec.size() * sizeof(HypernodeID));
+#else // KAHYPAR_ENABLE_DHGP
   readHypergraphFile(filename, num_hypernodes, num_hyperedges, index_vec,
                      edge_vec, &edge_weights_vec, &node_weights_vec);
+#endif // KAHYPAR_ENABLE_DHGP
 
   ASSERT(index_vector == nullptr);
   ASSERT(edge_vector == nullptr);
@@ -187,10 +226,26 @@ static inline Hypergraph createHypergraphFromFile(const std::string& filename,
   HyperedgeVector edge_vector;
   HypernodeWeightVector hypernode_weights;
   HyperedgeWeightVector hyperedge_weights;
+
+#ifdef KAHYPAR_ENABLE_DHGP
+  bool directed = false;
+  HyperedgeVector head_vector;
+
+  readHypergraphFile(filename, num_hypernodes, num_hyperedges,
+                     index_vector, edge_vector, directed, head_vector,
+                     &hyperedge_weights, &hypernode_weights);
+
+  ASSERT((directed && head_vector.size() == num_hypernodes) || (!directed && head_vector.empty()));
+
+  return Hypergraph(num_hypernodes, num_hyperedges, index_vector, edge_vector,
+                    directed, head_vector, num_parts,
+                    &hyperedge_weights, &hypernode_weights);
+#else // KAHYPAR_ENABLE_DHGP
   readHypergraphFile(filename, num_hypernodes, num_hyperedges,
                      index_vector, edge_vector, &hyperedge_weights, &hypernode_weights);
   return Hypergraph(num_hypernodes, num_hyperedges, index_vector, edge_vector,
                     num_parts, &hyperedge_weights, &hypernode_weights);
+#endif // KAHYPAR_ENABLE_DHGP
 }
 
 
@@ -205,6 +260,9 @@ static inline void writeHGRHeader(std::ofstream& out_stream, const Hypergraph& h
   if (hypergraph.type() != HypergraphType::Unweighted) {
     out_stream << static_cast<int>(hypergraph.type());
   }
+#ifdef KAHYPAR_ENABLE_DHGP
+  out_stream << " " << hypergraph.isDirected();
+#endif // KAHYPAR_ENABLE_DHGP
   out_stream << std::endl;
 }
 
@@ -220,6 +278,11 @@ static inline void writeHypergraphFile(const Hypergraph& hypergraph, const std::
         hypergraph.type() == HypergraphType::EdgeAndNodeWeights) {
       out_stream << hypergraph.edgeWeight(he) << " ";
     }
+#ifdef KAHYPAR_ENABLE_DHGP
+    if (hypergraph.isDirected()) {
+      out_stream << hypergraph.edgeNumHeads(he) << " ";
+    }
+#endif // KAHYPAR_ENABLE_DHGP
     for (const HypernodeID& pin : hypergraph.pins(he)) {
       out_stream << pin + 1 << " ";
     }
