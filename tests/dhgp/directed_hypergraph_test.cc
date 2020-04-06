@@ -3,19 +3,19 @@
 #include "kahypar/definitions.h"
 
 #include "../datastructure/hypergraph_test_fixtures.h"
+#include "test_instances.h"
 
-using ::testing::Test;
 using ::testing::Eq;
-using ::testing::UnorderedElementsAre;
 using ::testing::IsEmpty;
+using ::testing::Test;
+using ::testing::UnorderedElementsAre;
 
 namespace kahypar::ds {
+using namespace kahypar::dhgp;
+
 class ADirectedHypergraph : public Test {
-   public:
-  ADirectedHypergraph() :
-    hypergraph(11, 6, HyperedgeIndexVector { 0, 3, 6, 9, 12, 15, 18 },
-               HyperedgeVector { 0, 2, 7, 1, 8, 2, 2, 10, 4, 3, 5, 1, 5, 6, 10, 9, 1, 0 },
-               true, HyperedgeVector { 1, 1, 1, 1, 1, 1 }) { }
+  public:
+  ADirectedHypergraph() : hypergraph(test_instances::c17()) {}
   Hypergraph hypergraph;
 };
 
@@ -32,19 +32,19 @@ TEST_F(ADirectedHypergraph, HasCorrectNumberOfHeadsAndTails) {
     ASSERT_THAT(hypergraph.edgeNumHeads(he), Eq(1));
     ASSERT_THAT(hypergraph.edgeNumTails(he), Eq(2));
   }
-  for (const auto& hn : {0, 1, 2, 3, 5, 9}) {
+  for (const auto &hn : {0, 1, 2, 3, 5, 9}) {
     ASSERT_THAT(hypergraph.nodeNumHeads(hn), Eq(1));
   }
-  for (const auto& hn : {1, 2, 10}) {
+  for (const auto &hn : {1, 2, 10}) {
     ASSERT_THAT(hypergraph.nodeNumTails(hn), Eq(2));
   }
-  for (const auto& hn : {0, 4, 5, 6, 7, 8}) {
+  for (const auto &hn : {0, 4, 5, 6, 7, 8}) {
     ASSERT_THAT(hypergraph.nodeNumTails(hn), Eq(1));
   }
 }
 
 TEST_F(ADirectedHypergraph, StructureIsCorrect) {
-  auto to_vec = [](const auto&& iter_pair) -> auto {
+  auto to_vec = [](const auto &&iter_pair) -> auto {
     std::vector<typename decltype(iter_pair.first)::value_type> values;
     values.insert(values.begin(), iter_pair.first, iter_pair.second);
     return values;
@@ -88,4 +88,4 @@ TEST_F(ADirectedHypergraph, StructureIsCorrect) {
   ASSERT_THAT(to_vec(hypergraph.incidentHeadEdges(10)), IsEmpty());
   ASSERT_THAT(to_vec(hypergraph.incidentTailEdges(10)), UnorderedElementsAre(2, 4));
 }
-} // namespace kahypar::ds
+}// namespace kahypar::ds
