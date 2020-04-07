@@ -221,6 +221,36 @@ class GenericHypergraph {
       _weight = weight;
     }
 
+#ifdef KAHYPAR_ENABLE_DHGP
+    IDType numIncidentHeadNets() const {
+      return _num_incident_head_nets;
+    }
+
+    IDType numIncidentTailNets() const {
+      ASSERT(_num_head_hyperedges <= size());
+      return size() - _num_incident_head_nets;
+    }
+
+    bool isIncidentHeadNetID(const IDType id) const {
+      ASSERT(id <= size());
+      return id <= _num_incident_head_nets;
+    }
+
+    bool isIncidentTailNetID(const IDType id) const {
+      return !isIncidentHeadNetID(id);
+    }
+
+    void pushIncidentHeadNet(const HyperedgeID he) {
+      _incident_nets.push_back(he);
+      std::swap(_incident_nets[_num_incident_head_nets], _incident_nets.back());
+      ++_num_incident_head_nets;
+    }
+
+    void pushIncidentTailNet(const HyperedgeID he) {
+      _incident_nets.push_back(he);
+    }
+#endif // KAHYPAR_ENABLE_DHGP
+
     bool operator== (const Vertex& rhs) const {
       return _incident_nets.size() == rhs._incident_nets.size() &&
              _weight == rhs._weight &&
@@ -240,6 +270,10 @@ class GenericHypergraph {
     WeightType _weight = 1;
     // ! Flag indicating whether or not the element is active.
     bool _valid = true;
+#ifdef KAHYPAR_ENABLE_DHGP
+    // ! Number of incident hyperedges containing this hypernode as head pin
+    IDType _num_incident_head_nets;
+#endif // KAHYPAR_ENABLE_DHGP
   };
 
 
@@ -335,6 +369,58 @@ class GenericHypergraph {
       _weight = weight;
     }
 
+#ifdef KAHYPAR_ENABLE_DHGP
+    IDType numHeadPins() const {
+      return _num_head_pins;
+    }
+
+    IDType numTailPins() const {
+      ASSERT(size() >= _num_head_pins);
+      return size() - _num_head_pins;
+    }
+
+    bool isHeadPinID(const IDType id) const {
+      ASSERT(id >= firstEntry());
+      ASSERT(id < firstInvalidEntry());
+      return (id - firstEntry()) < numHeadPins();
+    }
+
+    bool isTailPinID(const IDType id) const {
+      return !isHeadPinID(id);
+    }
+
+    void incrementHeadPinCounter() {
+      ASSERT(_num_head_pins < size());
+      ++_num_head_pins;
+    }
+
+    void decrementHeadPinCounter() {
+      ASSERT(_num_head_pins > 0);
+      --_num_head_pins;
+    }
+
+    void setHeadPinCounter(IDType num_head_pins) {
+      ASSERT(num_head_pins <= size());
+      _num_head_pins = num_head_pins;
+    }
+
+    IDType firstHeadEntry() const {
+      return firstEntry();
+    }
+
+    IDType firstInvalidHeadEntry() const {
+      return firstTailEntry();
+    }
+
+    IDType firstTailEntry() const {
+      return firstEntry() + _num_head_pins;
+    }
+
+    IDType firstInvalidTailEntry() const {
+      return firstInvalidEntry();
+    }
+#endif // KAHYPAR_ENABLE_DHGP
+
     bool operator== (const HyperEdge& rhs) const {
       return _begin == rhs._begin && _size == rhs._size && _weight == rhs._weight;
     }
@@ -352,6 +438,10 @@ class GenericHypergraph {
     WeightType _weight = 1;
     // ! Flag indicating whether or not the element is active.
     bool _valid = true;
+#ifdef KAHYPAR_ENABLE_DHGP
+    // ! Number of head pins
+    IDType _num_head_pins = 0;
+#endif // KAHYPAR_ENABLE_DHGP
   };
 
   /*!
@@ -681,7 +771,11 @@ class GenericHypergraph {
     _part_info(_k),
     _pins_in_part(static_cast<size_t>(_num_hyperedges) * k),
     _connectivity_sets(_num_hyperedges),
-    _hes_not_containing_u(_num_hyperedges) { // TODO use head_vector
+    _hes_not_containing_u(_num_hyperedges) {
+#ifdef KAHYPAR_ENABLE_DHGP
+    ASSERT(!directed || head_vector != nullptr);
+#endif // KAHYPAR_ENABLE_DHGP
+
     VertexID edge_vector_index = 0;
     for (HyperedgeID i = 0; i < _num_hyperedges; ++i) {
       hyperedge(i).setFirstEntry(edge_vector_index);
@@ -690,6 +784,12 @@ class GenericHypergraph {
         hyperedge(i).incrementSize();
         hyperedge(i).hash += math::hash(edge_vector[pin_index]);
         _incidence_array[pin_index] = edge_vector[pin_index];
+#ifdef KAHYPAR_ENABLE_DHGP
+        const VertexID local_pin_index = pin_index - index_vector[i];
+        if (directed && local_pin_index < head_vector[i]) {
+          hyperedge(i).incrementHeadPinCounter();
+        }
+#endif // KAHYPAR_ENABLE_DHGP
         ++edge_vector_index;
       }
     }
@@ -698,7 +798,16 @@ class GenericHypergraph {
       for (VertexID pin_index = index_vector[i]; pin_index <
            index_vector[static_cast<size_t>(i) + 1]; ++pin_index) {
         const HypernodeID pin = edge_vector[pin_index];
+#ifdef KAHYPAR_ENABLE_DHGP
+        const VertexID local_pin_index = pin_index - index_vector[i];
+        if (directed && local_pin_index < head_vector[i]) {
+          hypernode(pin).pushIncidentHeadNet(i);
+        } else {
+          hypernode(pin).pushIncidentTailNet(i);
+        }
+#else // KAHYPAR_ENABLE_DHGP
         hypernode(pin).incidentNets().push_back(i);
+#endif // KAHYPAR_ENABLE_DHGP
       }
     }
 
@@ -943,44 +1052,56 @@ class GenericHypergraph {
    * Returns a for-each iterator-pair to loop of hyperedges containing u as a head pin.
    */
   std::pair<IncidenceIterator, IncidenceIterator> incidentHeadEdges(const HypernodeID u) const {
-      return incidentEdges(u); // TODO
+    ASSERT(!hypernode(u).isDisabled(), "Hypernode" << u << "is disabled");
+    return std::make_pair(hypernode(u).incidentNets().cbegin(),
+                          hypernode(u).incidentNets().cbegin() + nodeNumHeadEdges(u));
   }
 
   /*!
    * Returns a for-each iterator-pair to loop over hyperedges containing u as a tail pin.
    */
   std::pair<IncidenceIterator, IncidenceIterator> incidentTailEdges(const HypernodeID u) const {
-      return incidentEdges(u); // TODO
+    ASSERT(!hypernode(u).isDisabled(), "Hypernode" << u << "is disabled");
+    return std::make_pair(hypernode(u).incidentNets().cbegin() + nodeNumHeadEdges(u),
+                          hypernode(u).incidentNets().cend());
   }
 
   /*!
    * Returns a for-each iterator-pair to loop over all head pins of hyperedge e.
    */
-  std::pair<IncidenceIterator, IncidenceIterator> heads(const HyperedgeID e) const {
-      return pins(e); // TODO
+  std::pair<IncidenceIterator, IncidenceIterator> headPins(const HyperedgeID e) const {
+    ASSERT(!hyperedge(e).isDisabled(), "Hyperedge" << e << "is disabled");
+    return std::make_pair(_incidence_array.cbegin() + hyperedge(e).firstHeadEntry(),
+                          _incidence_array.cbegin() + hyperedge(e).firstInvalidHeadEntry());
   }
 
   /*!
    * Returns a for-each iterator-pair to loop over all tail pins of hyperedge e.
    */
-  std::pair<IncidenceIterator, IncidenceIterator> tails(const HyperedgeID e) const {
-      return pins(e); // TODO
+  std::pair<IncidenceIterator, IncidenceIterator> tailPins(const HyperedgeID e) const {
+    ASSERT(!hyperedge(e).isDisabled(), "Hyperedge" << e << "is disabled");
+    return std::make_pair(_incidence_array.cbegin() + hyperedge(e).firstTailEntry(),
+                          _incidence_array.cbegin() + hyperedge(e).firstInvalidTailEntry());
   }
 
-  HypernodeID edgeNumHeads(const HyperedgeID e) const {
-    return -1; // TODO
+  HypernodeID edgeNumHeadPins(const HyperedgeID e) const {
+    ASSERT(!hyperedge(e).isDisabled(), "Hyperedge" << e << "is disabled");
+    return hyperedge(e).numHeadPins();
   }
 
-  HypernodeID edgeNumTails(const HyperedgeID e) const {
-    return -1; // TODO
+  HypernodeID edgeNumTailPins(const HyperedgeID e) const {
+    ASSERT(!hyperedge(e).isDisabled(), "Hyperedge" << e << "is disabled");
+    return hyperedge(e).numTailPins();
   }
 
-  HyperedgeID nodeNumHeads(const HypernodeID u) const {
-    return -1; // TODO
+  HyperedgeID nodeNumHeadEdges(const HypernodeID u) const {
+    ASSERT(!hypernode(u).isDisabled(), "Hypernode" << u << "is disabled");
+    return hypernode(u).numIncidentHeadNets();
   }
 
-  HyperedgeID nodeNumTails(const HypernodeID u) const {
-    return -1; // TODO
+  HyperedgeID nodeNumTailEdges(const HypernodeID u) const {
+    ASSERT(!hypernode(u).isDisabled(), "Hypernode" << u << "is disabled");
+    return hypernode(u).numIncidentTailNets();
   }
 #endif // KAHYPAR_ENABLE_DHGP
 

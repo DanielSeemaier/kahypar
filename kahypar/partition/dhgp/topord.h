@@ -25,8 +25,8 @@ namespace kahypar::dhgp {
 std::vector<HypernodeID> calculateTopologicalOrdering(const Hypergraph& hg, const bool randomize = true) {
   std::vector<HypernodeID> rank(hg.initialNumNodes());
   for (const HyperedgeID he : hg.edges()) {
-    for (const HypernodeID& hh : hg.heads(he)) {
-      rank[hh] += hg.edgeNumTails(he);
+    for (const HypernodeID& hh : hg.headPins(he)) {
+      rank[hh] += hg.edgeNumTailPins(he);
     }
   }
 
@@ -51,7 +51,7 @@ std::vector<HypernodeID> calculateTopologicalOrdering(const Hypergraph& hg, cons
     topological_ordering.push_back(u);
 
     for (const HyperedgeID &he : hg.incidentTailEdges(u)) {
-      for (const HypernodeID& hh : hg.heads(he)) {
+      for (const HypernodeID& hh : hg.headPins(he)) {
         ASSERT(rank[hh] > 0);
         --rank[hh];
         if (rank[hh] == 0) candidates.push_back(hh);
@@ -81,7 +81,7 @@ std::vector<HypernodeID> calculateToplevels(const Hypergraph& hg) {
 
   for (const HypernodeID& u : topord) {
     for (const HyperedgeID& he : hg.incidentTailEdges(u)) {
-      for (const HypernodeID& v : hg.heads(he)) {
+      for (const HypernodeID& v : hg.headPins(he)) {
         toplevels[v] = std::max(toplevels[v], toplevels[u] + 1);
       }
     }
@@ -98,7 +98,7 @@ std::vector<HypernodeID> calculateReverseToplevels(const Hypergraph& hg) {
   HypernodeID max_level = 0;
   for (const HypernodeID& u : topord) {
     for (const HyperedgeID& he : hg.incidentHeadEdges(u)) {
-      for (const HypernodeID& v : hg.tails(he)) {
+      for (const HypernodeID& v : hg.tailPins(he)) {
         rtoplevels[v] = std::max(rtoplevels[v], rtoplevels[u] + 1);
         max_level = std::max(max_level, rtoplevels[v]);
       }

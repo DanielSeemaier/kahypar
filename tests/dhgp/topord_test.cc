@@ -25,7 +25,7 @@ TEST_F(ADirectedAcyclicHypergraph, TopOrdIsTopological) {
   std::set<HypernodeID> already_seen;
   for (const HypernodeID& u : topord) {
     for (const HyperedgeID& he : hg.incidentTailEdges(u)) {
-      for (const HypernodeID& v : hg.heads(he)) {
+      for (const HypernodeID& v : hg.headPins(he)) {
         ASSERT_THAT(already_seen, Not(Contains(v)));
       }
     }
@@ -41,7 +41,7 @@ TEST_F(ADirectedAcyclicHypergraph, InvertedTopOrdIsTopological) {
 
   for (const HypernodeID& u : inverted_topord) {
     for (const HyperedgeID& he : hg.incidentTailEdges(u)) {
-      for (const HypernodeID& v : hg.heads(he)) {
+      for (const HypernodeID& v : hg.headPins(he)) {
         ASSERT_THAT(inverted_topord[u], Lt(inverted_topord[v]));
       }
     }
