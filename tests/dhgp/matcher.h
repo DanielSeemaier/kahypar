@@ -28,11 +28,8 @@ auto iter2vec(const IterPair&& iter_pair) {
 }
 
 auto IsSameDirectedHypergraph(const Hypergraph& as) {
-  auto properties_matcher = AllOf(Property(&Hypergraph::initialNumEdges, Eq(as.initialNumEdges())),
-                                  Property(&Hypergraph::currentNumEdges, Eq(as.currentNumEdges())),
-                                  Property(&Hypergraph::initialNumNodes, Eq(as.initialNumNodes())),
+  auto properties_matcher = AllOf(Property(&Hypergraph::currentNumEdges, Eq(as.currentNumEdges())),
                                   Property(&Hypergraph::currentNumNodes, Eq(as.currentNumNodes())),
-                                  Property(&Hypergraph::initialNumPins, Eq(as.initialNumPins())),
                                   Property(&Hypergraph::currentNumPins, Eq(as.currentNumPins())));
 
   using utility::iter2vec;
