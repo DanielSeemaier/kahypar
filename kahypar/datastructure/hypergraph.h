@@ -650,10 +650,12 @@ class GenericHypergraph {
                     const HypernodeWeightVector* hypernode_weights = nullptr) :
     GenericHypergraph(num_hypernodes,
                       num_hyperedges,
+#ifdef KAHYPAR_ENABLE_DHGP
+                      false,
+#endif // KAHYPAR_ENABLE_DHGP
                       index_vector.data(),
                       edge_vector.data(),
 #ifdef KAHYPAR_ENABLE_DHGP
-                      false,
                       nullptr,
 #endif // KAHYPAR_ENABLE_DHGP
                       k,
@@ -690,9 +692,9 @@ class GenericHypergraph {
                     const HypernodeWeightVector* hypernode_weights = nullptr) :
     GenericHypergraph(num_hypernodes,
                       num_hyperedges,
+                      directed,
                       index_vector.data(),
                       edge_vector.data(),
-                      directed,
                       head_vector.data(),
                       k,
                       hyperedge_weights == nullptr ? nullptr : hyperedge_weights->data(),
@@ -724,10 +726,12 @@ class GenericHypergraph {
                     const HypernodeWeightVector& hypernode_weights) :
     GenericHypergraph(num_hypernodes,
                       num_hyperedges,
+#ifdef KAHYPAR_ENABLE_DHGP
+                      false,
+#endif // KAHYPAR_ENABLE_DHGP
                       index_vector.data(),
                       edge_vector.data(),
 #ifdef KAHYPAR_ENABLE_DHGP
-                      false,
                       nullptr,
 #endif // KAHYPAR_ENABLE_DHGP
                       k,
@@ -746,9 +750,9 @@ class GenericHypergraph {
                     const HypernodeWeight* hypernode_weights = nullptr) :
      GenericHypergraph(num_hypernodes,
                        num_hyperedges,
+                       false,
                        index_vector,
                        edge_vector,
-                       false,
                        nullptr,
                        k,
                        hyperedge_weights,
@@ -758,10 +762,10 @@ class GenericHypergraph {
 #ifdef KAHYPAR_ENABLE_DHGP
   GenericHypergraph(const HypernodeID num_hypernodes,
                     const HyperedgeID num_hyperedges,
+                    const bool directed,
                     const size_t* index_vector,
                     const HypernodeID* edge_vector,
-                    const bool directed = false,
-                    const HypernodeID* head_vector = nullptr,
+                    const HypernodeID* head_vector,
                     const PartitionID k = 2,
                     const HyperedgeWeight* hyperedge_weights = nullptr,
                     const HypernodeWeight* hypernode_weights = nullptr) :
