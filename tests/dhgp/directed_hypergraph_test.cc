@@ -87,26 +87,21 @@ TEST_F(ADirectedHypergraph, StructureIsCorrect) {
 }
 
 TEST_F(ADirectedHypergraph, TailTail_Case1_Contraction) {
-  const auto memento_2_7 = hypergraph.contract(2, 7);
+  hypergraph.contract(2, 7);
   ASSERT_THAT(iter2vec(hypergraph.headPins(0)), UnorderedElementsAre(0));
   ASSERT_THAT(iter2vec(hypergraph.tailPins(0)), UnorderedElementsAre(2));
   ASSERT_THAT(iter2vec(hypergraph.tailPins(1)), UnorderedElementsAre(2, 8));
   ASSERT_THAT(iter2vec(hypergraph.incidentHeadEdges(2)), UnorderedElementsAre(2));
   ASSERT_THAT(iter2vec(hypergraph.incidentTailEdges(2)), UnorderedElementsAre(0, 1));
-  hypergraph.uncontract(memento_2_7);
-  ASSERT_THAT(hypergraph, IsSameDirectedHypergraph(test_instances::c17()));
+}
 
-  const auto memento_7_2 = hypergraph.contract(7, 2);
-  ASSERT_THAT(iter2vec(hypergraph.headPins(0)), UnorderedElementsAre(0));
-  ASSERT_THAT(iter2vec(hypergraph.tailPins(0)), UnorderedElementsAre(7));
-  ASSERT_THAT(iter2vec(hypergraph.tailPins(1)), UnorderedElementsAre(7, 8));
-  ASSERT_THAT(iter2vec(hypergraph.headPins(2)), UnorderedElementsAre(7));
-  hypergraph.uncontract(memento_7_2);
+TEST_F(ADirectedHypergraph, TailToTail_Case1_Uncontraction) {
+  hypergraph.uncontract(hypergraph.contract(2, 7));
   ASSERT_THAT(hypergraph, IsSameDirectedHypergraph(test_instances::c17()));
 }
 
 TEST_F(ADirectedHypergraph, TailTail_Case2_Contraction) {
-  const auto memento_1_10 = hypergraph.contract(1, 10);
+  hypergraph.contract(1, 10);
   ASSERT_THAT(iter2vec(hypergraph.headPins(1)), UnorderedElementsAre(1));
   ASSERT_THAT(iter2vec(hypergraph.tailPins(1)), UnorderedElementsAre(8, 2));
   ASSERT_THAT(iter2vec(hypergraph.headPins(2)), UnorderedElementsAre(2));
@@ -119,24 +114,30 @@ TEST_F(ADirectedHypergraph, TailTail_Case2_Contraction) {
   ASSERT_THAT(iter2vec(hypergraph.tailPins(5)), UnorderedElementsAre(1, 0));
   ASSERT_THAT(iter2vec(hypergraph.incidentHeadEdges(1)), UnorderedElementsAre(1));
   ASSERT_THAT(iter2vec(hypergraph.incidentTailEdges(1)), UnorderedElementsAre(2, 3, 4, 5));
-  hypergraph.uncontract(memento_1_10);
+}
+
+TEST_F(ADirectedHypergraph, TailTail_Case2_Uncontraction) {
+  hypergraph.uncontract(hypergraph.contract(1, 10));
   ASSERT_THAT(hypergraph, IsSameDirectedHypergraph(test_instances::c17()));
 }
 
-TEST_F(ADirectedHypergraph, TailToHead_Case1_Contraction) {
-  const auto memento_2_0 = hypergraph.contract(2, 0);
+TEST_F(ADirectedHypergraph, TailHead_Case1_Contraction) {
+  hypergraph.contract(2, 0);
   ASSERT_THAT(iter2vec(hypergraph.headPins(0)), UnorderedElementsAre(2));
   ASSERT_THAT(iter2vec(hypergraph.tailPins(0)), UnorderedElementsAre(7));
   ASSERT_THAT(iter2vec(hypergraph.headPins(5)), UnorderedElementsAre(9));
   ASSERT_THAT(iter2vec(hypergraph.tailPins(5)), UnorderedElementsAre(1, 2));
   ASSERT_THAT(iter2vec(hypergraph.incidentHeadEdges(2)), UnorderedElementsAre(0, 2));
   ASSERT_THAT(iter2vec(hypergraph.incidentTailEdges(2)), UnorderedElementsAre(1, 5));
-  hypergraph.uncontract(memento_2_0);
+}
+
+TEST_F(ADirectedHypergraph, TailHead_Case1_Uncontraction) {
+  hypergraph.uncontract(hypergraph.contract(2, 0));
   ASSERT_THAT(hypergraph, IsSameDirectedHypergraph(test_instances::c17()));
 }
 
-TEST_F(ADirectedHypergraph, HeadToTail_Case1_Contraction) {
-  const auto memento_0_2 = hypergraph.contract(0, 2);
+TEST_F(ADirectedHypergraph, HeadTail_Case1_Contraction) {
+  hypergraph.contract(0, 2);
   ASSERT_THAT(iter2vec(hypergraph.headPins(0)), UnorderedElementsAre(0));
   ASSERT_THAT(iter2vec(hypergraph.tailPins(0)), UnorderedElementsAre(7));
   ASSERT_THAT(iter2vec(hypergraph.headPins(1)), UnorderedElementsAre(1));
@@ -147,7 +148,10 @@ TEST_F(ADirectedHypergraph, HeadToTail_Case1_Contraction) {
   ASSERT_THAT(iter2vec(hypergraph.tailPins(5)), UnorderedElementsAre(1, 0));
   ASSERT_THAT(iter2vec(hypergraph.incidentHeadEdges(0)), UnorderedElementsAre(0, 2));
   ASSERT_THAT(iter2vec(hypergraph.incidentTailEdges(0)), UnorderedElementsAre(1, 5));
-  hypergraph.uncontract(memento_0_2);
+}
+
+TEST_F(ADirectedHypergraph, HeadTail_Case1_Uncontraction) {
+  hypergraph.uncontract(hypergraph.contract(0, 2));
   ASSERT_THAT(hypergraph, IsSameDirectedHypergraph(test_instances::c17()));
 }
 
@@ -220,12 +224,16 @@ TEST_F(ADirectedHypergraph, ContractAndUncontractGraph) {
   ASSERT_THAT(hypergraph, IsSameDirectedHypergraph(test_instances::c17()));
 }
 
-TEST_F(ADirectedHypergraph, RemoveAndRestoreOneEdge) {
+TEST_F(ADirectedHypergraph, RemoveOneEdge) {
   hypergraph.removeEdge(0);
   ASSERT_THAT(hypergraph.currentNumEdges(), Eq(5));
   ASSERT_THAT(iter2vec(hypergraph.incidentHeadEdges(0)), IsEmpty());
   ASSERT_THAT(iter2vec(hypergraph.incidentTailEdges(2)), UnorderedElementsAre(1));
   ASSERT_THAT(iter2vec(hypergraph.incidentTailEdges(7)), IsEmpty());
+}
+
+TEST_F(ADirectedHypergraph, RestoreOneEdge) {
+  hypergraph.removeEdge(0);
   hypergraph.restoreEdge(0);
   ASSERT_THAT(hypergraph, IsSameDirectedHypergraph(test_instances::c17()));
 }
