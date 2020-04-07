@@ -736,17 +736,44 @@ class GenericHypergraph {
     ASSERT(edge_vector.size() == index_vector[num_hyperedges]);
   }
 
+#ifdef KAHYPAR_ENABLE_DHGP
   GenericHypergraph(const HypernodeID num_hypernodes,
                     const HyperedgeID num_hyperedges,
                     const size_t* index_vector,
                     const HypernodeID* edge_vector,
-#ifdef KAHYPAR_ENABLE_DHGP
-                    const bool directed = false,
-                    const HypernodeID* head_vector = nullptr,
-#endif // KAHYPAR_ENABLE_DHGP
                     const PartitionID k = 2,
                     const HyperedgeWeight* hyperedge_weights = nullptr,
                     const HypernodeWeight* hypernode_weights = nullptr) :
+     GenericHypergraph(num_hypernodes,
+                       num_hyperedges,
+                       index_vector,
+                       edge_vector,
+                       false,
+                       nullptr,
+                       k,
+                       hyperedge_weights,
+                       hypernode_weights) {}
+#endif // KAHYPAR_ENABLE_DHGP
+
+#ifdef KAHYPAR_ENABLE_DHGP
+  GenericHypergraph(const HypernodeID num_hypernodes,
+                    const HyperedgeID num_hyperedges,
+                    const size_t* index_vector,
+                    const HypernodeID* edge_vector,
+                    const bool directed = false,
+                    const HypernodeID* head_vector = nullptr,
+                    const PartitionID k = 2,
+                    const HyperedgeWeight* hyperedge_weights = nullptr,
+                    const HypernodeWeight* hypernode_weights = nullptr) :
+#else // KAHYPAR_ENABLE_DHGP
+  GenericHypergraph(const HypernodeID num_hypernodes,
+                    const HyperedgeID num_hyperedges,
+                    const size_t* index_vector,
+                    const HypernodeID* edge_vector,
+                    const PartitionID k = 2,
+                    const HyperedgeWeight* hyperedge_weights = nullptr,
+                    const HypernodeWeight* hypernode_weights = nullptr) :
+#endif // KAHYPAR_ENABLE_DHGP
     _num_hypernodes(num_hypernodes),
     _num_hyperedges(num_hyperedges),
     _num_pins(index_vector[num_hyperedges]),
