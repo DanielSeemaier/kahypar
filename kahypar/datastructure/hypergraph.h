@@ -272,7 +272,7 @@ class GenericHypergraph {
     bool _valid = true;
 #ifdef KAHYPAR_ENABLE_DHGP
     // ! Number of incident hyperedges containing this hypernode as head pin
-    IDType _num_incident_head_nets;
+    IDType _num_incident_head_nets = 0;
 #endif // KAHYPAR_ENABLE_DHGP
   };
 

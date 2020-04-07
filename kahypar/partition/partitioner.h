@@ -77,7 +77,7 @@ static inline void partition(Hypergraph& hypergraph, const Context& context) {
       direct_kway::partition(hypergraph, context);
       break;
     case Mode::dhgp:
-      dhgp::partition(hypergrap, context);
+      dhgp::partition(hypergraph, context);
       break;
     case Mode::UNDEFINED:
       LOG << "Partitioning Mode undefined!";

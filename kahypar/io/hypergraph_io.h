@@ -280,7 +280,7 @@ static inline void writeHypergraphFile(const Hypergraph& hypergraph, const std::
     }
 #ifdef KAHYPAR_ENABLE_DHGP
     if (hypergraph.isDirected()) {
-      out_stream << hypergraph.edgeNumHeads(he) << " ";
+      out_stream << hypergraph.edgeNumHeadPins(he) << " ";
     }
 #endif // KAHYPAR_ENABLE_DHGP
     for (const HypernodeID& pin : hypergraph.pins(he)) {
