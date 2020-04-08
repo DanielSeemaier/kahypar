@@ -19,6 +19,13 @@ using testing::utility::iter2vec;
 class ADirectedHypergraph : public Test {
  public:
   ADirectedHypergraph() : hypergraph(test_instances::c17()) {}
+
+  void SetUp() { // we need this for uncontractions
+    for (const HypernodeID u : hypergraph.nodes()) {
+      hypergraph.setNodePart(u, 0);
+    }
+  }
+
   Hypergraph hypergraph;
 };
 
@@ -95,7 +102,7 @@ TEST_F(ADirectedHypergraph, TailTail_Case1_Contraction) {
   ASSERT_THAT(iter2vec(hypergraph.incidentTailEdges(2)), UnorderedElementsAre(0, 1));
 }
 
-TEST_F(ADirectedHypergraph, TailToTail_Case1_Uncontraction) {
+TEST_F(ADirectedHypergraph, TailTail_Case1_Uncontraction) {
   hypergraph.uncontract(hypergraph.contract(2, 7));
   ASSERT_THAT(hypergraph, IsSameDirectedHypergraph(test_instances::c17()));
 }
