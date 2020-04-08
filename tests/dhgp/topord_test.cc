@@ -47,4 +47,12 @@ TEST_F(ADirectedAcyclicHypergraph, InvertedTopOrdIsTopological) {
     }
   }
 }
+
+TEST(TopOrd, AcyclicHypergraphIsAcyclic) {
+  ASSERT_TRUE(checkHypergraphAcyclicity(test_instances::c17()));
+}
+
+TEST(TopOrd, CyclicHypergraphIsNotAcyclic) {
+  ASSERT_FALSE(checkHypergraphAcyclicity(test_instances::cycle()));
+}
 }

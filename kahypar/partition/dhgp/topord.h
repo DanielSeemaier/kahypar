@@ -21,6 +21,9 @@
 
 #pragma once
 
+#include "kahypar/utils/randomize.h"
+#include "kahypar/definitions.h"
+
 namespace kahypar::dhgp {
 std::vector<HypernodeID> calculateTopologicalOrdering(const Hypergraph& hg, const bool randomize = true) {
   std::vector<HypernodeID> rank(hg.initialNumNodes());
