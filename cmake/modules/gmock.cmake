@@ -8,9 +8,11 @@ function(add_gmock_test target)
 
     add_test(${target} ${target})
 
-    add_custom_command(TARGET ${target}
-                       POST_BUILD
-                       COMMAND ${target}
-                       WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-                       COMMENT "Running ${target}" VERBATIM)
+    if (KAHYPAR_RUN_TESTS_ON_BUILD)
+        add_custom_command(TARGET ${target}
+                           POST_BUILD
+                           COMMAND ${target}
+                           WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+                           COMMENT "Running ${target}" VERBATIM)
+    endif()
 endfunction()
