@@ -227,7 +227,7 @@ class GenericHypergraph {
     }
 
     IDType numIncidentTailNets() const {
-      ASSERT(_num_head_hyperedges <= size());
+      ASSERT(_num_incident_head_nets <= size());
       return size() - _num_incident_head_nets;
     }
 
@@ -683,9 +683,9 @@ class GenericHypergraph {
    */
   GenericHypergraph(const HypernodeID num_hypernodes,
                     const HyperedgeID num_hyperedges,
+                    const bool directed,
                     const HyperedgeIndexVector& index_vector,
                     const HyperedgeVector& edge_vector,
-                    const bool directed,
                     const HyperedgeVector& head_vector,
                     const PartitionID k = 2,
                     const HyperedgeWeightVector* hyperedge_weights = nullptr,
@@ -1030,6 +1030,50 @@ class GenericHypergraph {
     }
     LOG << "";
   }
+
+#ifdef KAHYPAR_ENABLE_DHGP
+  void printDirectedHyperedgeState(const HyperedgeID e) const {
+    if (!hyperedge(e).isDisabled()) {
+      LOG << "HE" << e << "(w=" << edgeWeight(e) << "connectivity=" << connectivity(e) << "): ";
+      for (const HypernodeID head : headPins(e)) {
+        LLOG << "H" << head;
+      }
+      for (const HypernodeID tail : tailPins(e)) {
+        LLOG << "T" << tail;
+      }
+      LOG << "";
+      for (PartitionID i = 0; i != _k; ++i) {
+        LOG << "Part[" << i << "]=" << pinCountInPart(e, i);
+      }
+    } else {
+      LOG << e << "-- invalid --";
+    }
+  }
+
+  void printDirectedHypernodeState(const HypernodeID u) const {
+    if (!hypernode(u).isDisabled()) {
+      LOG << "HN" << u << "(w=" << nodeWeight(u) << "block=" << hypernode(u).part_id << "): ";
+      for (const HyperedgeID hhe : incidentHeadEdges(u)) {
+        LLOG << "H" << hhe;
+      }
+      for (const HyperedgeID the : incidentTailEdges(u)) {
+        LLOG << "T" << the;
+      }
+      LOG << "";
+    } else {
+      LOG << u << "-- invalid --";
+    }
+  }
+
+  void printDirectedHypergraphState() const {
+    LOG << "Hypernodes:" << currentNumNodes() << "/" << initialNumNodes();
+    LOG << "Hyperedges:" << currentNumEdges() << "/" << initialNumEdges();
+    LOG << "Pins:" << currentNumPins() << "/" << initialNumPins();
+    LOG << "k:" << k();
+    for (const HyperedgeID he : edges()) printDirectedHyperedgeState(he);
+    for (const HypernodeID u : nodes()) printDirectedHypernodeState(u);
+  }
+#endif // KAHYPAR_ENABLE_DHGP
 
   // ! Returns a for-each iterator-pair to loop over the set of incident hyperedges of hypernode u.
   std::pair<IncidenceIterator, IncidenceIterator> incidentEdges(const HypernodeID u) const {
