@@ -233,7 +233,7 @@ class GenericHypergraph {
 
     bool isIncidentHeadNetID(const IDType id) const {
       ASSERT(id <= size());
-      return id <= _num_incident_head_nets;
+      return id < _num_incident_head_nets;
     }
 
     bool isIncidentTailNetID(const IDType id) const {
@@ -248,6 +248,23 @@ class GenericHypergraph {
 
     void pushIncidentTailNet(const HyperedgeID he) {
       _incident_nets.push_back(he);
+    }
+
+    void removeIncidentHeadNetByID(const HyperedgeID he_id) {
+      ASSERT(he_id < _num_incident_head_nets);
+      ASSERT(_num_incident_head_nets > 0);
+      std::swap(_incident_nets[he_id],
+                _incident_nets[_num_incident_head_nets - 1]);
+      std::swap(_incident_nets[_num_incident_head_nets - 1],
+                _incident_nets.back());
+      _incident_nets.pop_back();
+      --_num_incident_head_nets;
+    }
+
+    void removeIncidentTailNetByID(const HyperedgeID he_id) {
+      ASSERT(he_id >= _num_incident_head_nets);
+      std::swap(_incident_nets[he_id], _incident_nets.back());
+      _incident_nets.pop_back();
     }
 #endif // KAHYPAR_ENABLE_DHGP
 
@@ -1653,13 +1670,24 @@ class GenericHypergraph {
     ASSERT(hyperedge(he).isDisabled(), "Hyperedge is enabled!");
     enableEdge(he);
     resetPartitionPinCounts(he);
-    for (const HypernodeID& pin : pins(he)) {
+    for (HypernodeID pin_id = hyperedge(he).firstEntry();
+         pin_id < hyperedge(he).firstInvalidEntry();
+         ++pin_id) {
+      const HypernodeID pin = _incidence_array[pin_id];
       ASSERT(std::count(hypernode(pin).incidentNets().begin(),
                         hypernode(pin).incidentNets().end(), he)
              == 0,
              "HN" << pin << "is already connected to HE" << he);
       DBG << "re-adding pin" << pin << "to HE" << he;
+#ifdef KAHYPAR_ENABLE_DHGP
+      if (hyperedge(he).isHeadPinID(pin_id)) {
+        hypernode(pin).pushIncidentHeadNet(he);
+      } else {
+        hypernode(pin).pushIncidentTailNet(he);
+      }
+#else // KAHYPAR_ENABLE_DHGP
       hypernode(pin).incidentNets().push_back(he);
+#endif // KAHYPAR_ENABLE_DHGP
       if (partID(pin) != kInvalidPartition) {
         incrementPinCountInPart(he, partID(pin));
       }
@@ -1679,13 +1707,24 @@ class GenericHypergraph {
     ASSERT(hyperedge(he).isDisabled(), "Hyperedge is enabled!");
     enableEdge(he);
     resetPartitionPinCounts(he);
-    for (const HypernodeID& pin : pins(he)) {
+    for (HypernodeID pin_id = hyperedge(he).firstEntry();
+         pin_id < hyperedge(he).firstInvalidEntry();
+         ++pin_id) {
+      const HypernodeID pin = _incidence_array[pin_id];
       ASSERT(std::count(hypernode(pin).incidentNets().begin(),
                         hypernode(pin).incidentNets().end(), he)
              == 0,
              "HN" << pin << "is already connected to HE" << he);
       DBG << "re-adding pin" << pin << "to HE" << he;
+#ifdef KAHYPAR_ENABLE_DHGP
+      if (hyperedge(he).isHeadPinID(pin_id)) {
+        hypernode(pin).pushIncidentHeadNet(he);
+      } else {
+        hypernode(pin).pushIncidentTailNet(he);
+      }
+#else // KAHYPAR_ENABLE_DHGP
       hypernode(pin).incidentNets().push_back(he);
+#endif // KAHYPAR_ENABLE_DHGP
       if (partID(pin) != kInvalidPartition) {
         incrementPinCountInPart(he, partID(pin));
       }
@@ -2344,13 +2383,22 @@ class GenericHypergraph {
 
     auto begin = hypernode(hn).incidentNets().begin();
     ASSERT(hypernode(hn).size() > 0);
-    auto last_entry = hypernode(hn).incidentNets().end() - 1;
     while (*begin != he) {
       ++begin;
     }
     ASSERT(begin < hypernode(hn).incidentNets().end());
+#ifdef KAHYPAR_ENABLE_DHGP
+    const HyperedgeID he_id = begin - hypernode(hn).incidentNets().begin();
+    if (hypernode(hn).isIncidentHeadNetID(he_id)) {
+      hypernode(hn).removeIncidentHeadNetByID(he_id);
+    } else {
+      hypernode(hn).removeIncidentTailNetByID(he_id);
+    }
+#else // KAHYPAR_ENABLE_DHGP
+    auto last_entry = hypernode(hn).incidentNets().end() - 1;
     swap(*begin, *last_entry);
     hypernode(hn).incidentNets().pop_back();
+#endif // KAHYPAR_ENABLE_DHGP
   }
 
 
