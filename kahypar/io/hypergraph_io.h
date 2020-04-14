@@ -290,8 +290,8 @@ static inline Hypergraph createHypergraphFromFile(const std::string& filename,
 
   ASSERT((directed && head_vector.size() == num_hypernodes) || (!directed && head_vector.empty()));
 
-  return Hypergraph(num_hypernodes, num_hyperedges, index_vector, edge_vector,
-                    directed, head_vector, num_parts,
+  return Hypergraph(num_hypernodes, num_hyperedges, directed,
+                    index_vector, edge_vector, head_vector, num_parts,
                     &hyperedge_weights, &hypernode_weights);
 #else // KAHYPAR_ENABLE_DHGP
   readHypergraphFile(filename, num_hypernodes, num_hyperedges,
