@@ -117,6 +117,10 @@ enum class InitialPartitionerAlgorithm : uint8_t {
   lp,
   bin_packing,
   pool,
+#ifdef KAHYPAR_ENABLE_DHGP
+  acyclic_topord,
+  acyclic_undirected,
+#endif // KAHYPAR_ENABLE_DHGP
   UNDEFINED
 };
 
@@ -371,6 +375,10 @@ static std::ostream& operator<< (std::ostream& os, const InitialPartitionerAlgor
     case InitialPartitionerAlgorithm::lp: return os << "lp";
     case InitialPartitionerAlgorithm::bin_packing: return os << "bin_packing";
     case InitialPartitionerAlgorithm::pool: return os << "pool";
+#ifdef KAHYPAR_ENABLE_DHGP
+    case InitialPartitionerAlgorithm::acyclic_topord: return os << "acyclic_topord";
+    case InitialPartitionerAlgorithm::acyclic_undirected: return os << "acyclic_undirected";
+#endif // KAHYPAR_ENABLE_DHGP
     case InitialPartitionerAlgorithm::UNDEFINED: return os << "UNDEFINED";
       // omit default case to trigger compiler warning for missing cases
   }
@@ -586,6 +594,12 @@ static InitialPartitionerAlgorithm initialPartitioningAlgorithmFromString(const 
     return InitialPartitionerAlgorithm::random;
   } else if (mode == "pool") {
     return InitialPartitionerAlgorithm::pool;
+#ifdef KAHYPAR_ENABLE_DHGP
+  } else if (mode == "acyclic_topord") {
+    return InitialPartitionerAlgorithm::acyclic_topord;
+  } else if (mode == "acyclic_undirected") {
+    return InitialPartitionerAlgorithm::acyclic_undirected;
+#endif // KAHYPAR_ENABLE_DHGP
   }
   LOG << "Illegal option:" << mode;
   exit(0);

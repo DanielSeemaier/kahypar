@@ -23,6 +23,10 @@
 #include "kahypar/meta/policy_registry.h"
 #include "kahypar/partition/context.h"
 #include "kahypar/partition/initial_partitioning/initial_partitioning.h"
+#ifdef KAHYPAR_ENABLE_DHGP
+#include "kahypar/partition/dhgp/initial_partitioning/acyclic_topord_initial_partitioner.h"
+#include "kahypar/partition/dhgp/initial_partitioning/acyclic_undirected_initial_partitioner.h"
+#endif // KAHYPAR_ENABLE_DHGP
 
 #define REGISTER_INITIAL_PARTITIONER(id, ip)                               \
   static meta::Registrar<InitialPartitioningFactory> register_ ## ip(      \
@@ -97,4 +101,12 @@ REGISTER_INITIAL_PARTITIONER(InitialPartitionerAlgorithm::greedy_global_maxnet,
 REGISTER_INITIAL_PARTITIONER(InitialPartitionerAlgorithm::greedy_round_maxnet,
                              GHGInitialPartitionerBFS_MAXN_RND);
 REGISTER_INITIAL_PARTITIONER(InitialPartitionerAlgorithm::pool, PoolInitialPartitioner);
+#ifdef KAHYPAR_ENABLE_DHGP
+using kahypar::dhgp::AcyclicTopOrdInitialPartitioner;
+using kahypar::dhgp::AcyclicUndirectedInitialPartitioner;
+REGISTER_INITIAL_PARTITIONER(InitialPartitionerAlgorithm::acyclic_topord,
+                             AcyclicTopOrdInitialPartitioner);
+REGISTER_INITIAL_PARTITIONER(InitialPartitionerAlgorithm::acyclic_undirected,
+                             AcyclicUndirectedInitialPartitioner);
+#endif // KAHYPAR_ENABLE_DHGP
 }  // namespace kahypar
