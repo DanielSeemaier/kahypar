@@ -101,6 +101,10 @@ enum class RefinementAlgorithm : uint8_t {
   kway_hyperflow_cutter,
   kway_fm_hyperflow_cutter,
   kway_fm_hyperflow_cutter_km1,
+#ifdef KAHYPAR_ENABLE_DHGP
+  acyclic_twoway_fm,
+  acyclic_kway_fm,
+#endif // KAHYPAR_ENABLE_DHGP
   do_nothing,
   UNDEFINED
 };
@@ -358,6 +362,10 @@ static std::ostream& operator<< (std::ostream& os, const RefinementAlgorithm& al
     case RefinementAlgorithm::kway_hyperflow_cutter: return os << "kway_hyperflow_cutter";
     case RefinementAlgorithm::kway_fm_hyperflow_cutter: return os << "kway_fm_hyperflow_cutter";
     case RefinementAlgorithm::kway_fm_hyperflow_cutter_km1: return os << "kway_fm_hyperflow_cutter_km1";
+#ifdef KAHYPAR_ENABLE_DHGP
+    case RefinementAlgorithm::acyclic_kway_fm: return os << "acyclic_kway_fm";
+    case RefinementAlgorithm::acyclic_twoway_fm: return os << "acyclic_twoway_fm";
+#endif // KAHYPAR_ENABLE_DHGP
     case RefinementAlgorithm::do_nothing: return os << "do_nothing";
     case RefinementAlgorithm::UNDEFINED: return os << "UNDEFINED";
       // omit default case to trigger compiler warning for missing cases
@@ -569,6 +577,12 @@ static RefinementAlgorithm refinementAlgorithmFromString(const std::string& type
     return RefinementAlgorithm::twoway_fm_hyperflow_cutter;
   } else if (type == "kway_fm_hyperflow_cutter_km1") {
     return RefinementAlgorithm::kway_fm_hyperflow_cutter_km1;
+#ifdef KAHYPAR_ENABLE_DHGP
+  } else if (type == "acyclic_twoway_fm") {
+    return RefinementAlgorithm::acyclic_twoway_fm;
+  } else if (type == "acyclic_kway_fm") {
+    return RefinementAlgorithm::acyclic_kway_fm;
+#endif // KAHYPAR_ENABLE_DHGP
   } else if (type == "do_nothing") {
     return RefinementAlgorithm::do_nothing;
   }

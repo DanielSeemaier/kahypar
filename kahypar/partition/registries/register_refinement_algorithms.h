@@ -37,6 +37,11 @@
 #include "kahypar/partition/refinement/kway_fm_km1_refiner.h"
 #include "kahypar/partition/refinement/policies/fm_stop_policy.h"
 
+#ifdef KAHYPAR_ENABLE_DHGP
+#include "kahypar/partition/dhgp/refinement/acyclic_2way_fm_refiner.h"
+#include "kahypar/partition/dhgp/refinement/acyclic_kway_fm_refiner.h"
+#endif // KAHYPAR_ENABLE_DHGP
+
 #define REGISTER_DISPATCHED_REFINER(id, dispatcher, ...)          \
   static meta::Registrar<RefinerFactory> register_ ## dispatcher( \
     id,                                                           \
@@ -78,6 +83,16 @@ REGISTER_DISPATCHED_REFINER(RefinementAlgorithm::kway_hyperflow_cutter,
                             KWayHyperFlowCutterFactoryDispatcher,
                             meta::PolicyRegistry<FlowExecutionMode>::getInstance().getPolicy(
                               context.local_search.flow.execution_policy));
+#ifdef KAHYPAR_ENABLE_DHGP
+REGISTER_DISPATCHED_REFINER(RefinementAlgorithm::acyclic_twoway_fm,
+                            AcyclicTwoWayFMFactoryDispatcher,
+                            meta::PolicyRegistry<RefinementStoppingRule>::getInstance().getPolicy(
+                                context.local_search.fm.stopping_rule));
+REGISTER_DISPATCHED_REFINER(RefinementAlgorithm::acyclic_kway_fm,
+                            AcyclicKWayFMFactoryDispatcher,
+                            meta::PolicyRegistry<RefinementStoppingRule>::getInstance().getPolicy(
+                                context.local_search.fm.stopping_rule));
+#endif // KAHYPAR_ENABLE_DHGP
 
 REGISTER_REFINER(RefinementAlgorithm::twoway_fm_hyperflow_cutter, TwoWayFMFlowRefiner);
 REGISTER_REFINER(RefinementAlgorithm::kway_fm_hyperflow_cutter_km1, KWayFMFlowRefiner);
