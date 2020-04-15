@@ -212,6 +212,9 @@ po::options_description createCoarseningOptionsDescription(Context& context,
     "Coarsening Algorithm:\n"
     " - ml_style\n"
     " - heavy_full\n"
+#ifdef KAHYPAR_ENABLE_DHGP
+    " - acyclic\n"
+#endif // KAHYPAR_ENABLE_DHGP
     " - heavy_lazy")
     ((initial_partitioning ? "i-c-s" : "c-s"),
     po::value<double>((initial_partitioning ? &context.initial_partitioning.coarsening.max_allowed_weight_multiplier : &context.coarsening.max_allowed_weight_multiplier))->value_name("<double>"),
@@ -318,6 +321,10 @@ po::options_description createRefinementOptionsDescription(Context& context,
     " - kway_fm_km1                  : k-way FM algorithm         (direct k-way        : km1)\n"
     " - kway_fm_hyperflow_cutter_km1 : k-way FM + HyperFlowCutter (direct k-way        : km1)\n"
     " - kway_hyperflow_cutter        : k-way HyperFlowCutter      (direct k-way        : cut & km1)\n"
+#ifdef KAHYPAR_ENABLE_DHGP
+    " - acyclic_twoway_fm            : 2-way FM with acyclicity constraints             (km1)\n"
+    " - acyclic_kway_fm              : k-way FM with acyclicity constraints             (km1)\n"
+#endif // KAHYPAR_ENABLE_DHGP
     )
     ((initial_partitioning ? "i-r-runs" : "r-runs"),
     po::value<int>((initial_partitioning ? &context.initial_partitioning.local_search.iterations_per_level : &context.local_search.iterations_per_level))->value_name("<int>")->notifier(
