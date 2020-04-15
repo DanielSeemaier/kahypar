@@ -1,5 +1,9 @@
 #pragma once
 
+#ifndef KAHYPAR_ENABLE_DHGP
+#error This file should not be included when building without KAHYPAR_ENABLE_DHGP
+#endif // KAHYPAR_ENABLE_DHGP
+
 #include <limits>
 #include <string>
 #include <vector>

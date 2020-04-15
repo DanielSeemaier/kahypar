@@ -21,6 +21,10 @@
 
 #pragma once
 
+#ifndef KAHYPAR_ENABLE_DHGP
+#error This file should not be included when building without KAHYPAR_ENABLE_DHGP
+#endif // KAHYPAR_ENABLE_DHGP
+
 #include "kahypar/utils/randomize.h"
 #include "kahypar/definitions.h"
 
