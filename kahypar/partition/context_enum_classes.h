@@ -85,6 +85,9 @@ enum class CoarseningAlgorithm : uint8_t {
   heavy_full,
   heavy_lazy,
   ml_style,
+#ifdef KAHYPAR_ENABLE_DHGP
+  acyclic,
+#endif // KAHYPAR_ENABLE_DHGP
   do_nothing,
   UNDEFINED
 };
@@ -335,6 +338,9 @@ static std::ostream& operator<< (std::ostream& os, const CoarseningAlgorithm& al
     case CoarseningAlgorithm::heavy_full: return os << "heavy_full";
     case CoarseningAlgorithm::heavy_lazy: return os << "heavy_lazy";
     case CoarseningAlgorithm::ml_style: return os << "ml_style";
+#ifdef KAHYPAR_ENABLE_DHGP
+    case CoarseningAlgorithm::acyclic: return os << "acyclic";
+#endif // KAYPAR_ENABLE_DHGP
     case CoarseningAlgorithm::do_nothing: return os << "do_nothing";
     case CoarseningAlgorithm::UNDEFINED: return os << "UNDEFINED";
       // omit default case to trigger compiler warning for missing cases
@@ -534,6 +540,10 @@ static CoarseningAlgorithm coarseningAlgorithmFromString(const std::string& type
     return CoarseningAlgorithm::heavy_lazy;
   } else if (type == "ml_style") {
     return CoarseningAlgorithm::ml_style;
+#ifdef KAHYPAR_ENABLE_DHGP
+  } else if (type == "acyclic") {
+    return CoarseningAlgorithm::acyclic;
+#endif // KAHYPAR_ENABLE_DHGP
   } else if (type == "do_nothing") {
     return CoarseningAlgorithm::do_nothing;
   }

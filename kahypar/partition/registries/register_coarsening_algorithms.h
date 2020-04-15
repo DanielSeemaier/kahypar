@@ -33,6 +33,10 @@
 #include "kahypar/partition/context.h"
 #include "kahypar/partition/factories.h"
 
+#ifdef KAHYPAR_ENABLE_DHGP
+#include "kahypar/partition/dhgp/coarsening/acyclic_coarsener.h"
+#endif // KAHYPAR_ENABLE_DHGP
+
 #define REGISTER_COARSENER(id, coarsener)                               \
   static meta::Registrar<CoarsenerFactory> register_ ## coarsener(      \
     id,                                                                 \
@@ -99,4 +103,21 @@ REGISTER_DISPATCHED_COARSENER(CoarseningAlgorithm::ml_style,
                                 context.coarsening.rating.acceptance_policy),
                               meta::PolicyRegistry<FixVertexContractionAcceptancePolicy>::getInstance().getPolicy(
                                 context.coarsening.rating.fixed_vertex_acceptance_policy));
+
+#ifdef KAHYPAR_ENABLE_DHGP
+REGISTER_DISPATCHED_COARSENER(CoarseningAlgorithm::acyclic,
+                              AcyclicCoarseningDispatcher,
+                              meta::PolicyRegistry<RatingFunction>::getInstance().getPolicy(
+                                context.coarsening.rating.rating_function),
+                              meta::PolicyRegistry<HeavyNodePenaltyPolicy>::getInstance().getPolicy(
+                                context.coarsening.rating.heavy_node_penalty_policy),
+                              meta::PolicyRegistry<CommunityPolicy>::getInstance().getPolicy(
+                                context.coarsening.rating.community_policy),
+                              meta::PolicyRegistry<RatingPartitionPolicy>::getInstance().getPolicy(
+                                context.coarsening.rating.partition_policy),
+                              meta::PolicyRegistry<AcceptancePolicy>::getInstance().getPolicy(
+                                context.coarsening.rating.acceptance_policy),
+                              meta::PolicyRegistry<FixVertexContractionAcceptancePolicy>::getInstance().getPolicy(
+                                context.coarsening.rating.fixed_vertex_acceptance_policy));
+#endif // KAHYPAR_ENABLE_DHGP
 }  // namespace kahypar
