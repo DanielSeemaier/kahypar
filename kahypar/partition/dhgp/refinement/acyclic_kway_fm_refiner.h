@@ -45,6 +45,7 @@ class AcyclicKWayFMRefiner final : public IRefiner,
   friend class FMRefinerBase<HypernodeID, AcyclicKWayFMRefiner<StoppingPolicy,
                                                                FMImprovementPolicy>>;
 
+  using HypernodeWeightArray = std::array<HypernodeWeight, 2>;
   using HEState = typename Base::HEState;
   using Base::kInvalidGain;
   using Base::kInvalidHN;
