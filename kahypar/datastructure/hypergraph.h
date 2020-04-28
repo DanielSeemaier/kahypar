@@ -92,6 +92,9 @@ template <typename HypernodeType_ = Mandatory,
 class GenericHypergraph {
  private:
   static constexpr bool debug = false;
+#ifdef KAHYPAR_ENABLE_DHGP
+  static constexpr bool allow_mixed_contractions = true;
+#endif // KAHYPAR_ENABLE_DHGP
 
  public:
   // export template parameters
@@ -265,6 +268,12 @@ class GenericHypergraph {
       ASSERT(he_id >= _num_incident_head_nets);
       std::swap(_incident_nets[he_id], _incident_nets.back());
       _incident_nets.pop_back();
+    }
+
+    void promoteIncidentTailNetToHeadNetByID(const HyperedgeID he_id) {
+      ASSERT(isIncidentTailNetID(he_id));
+      std::swap(_incident_nets[he_id], _incident_nets[_num_incident_head_nets]);
+      ++_num_incident_head_nets;
     }
 #endif // KAHYPAR_ENABLE_DHGP
 
@@ -1252,10 +1261,24 @@ class GenericHypergraph {
       HypernodeID slot_of_u = pins_end - 1;
       HypernodeID last_pin_slot = pins_end - 1;
 
+#ifdef KAHYPAR_ENABLE_DHGP
+      bool v_is_head = false;
+#endif // KAHYPAR_ENABLE_DHGP
+
       for (HypernodeID pin_iter = pins_begin; pin_iter != last_pin_slot; ++pin_iter) {
         const HypernodeID pin = _incidence_array[pin_iter];
         if (pin == v) {
+#ifdef KAHYPAR_ENABLE_DHGP
+          v_is_head = hyperedge(he).isHeadPinID(pin_iter);
+
+          if (v_is_head) {
+            hyperedgeMakeHeadPinLastByID(he, pin_iter);
+          } else {
+            hyperedgeMakeTailPinLastByID(he, pin_iter);
+          }
+#else // KAHYPAR_ENABLE_DHGP
           swap(_incidence_array[pin_iter], _incidence_array[last_pin_slot]);
+#endif // KAHYPAR_ENABLE_DHGP
           --pin_iter;
         } else if (pin == u) {
           slot_of_u = pin_iter;
@@ -1263,6 +1286,12 @@ class GenericHypergraph {
       }
 
       ASSERT(_incidence_array[last_pin_slot] == v, "v is not last entry in adjacency array!");
+
+#ifdef KAHYPAR_ENABLE_DHGP
+      // catch the case where v is a head pin *and* the last element in he's incidence list
+      // this is only possible if he contains zero tail pins
+      v_is_head |= hyperedge(he).numTailPins() == 0;
+#endif // KAHYPAR_ENABLE_DHGP
 
       if (slot_of_u != last_pin_slot) {
         // Case 1:
@@ -1275,6 +1304,30 @@ class GenericHypergraph {
           decrementPinCountInPart(he, partID(v));
         }
         --_current_num_pins;
+
+#ifdef KAHYPAR_ENABLE_DHGP
+        const bool u_is_head = hyperedge(he).isHeadPinID(slot_of_u);
+        ASSERT(allow_mixed_contractions || v_is_head == u_is_head,
+               "contracting a (tail, head) pair is forbidden");
+
+        // contracting (tail, head) pair -> promote u to head of he
+        if (v_is_head && !u_is_head) {
+          ASSERT(hyperedge(he).numHeadPins() == 0, // 0 because we already removed v as head
+                 "contracting a (tail, head) pair sharing a hyperedge with multiple heads is not supported");
+
+          // make u head of he
+          std::swap(_incidence_array[hyperedge(he).firstTailEntry()],
+                    _incidence_array[slot_of_u]);
+
+          // make he head of u
+          const auto he_iter = std::find(hypernode(u).incidentNets().begin() + hypernode(u).numIncidentHeadNets(),
+                                              hypernode(u).incidentNets().end(),
+                                              he);
+          ASSERT(he_iter < hypernode(u).incidentNets().end());
+          const HyperedgeID he_id = std::distance(hypernode(u).incidentNets().begin(), he_iter);
+          hypernode(u).promoteIncidentTailNetToHeadNetByID(he_id);
+        }
+#endif // KAHYPAR_ENABLE_DHGP
       } else {
         DBG << V(he) << ": Case 2";
         // Case 2:
@@ -1282,7 +1335,11 @@ class GenericHypergraph {
         // This reuses the pin slot of v in e's incidence array (i.e. last_pin_slot!)
         edgeHash(he) -= math::hash(v);
         edgeHash(he) += math::hash(u);
+#ifdef KAHYPAR_ENABLE_DHGP
+        connectHyperedgeToRepresentative(he, u, v_is_head);
+#else // KAHYPAR_ENABLE_DHGP
         connectHyperedgeToRepresentative(he, u);
+#endif // KAHYPAR_ENABLE_DHGP
       }
     }
     hypernode(v).disable();
@@ -2324,8 +2381,14 @@ class GenericHypergraph {
    * u at the end of _incidence array. Subsequent calls with first_call = false
    * then only append at the end.
    */
+   #ifdef KAHYPAR_ENABLE_DHGP
   KAHYPAR_ATTRIBUTE_ALWAYS_INLINE void connectHyperedgeToRepresentative(const HyperedgeID e,
+                                                                        const HypernodeID u,
+                                                                        const bool make_head) {
+   #else // KAHYPAR_ENABLE_DHGP
+    KAHYPAR_ATTRIBUTE_ALWAYS_INLINE void connectHyperedgeToRepresentative(const HyperedgeID e,
                                                                         const HypernodeID u) {
+   #endif // KAHYPAR_ENABLE_DHGP
     ASSERT(!hypernode(u).isDisabled(), "Hypernode" << u << "is disabled");
     ASSERT(!hyperedge(e).isDisabled(), "Hyperedge" << e << "is disabled");
     ASSERT(partID(_incidence_array[hyperedge(e).firstInvalidEntry() - 1]) == partID(u),
@@ -2335,8 +2398,19 @@ class GenericHypergraph {
     // -- this is ensured by the contract method) in e's edge array to store the information
     // that u is now connected to e and add the edge (u,e) to indicate this conection also from
     // the hypernode's point of view.
-    _incidence_array[hyperedge(e).firstInvalidEntry() - 1] = u;
+    const HyperedgeID entry_of_v = hyperedge(e).firstInvalidEntry() - 1;
+    _incidence_array[entry_of_v] = u;
+
+#ifdef KAHYPAR_ENABLE_DHGP
+    if (make_head) {
+      std::swap(_incidence_array[entry_of_v], _incidence_array[hyperedge(e).firstTailEntry()]);
+      hypernode(u).pushIncidentHeadNet(e);
+    } else {
+      hypernode(u).pushIncidentTailNet(e);
+    }
+#else // KAHYPAR_ENABLE_DHGP
     hypernode(u).incidentNets().push_back(e);
+#endif // KAHYPAR_ENABLE_DHGP
   }
 
   KAHYPAR_ATTRIBUTE_ALWAYS_INLINE void markIncidentNetsOf(const HypernodeID v) {
@@ -2452,6 +2526,22 @@ class GenericHypergraph {
   Hyperedge & hyperedge(const HyperedgeID e) {
     return const_cast<Hyperedge&>(static_cast<const GenericHypergraph&>(*this).hyperedge(e));
   }
+
+#ifdef KAHYPAR_ENABLE_DHGP
+  void hyperedgeMakeHeadPinLastByID(const HyperedgeID he, const HypernodeID pin_id) {
+    ASSERT(hyperedge(he).isHeadPinID(pin_id));
+    std::swap(_incidence_array[pin_id],
+              _incidence_array[hyperedge(he).firstTailEntry() - 1]);
+    std::swap(_incidence_array[hyperedge(he).firstTailEntry() - 1],
+              _incidence_array[hyperedge(he).firstInvalidTailEntry() - 1]);
+  }
+
+  void hyperedgeMakeTailPinLastByID(const HyperedgeID he, const HypernodeID pin_id) {
+    ASSERT(hyperedge(he).isTailPinID(pin_id));
+    std::swap(_incidence_array[pin_id],
+              _incidence_array[hyperedge(he).firstInvalidTailEntry() - 1]);
+  }
+#endif // KAHYPAR_ENABLE_DHGP
 
   // ! Original number of hypernodes |V|
   HypernodeID _num_hypernodes;
