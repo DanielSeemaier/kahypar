@@ -1312,11 +1312,11 @@ class GenericHypergraph {
 
         // contracting (tail, head) pair -> promote u to head of he
         if (v_is_head && !u_is_head) {
-          ASSERT(hyperedge(he).numHeadPins() == 0, // 0 because we already removed v as head
+          ASSERT(hyperedge(he).numHeadPins() == 1, // 1 because we did not decrement the head counter
                  "contracting a (tail, head) pair sharing a hyperedge with multiple heads is not supported");
 
           // make u head of he
-          std::swap(_incidence_array[hyperedge(he).firstTailEntry()],
+          std::swap(_incidence_array[hyperedge(he).firstTailEntry() - 1], // -1 because we did not decrement its head counter
                     _incidence_array[slot_of_u]);
 
           // make he head of u
@@ -2403,7 +2403,7 @@ class GenericHypergraph {
 
 #ifdef KAHYPAR_ENABLE_DHGP
     if (make_head) {
-      std::swap(_incidence_array[entry_of_v], _incidence_array[hyperedge(e).firstTailEntry()]);
+      std::swap(_incidence_array[entry_of_v], _incidence_array[hyperedge(e).firstTailEntry() - 1]);
       hypernode(u).pushIncidentHeadNet(e);
     } else {
       hypernode(u).pushIncidentTailNet(e);
