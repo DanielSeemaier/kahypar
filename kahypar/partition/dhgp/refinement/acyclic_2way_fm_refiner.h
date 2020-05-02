@@ -82,6 +82,7 @@ class AcyclicTwoWayFMRefiner final : public IRefiner,
                   const HypernodeWeightArray& max_allowed_part_weights,
                   const UncontractionGainChanges& changes,
                   Metrics& best_metrics) override final {
+      return false;
   }
 
   using Base::_hg;
