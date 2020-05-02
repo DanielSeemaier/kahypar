@@ -1737,7 +1737,8 @@ class GenericHypergraph {
              "HN" << pin << "is already connected to HE" << he);
       DBG << "re-adding pin" << pin << "to HE" << he;
 #ifdef KAHYPAR_ENABLE_DHGP
-      if (hyperedge(he).isHeadPinID(pin_id)) {
+      const HypernodeID local_pin_id = pin_id - hyperedge(he).firstEntry();
+      if (hyperedge(he).isHeadPinID(local_pin_id)) {
         hypernode(pin).pushIncidentHeadNet(he);
       } else {
         hypernode(pin).pushIncidentTailNet(he);
