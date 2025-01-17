@@ -22,6 +22,7 @@
 
 #include <iomanip>
 #include <iostream>
+#include <iterator>
 #include <sstream>
 #include <string>
 #include <set>

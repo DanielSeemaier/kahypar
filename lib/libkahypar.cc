@@ -20,6 +20,8 @@
 
 #include "libkahypar.h"
 
+#include "kahypar/datastructure/hypergraph.h"
+#include "kahypar/definitions.h"
 #include "kahypar/application/command_line_options.h"
 #include "kahypar/io/hypergraph_io.h"
 #include "kahypar/macros.h"
@@ -58,10 +60,15 @@ void kahypar_read_hypergraph_from_file(const char* file_name,
 
   std::unique_ptr<kahypar_hyperedge_weight_t[]> hyperedge_weights_ptr(nullptr);
   std::unique_ptr<kahypar_hypernode_weight_t[]> vertex_weights_ptr(nullptr);
+  std::unique_ptr<kahypar_hyperedge_id_t[]> num_heads_ptr(nullptr);
 
+  bool directed = true;
+
+  
   kahypar::io::readHypergraphFile(file_name, *num_vertices, *num_hyperedges,
-                                  indices_ptr, hyperedges_ptr, hyperedge_weights_ptr,
+                                  indices_ptr, hyperedges_ptr, directed, num_heads_ptr, hyperedge_weights_ptr,
                                   vertex_weights_ptr);
+  
 
   *hyperedge_indices = indices_ptr.release();
   *hyperedges = hyperedges_ptr.release();
@@ -88,13 +95,16 @@ void kahypar_partition(const kahypar_hypernode_id_t num_vertices,
   context.partition.quiet_mode = true;
   context.partition.write_partition_file = false;
 
+  std::vector<kahypar::HypernodeID> num_heads(num_vertices, 1);
   kahypar::Hypergraph hypergraph(num_vertices,
                                  num_hyperedges,
-                                 hyperedge_indices,
-                                 hyperedges,
+                                 reinterpret_cast<const size_t *>(hyperedge_indices),
+                                 reinterpret_cast<const kahypar::HypernodeID *>(hyperedges),
+                                 true,
+                                 num_heads.data(),
                                  context.partition.k,
-                                 hyperedge_weights,
-                                 vertex_weights);
+                                 static_cast<const kahypar::HyperedgeWeight *>(hyperedge_weights),
+                                 static_cast<const kahypar::HypernodeWeight *>(vertex_weights));
 
   kahypar::PartitionerFacade partitioner;
   partitioner.partition(hypergraph, context);

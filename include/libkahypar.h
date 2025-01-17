@@ -50,8 +50,8 @@ typedef struct kahypar_context_s kahypar_context_t;
 
 typedef unsigned int kahypar_hypernode_id_t;
 typedef unsigned int kahypar_hyperedge_id_t;
-typedef int kahypar_hypernode_weight_t;
-typedef int kahypar_hyperedge_weight_t;
+typedef long kahypar_hypernode_weight_t;
+typedef long kahypar_hyperedge_weight_t;
 typedef unsigned int kahypar_partition_id_t;
 
 KAHYPAR_API kahypar_context_t* kahypar_context_new();
